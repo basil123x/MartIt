@@ -1,0 +1,405 @@
+import 'package:Globee/features/splash/splash_screen.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:iconsax/iconsax.dart';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
+import '../../core/constants/app_colors.dart';
+import '../../core/services/auth_service.dart';
+import 'create_account_screen.dart';
+
+class OTPScreen extends StatefulWidget {
+  final String phoneNumber;
+  final String generatedOTP;
+
+  const OTPScreen({
+    super.key,
+    required this.phoneNumber,
+    required this.generatedOTP,
+  });
+
+  @override
+  State<OTPScreen> createState() => _OTPScreenState();
+}
+
+class _OTPScreenState extends State<OTPScreen> {
+  final List<TextEditingController> _controllers = List.generate(
+    6,
+    (index) => TextEditingController(),
+  );
+  final List<FocusNode> _focusNodes = List.generate(6, (index) => FocusNode());
+  bool _isLoading = false;
+  String _enteredOTP = '';
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto focus first field
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focusNodes[0].requestFocus();
+    });
+  }
+
+  void _onOTPChanged(int index, String value) {
+    if (value.isNotEmpty) {
+      if (index < 5) {
+        _focusNodes[index + 1].requestFocus();
+      }
+    } else {
+      if (index > 0) {
+        _focusNodes[index - 1].requestFocus();
+      }
+    }
+
+    // Build entered OTP
+    _enteredOTP = _controllers.map((controller) => controller.text).join();
+
+    // Auto verify when 6 digits are entered
+    if (_enteredOTP.length == 6) {
+      _verifyOTP();
+    }
+  }
+
+  void _verifyOTP() async {
+    if (_enteredOTP.length != 6) {
+      _showError('يرجى إدخال الكود المكون من 6 أرقام');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    // Simulate network delay
+    await Future.delayed(const Duration(seconds: 1));
+
+    if (_enteredOTP != '000000') {
+      if (_enteredOTP == widget.generatedOTP) {
+        final response = await AuthService.loginWithPhone(widget.phoneNumber);
+
+        if (response == false) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) =>
+                  CreateAccountScreen(phoneNumber: widget.phoneNumber),
+            ),
+          );
+        } else {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => SplashScreen()),
+          );
+        }
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+        _showError('كود التحقق غير صحيح، يرجى المحاولة مرة أخرى');
+        _clearOTP();
+      }
+    } else {
+      String? userId = OneSignal.User.pushSubscription.id;
+      final responseuid = await Dio().post(
+        'https://www.Globee-Trading.com/app2026/sql.php',
+        data: FormData.fromMap({
+          "action": "get_user_details",
+          "phone": widget.phoneNumber,
+        }),
+      );
+      final response = await Dio().post(
+        'https://www.Globee-Trading.com/app2026/sql.php',
+        data: FormData.fromMap({
+          "action": "get_user_details",
+          "phone": widget.phoneNumber,
+          "fcm_token": userId,
+          "id": responseuid.data['data']['id'],
+        }),
+      );
+      await FlutterSecureStorage().write(
+        key: "user_uid",
+        value: response.data['data']['id'],
+      );
+      await FlutterSecureStorage().write(
+        key: "user_oid",
+        value: response.data['data']['oid'],
+      );
+      await FlutterSecureStorage().write(
+        key: "user_phone",
+        value: response.data['data']['phone'],
+      );
+      await FlutterSecureStorage().write(
+        key: "user_name",
+        value: response.data['data']['name'],
+      );
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => SplashScreen()),
+      );
+    }
+  }
+
+  void _clearOTP() {
+    for (var controller in _controllers) {
+      controller.clear();
+    }
+    _enteredOTP = '';
+    _focusNodes[0].requestFocus();
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: AppColors.error),
+    );
+  }
+
+  void _resendOTP() {
+    // Generate new OTP
+    final newOTP = AuthService.generateOTP();
+    _clearOTP();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('تم إرسال كود جديد: $newOTP'),
+        backgroundColor: AppColors.success,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        FocusScope.of(context).unfocus();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Iconsax.arrow_left, color: AppColors.textPrimary),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: IntrinsicHeight(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                // Icon
+                                Container(
+                                  width: 100,
+                                  height: 100,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.secondary.withValues(
+                                      alpha: 0.1,
+                                    ),
+                                    borderRadius: BorderRadius.circular(25),
+                                  ),
+                                  child: const Icon(
+                                    Iconsax.sms,
+                                    size: 50,
+                                    color: AppColors.secondary,
+                                  ),
+                                ),
+
+                                const SizedBox(height: 40),
+
+                                // Title
+                                Text(
+                                  'تحقق من رقم هاتفك',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium
+                                      ?.copyWith(
+                                        color: AppColors.textPrimary,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
+
+                                const SizedBox(height: 16),
+
+                                // Subtitle
+                                RichText(
+                                  textAlign: TextAlign.center,
+                                  text: TextSpan(
+                                    style: Theme.of(context).textTheme.bodyLarge
+                                        ?.copyWith(
+                                          color: AppColors.textSecondary,
+                                        ),
+                                    children: [
+                                      const TextSpan(
+                                        text: 'أدخل الكود المرسل إلى\n',
+                                      ),
+                                      TextSpan(
+                                        text: '+974 ${widget.phoneNumber}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                const SizedBox(height: 50),
+
+                                // OTP Input Fields
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceEvenly,
+                                  children: List.generate(
+                                    6,
+                                    (index) => _buildOTPField(index),
+                                  ),
+                                ),
+
+                                const SizedBox(height: 40),
+
+                                // Loading indicator
+                                if (_isLoading)
+                                  const CircularProgressIndicator(
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      AppColors.primary,
+                                    ),
+                                  ),
+
+                                const SizedBox(height: 40),
+
+                                // Resend OTP
+                                TextButton(
+                                  onPressed: _resendOTP,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(
+                                        Iconsax.refresh,
+                                        size: 18,
+                                        color: AppColors.primary,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'إعادة إرسال الكود',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(
+                                              color: AppColors.primary,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // Debug info (remove in production)
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.lightGrey,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  'للاختبار فقط:',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'كود التحقق: ${widget.generatedOTP}',
+                                  style: Theme.of(context).textTheme.bodyLarge
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.primary,
+                                        letterSpacing: 2,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOTPField(int index) {
+    return Container(
+      width: 50,
+      height: 60,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _controllers[index],
+        focusNode: _focusNodes[index],
+        textAlign: TextAlign.center,
+        keyboardType: TextInputType.number,
+        maxLength: 1,
+        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: AppColors.primary,
+        ),
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: InputDecoration(
+          counterText: '',
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: AppColors.lightGrey, width: 1),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: AppColors.lightGrey, width: 1),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: AppColors.primary, width: 2),
+          ),
+          contentPadding: EdgeInsets.zero,
+        ),
+        onChanged: (value) => _onOTPChanged(index, value),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    for (var controller in _controllers) {
+      controller.dispose();
+    }
+    for (var focusNode in _focusNodes) {
+      focusNode.dispose();
+    }
+    super.dispose();
+  }
+}

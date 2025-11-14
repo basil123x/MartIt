@@ -1,0 +1,2363 @@
+import 'package:Globee/core/services/onesignal_service.dart';
+import 'package:Globee/features/add_product/add_product_screen.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:iconsax/iconsax.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:share_plus/share_plus.dart';
+import '../../core/constants/app_colors.dart';
+import '../../core/constants/app_strings.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/services/api_service.dart';
+import '../../core/services/database_service.dart';
+import '../../core/models/item_model.dart';
+import '../../core/widgets/video_player_widget.dart';
+import '../../core/widgets/media_viewer_widget.dart';
+import '../auth/login_screen.dart';
+import '../search/search_screen.dart';
+import '../profile/profile_screen.dart';
+import '../comments/comments_modal.dart';
+import '../camera/camera_screen.dart';
+
+class TikTokFeedScreen extends StatefulWidget {
+  final String? initialItemId;
+
+  const TikTokFeedScreen({super.key, this.initialItemId});
+
+  @override
+  State<TikTokFeedScreen> createState() => _TikTokFeedScreenState();
+}
+
+class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
+  final PageController _pageController = PageController();
+  int _currentIndex = 0;
+  bool _isLoggedIn = false;
+  List<ItemModel> _items = [];
+  bool _isLoading = false;
+  bool _hasError = false;
+  int _currentPage = 0;
+  String? _currentItemId;
+  String? _currentUserId;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkLoginStatus();
+    _pageController.addListener(() {
+      final page = _pageController.page?.round() ?? 0;
+      if (page != _currentIndex && page < _items.length) {
+        setState(() {
+          _currentIndex = page;
+          _currentItemId = _items[page].id;
+        });
+      }
+    });
+  }
+
+  Future<void> _checkLoginStatus() async {
+    final _currentUserIdx = await AuthService.getCurrentUserId();
+
+    final isLoggedIn = await AuthService.isLoggedIn();
+    setState(() {
+      _isLoggedIn = isLoggedIn;
+      _currentUserId = _currentUserIdx;
+      _loadItems(uid: _currentUserId);
+    });
+  }
+
+  Future<void> _loadItems({bool isRefresh = false, String? uid}) async {
+    if (_isLoading) return;
+    print("SSSSSS $uid");
+
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+      if (isRefresh) {
+        _currentPage = 0;
+        _items.clear();
+      }
+    });
+
+    try {
+      List<ItemModel> items;
+
+      // ✅ نجيب الـ user_id سواء مسجل دخول أو لأ
+      final currentUserId = _isLoggedIn
+          ? await AuthService.getCurrentUserId()
+          : null;
+
+      if (_isLoggedIn && currentUserId != null) {
+        // ✅ لو مسجل دخول، نستخدم fetchItemsWithLikes
+        items = await ApiService.fetchItemsWithLikes(
+          userId: currentUserId,
+          limit: 10,
+          offset: _items.length,
+        );
+      } else {
+        // ✅ لو مش مسجل، نستخدم fetchItems عادي (بدون user_id)
+        items = await ApiService.fetchItems(
+          page: _currentPage,
+          userId: uid, // ✅ مفيش user_id
+        );
+      }
+
+      setState(() {
+        _items.addAll(items);
+        _isLoading = false;
+        _currentPage++;
+      });
+    } catch (e) {
+      print('API Error: $e');
+      setState(() {
+        _hasError = true;
+        _isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('خطأ في الاتصال بالخادم: $e'),
+          backgroundColor: Colors.red,
+          action: SnackBarAction(
+            label: 'إعادة المحاولة',
+            textColor: Colors.white,
+            onPressed: () =>
+                _loadItems(isRefresh: true, uid: _items[0].seller.id),
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: _isLoading && _items.isEmpty
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            )
+          : _items.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Iconsax.box, size: 64, color: Colors.white),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'لا توجد منتجات',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => _loadItems(isRefresh: true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('إعادة المحاولة'),
+                  ),
+                ],
+              ),
+            )
+          : Stack(
+              children: [
+                // Video Feed
+                PageView.builder(
+                  controller: _pageController,
+                  scrollDirection: Axis.vertical,
+                  onPageChanged: (index) {
+                    // ✅ نحسب الـ actual index باستخدام modulo
+                    final actualIndex = index % _items.length;
+
+                    setState(() {
+                      _currentIndex = actualIndex;
+                    });
+
+                    // ✅ لو وصل لآخر 3 أصناف، نجيب أصناف جديدة
+                    if (actualIndex >= _items.length - 3 && !_isLoading) {
+                      _loadItems(uid: _items[actualIndex].seller.id);
+                    }
+                  },
+                  itemCount: _items.isEmpty
+                      ? 0
+                      : null, // ✅ null = infinite scroll
+                  itemBuilder: (context, index) {
+                    if (_items.isEmpty) {
+                      return const Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                        ),
+                      );
+                    }
+
+                    // ✅ نستخدم modulo عشان نعيد تدوير الأصناف
+                    final actualIndex = index % _items.length;
+                    return _buildVideoItem(_items[actualIndex]);
+                  },
+                ),
+
+                // Top Bar
+                _buildTopBar(),
+
+                // Side Actions
+                _buildSideActions(),
+
+                // Bottom Info
+                _buildBottomInfo(),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildTopBar() {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Add Product Button
+            IconButton(
+              onPressed: () async {
+                // AuthService.getUserStatus();
+                String? uid = await AuthService.getCurrentUID();
+                if (_isLoggedIn) {
+                  AuthService.getUserStatus(uid).then((val) {
+                    if (val['status'] == '0') {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('في انتظار مراجعة المشرفين.'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    } else if (val['status'] == '2') {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'تم حظرك نهائياً من إستخدام التطبيق يرجى التواصل مع الدعم لحل المشكلة!',
+                          ),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    } else {
+                      _handleAddProduct();
+                    }
+                  });
+                } else {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const LoginScreen(),
+                    ),
+                  );
+                }
+              },
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.secondary,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Iconsax.add, color: Colors.white, size: 24),
+              ),
+            ),
+
+            // Actions
+            Row(
+              children: [
+                IconButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SearchScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(
+                    Iconsax.search_normal,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+                if (_isLoggedIn)
+                  IconButton(
+                    onPressed: _showMoreOptions,
+                    icon: const Icon(
+                      Iconsax.more,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSideActions() {
+    if (_items.isEmpty || _currentIndex >= _items.length)
+      return const SizedBox();
+
+    final item = _items[_currentIndex];
+    return Positioned(
+      right: 9,
+      bottom: 140,
+      child: Column(
+        children: [
+          _buildActionButton(
+            child: CircleAvatar(
+              radius: 24,
+              backgroundColor: AppColors.secondary,
+              child: item.seller.avatar.isNotEmpty
+                  ? ClipOval(
+                      child: Image.network(
+                        item.seller.avatar,
+                        width: 48,
+                        height: 48,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          // ✅ لو فيه error في الصورة، اعرض الـ Text
+                          return Center(
+                            child: Text(
+                              item.seller.name.isNotEmpty
+                                  ? item.seller.name[0]
+                                  : 'U',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                              ),
+                            ),
+                          );
+                        },
+                        loadingBuilder: (context, child, loadingProgress) {
+                          // ✅ أثناء التحميل
+                          if (loadingProgress == null) return child;
+                          return const Center(
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          );
+                        },
+                      ),
+                    )
+                  : Text(
+                      item.seller.name.isNotEmpty ? item.seller.name[0] : 'U',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+            ),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProfileScreen(userId: item.seller.id),
+                ),
+              );
+            },
+          ),
+
+          // Follow Button
+          // Follow Button
+          if (_isLoggedIn)
+            Visibility(
+              visible: _currentUserId == item.seller.id ? false : true,
+              child: _buildActionButton(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: item.seller.isFollowing
+                        ? const Color(0xFF6B7280) // رمادي داكن للمتابع
+                        : AppColors.primary, // لون أساسي للغير متابع
+                    borderRadius: BorderRadius.circular(20),
+                    border: item.seller.isFollowing
+                        ? Border.all(color: const Color(0xFF4B5563), width: 1)
+                        : null,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (item.seller.isFollowing)
+                        const Icon(Icons.check, color: Colors.white, size: 14),
+                      if (item.seller.isFollowing) const SizedBox(width: 4),
+                      Text(
+                        item.seller.isFollowing ? 'يتابع' : 'متابعة',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                onTap: () {
+                  _followUser(item);
+                },
+              ),
+            ),
+
+          // Like Button
+          _buildActionButton(
+            child: Column(
+              children: [
+                Icon(
+                  item.interactions.isLiked ? Iconsax.heart5 : Iconsax.heart,
+                  color: item.interactions.isLiked ? Colors.red : Colors.white,
+                  size: 32,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _formatCount(item.interactions.likes),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            onTap: () => _handleLike(item),
+          ),
+
+          // Comment Button
+          _buildActionButton(
+            child: Column(
+              children: [
+                const Icon(Iconsax.message, color: Colors.white, size: 32),
+                const SizedBox(height: 4),
+                Text(
+                  _formatCount(item.interactions.comments),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            onTap: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (context) =>
+                    CommentsModal(itemId: item.id, isLoggedIn: _isLoggedIn),
+              );
+            },
+          ),
+
+          // Share Button
+          _buildActionButton(
+            child: Column(
+              children: [
+                const Icon(Iconsax.share, color: Colors.white, size: 32),
+                const SizedBox(height: 4),
+                Text(
+                  _formatCount(item.interactions.shares),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            onTap: () => _handleShare(item),
+          ),
+
+          // Shopping Cart Button
+          _buildActionButton(
+            child: Column(
+              children: [
+                const Icon(
+                  Iconsax.shopping_cart,
+                  color: Colors.white,
+                  size: 32,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _formatCount(item.interactions.cartQuantity),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            onTap: () => _showCartBottomSheet(item),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required Widget child,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(padding: const EdgeInsets.all(8), child: child),
+    );
+  }
+
+  Widget _buildBottomInfo() {
+    if (_items.isEmpty || _currentIndex >= _items.length)
+      return const SizedBox();
+
+    final item = _items[_currentIndex];
+
+    return Positioned(
+      left: 16,
+      right: 80,
+      bottom: 100,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Iconsax.user, color: Colors.white, size: 16),
+              const SizedBox(width: 8),
+              Text(
+                item.seller.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          // Product Title
+          Text(
+            item.name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          // Price
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Iconsax.tag, color: Colors.white, size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  '${item.price} ريال',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVideoItem(ItemModel item) {
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      color: Colors.black,
+      child: item.media.isNotEmpty
+          ? MediaViewerWidget(
+              mediaUrls: item.media,
+              itmId: item.id,
+              autoPlayVideo: true,
+              showControls: false,
+              showIndicators: item.media.length > 1,
+            )
+          : const Center(
+              child: Icon(Iconsax.image, color: Colors.white, size: 80),
+            ),
+    );
+  }
+
+  void _handleAddProduct() async {
+    _showAddProductBottomSheet();
+  }
+
+  void _showAddProductBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 50,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'إضافة منتج جديد',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Iconsax.camera, color: AppColors.primary),
+              title: const Text('إضافة صورة'),
+              subtitle: const Text('التقط صورة للمنتج'),
+              onTap: () {
+                Navigator.pop(context);
+                _showImageSourceBottomSheet();
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Iconsax.video_play,
+                color: AppColors.secondary,
+              ),
+              title: const Text('إضافة فيديو'),
+              subtitle: const Text('سجل فيديو للمنتج'),
+              onTap: () {
+                Navigator.pop(context);
+                _showVideoSourceBottomSheet();
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMoreOptions() async {
+    bool isVisible = false;
+    String? uid = await AuthService.getCurrentUID();
+    AuthService.getUserStatus(uid).then((val) {
+      if (val['status'] == '0') {
+        setState(() {
+          isVisible = false;
+        });
+      } else if (val['status'] == '2') {
+        setState(() {
+          isVisible = false;
+        });
+      } else {
+        setState(() {
+          isVisible = true;
+        });
+      }
+    });
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 50,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text('المزيد', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 20),
+              Visibility(
+                visible: isVisible,
+                child: _buildMoreOption(
+                  Iconsax.user,
+                  'عرض الملف الشخصي',
+                  _showCurrentUserProfile,
+                ),
+              ),
+              Visibility(
+                visible: isVisible,
+                child: _buildMoreOption(Iconsax.bag_2, 'طلبات العملاء', () {}),
+              ),
+              Visibility(
+                visible: isVisible,
+                child: _buildMoreOption(Iconsax.shopping_bag, 'طلباتي', () {}),
+              ),
+              Visibility(
+                visible: isVisible,
+                child: _buildMoreOption(
+                  Iconsax.shopping_cart,
+                  'عرض سلة التسوق',
+                  () {},
+                ),
+              ),
+              _buildMoreOption(
+                Iconsax.document_text,
+                'الوصف',
+                _showItemDescription,
+              ),
+              _buildMoreOption(
+                Iconsax.warning_2,
+                'بلغ عن المحتوى',
+                _showReportOptions,
+              ),
+              _buildMoreOption(
+                Iconsax.user_remove,
+                'حظر المستخدم',
+                _showBlockUserOptions,
+              ),
+              _buildMoreOption(Iconsax.logout, 'تسجيل الخروج', _handleLogout),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMoreOption(IconData icon, String title, VoidCallback onTap) {
+    return ListTile(
+      leading: Icon(icon, color: AppColors.primary),
+      title: Text(title),
+      onTap: onTap,
+    );
+  }
+
+  void _handleLogout() async {
+    Navigator.pop(context); // Close bottom sheet
+    await AuthService.logout();
+    setState(() {
+      _isLoggedIn = false;
+    });
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('تم تسجيل الخروج بنجاح')));
+  }
+
+  String _formatCount(int count) {
+    if (count >= 1000000) {
+      return '${(count / 1000000).toStringAsFixed(1)}M';
+    } else if (count >= 1000) {
+      return '${(count / 1000).toStringAsFixed(1)}K';
+    }
+    return count.toString();
+  }
+
+  void _showCurrentUserProfile() async {
+    Navigator.pop(context); // Close bottom sheet
+
+    // Get current user ID from AuthService
+    final currentUserId = await AuthService.getCurrentUserId();
+    if (currentUserId != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProfileScreen(userId: currentUserId),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('لم يتم العثور على بيانات المستخدم'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _showImageSourceBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 50,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text('إضافة صورة', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Iconsax.camera, color: AppColors.primary),
+              title: const Text('التقاط صورة'),
+              subtitle: const Text('استخدم الكاميرا لالتقاط صورة جديدة'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CameraScreen(isVideo: false),
+                  ),
+                ).then((result) async {
+                  if (result != null &&
+                      result is List<String> &&
+                      result.isNotEmpty) {
+                    // Create new item first
+                    final userId = await AuthService.getCurrentUserId();
+                    if (userId != null) {
+                      final createResult = await DatabaseService.createItem(
+                        userId,
+                      );
+                      if (createResult['success'] == true) {
+                        final itemId = createResult['item_id'].toString();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => AddProductScreen(
+                              mediaFiles: result,
+                              itemId: itemId,
+                            ),
+                          ),
+                        );
+                      }
+                    }
+                  }
+                });
+              },
+            ),
+            ListTile(
+              leading: const Icon(Iconsax.gallery, color: AppColors.secondary),
+              title: const Text('اختيار من المعرض'),
+              subtitle: const Text('اختر صورة من معرض الصور'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImageFromGallery();
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showVideoSourceBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 50,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text('إضافة فيديو', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(
+                Iconsax.video_circle,
+                color: AppColors.primary,
+              ),
+              title: const Text('تسجيل فيديو'),
+              subtitle: const Text('استخدم الكاميرا لتسجيل فيديو جديد'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CameraScreen(isVideo: true),
+                  ),
+                ).then((result) async {
+                  if (result != null &&
+                      result is List<String> &&
+                      result.isNotEmpty) {
+                    // Create new item first
+                    final userId = await AuthService.getCurrentUserId();
+                    if (userId != null) {
+                      final createResult = await DatabaseService.createItem(
+                        userId,
+                      );
+                      if (createResult['success'] == true) {
+                        final itemId = createResult['item_id'].toString();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => AddProductScreen(
+                              mediaFiles: result,
+                              itemId: itemId,
+                            ),
+                          ),
+                        );
+                      }
+                    }
+                  }
+                });
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Iconsax.video_play,
+                color: AppColors.secondary,
+              ),
+              title: const Text('اختيار من المعرض'),
+              subtitle: const Text('اختر فيديو من معرض الفيديوهات'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickVideoFromGallery();
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _pickImageFromGallery() async {
+    final ImagePicker picker = ImagePicker();
+    final List<XFile> images = await picker.pickMultiImage();
+
+    if (images.isNotEmpty) {
+      final List<String> imagePaths = images
+          .map((image) => image.path)
+          .toList();
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => AddProductScreen(mediaFiles: imagePaths),
+        ),
+      );
+    }
+  }
+
+  void _pickVideoFromGallery() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? video = await picker.pickVideo(source: ImageSource.gallery);
+
+    if (video != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => AddProductScreen(mediaFiles: [video.path]),
+        ),
+      );
+    }
+  }
+
+  void _followUser(ItemModel item) async {
+    try {
+      final currentUserId = await AuthService.getCurrentUserId();
+      if (currentUserId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('يرجى تسجيل الدخول أولاً'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      if (currentUserId == item.seller.id) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('لا يمكنك متابعة نفسك'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // ✅ حدّث الـ UI فوراً
+      setState(() {
+        // ✅ حدّث كل الأصناف لنفس البائع
+        for (var i = 0; i < _items.length; i++) {
+          if (_items[i].seller.id == item.seller.id) {
+            // ✅ اعمل ItemModel جديد بالكامل
+            _items[i] = ItemModel(
+              id: _items[i].id,
+              name: _items[i].name,
+              price: _items[i].price,
+              quantity: _items[i].quantity,
+              description: _items[i].description,
+              views: _items[i].views,
+              media: _items[i].media,
+              seller: SellerModel(
+                // ✅ استخدم SellerModel
+                id: _items[i].seller.id,
+                uid: _items[i].seller.uid,
+                name: _items[i].seller.name,
+                avatar: _items[i].seller.avatar,
+                token: _items[i].seller.token,
+                isFollowing: !_items[i].seller.isFollowing,
+              ),
+              interactions: _items[i].interactions,
+            );
+          }
+        }
+      });
+
+      // Get OneSignal user token
+      String? userToken;
+      try {
+        final subscription = OneSignal.User.pushSubscription;
+        userToken = subscription.id;
+      } catch (e) {
+        print('Error getting OneSignal token: $e');
+      }
+      final result = await DatabaseService.followUser(
+        buyerId: currentUserId,
+        userId: item.seller.id,
+        userToken: userToken,
+      );
+
+      if (result['success'] == true) {
+        // تحديد الرسالة حسب الإجراء الفعلي من السيرفر
+        String message = 'تم التحديث بنجاح';
+        if (result['action'] == 'followed') {
+          message = 'تمت المتابعة بنجاح';
+        } else if (result['action'] == 'unfollowed') {
+          message = 'تم إلغاء المتابعة';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 1),
+          ),
+        );
+
+        final user = await FlutterSecureStorage().read(key: 'user_name');
+        print(item.seller.token);
+
+        OneSignalService.sendNotificationToUser(
+          playerId: item.seller.token,
+          title: "متابعة مشتري",
+          message: "$message من قبل $user",
+        );
+      } else {
+        // ✅ لو فشل، ارجع الحالة زي ما كانت
+        setState(() {
+          for (var i = 0; i < _items.length; i++) {
+            if (_items[i].seller.id == item.seller.id) {
+              _items[i] = ItemModel(
+                id: _items[i].id,
+                name: _items[i].name,
+                price: _items[i].price,
+                quantity: _items[i].quantity,
+                description: _items[i].description,
+                views: _items[i].views,
+                media: _items[i].media,
+                seller: SellerModel(
+                  id: _items[i].seller.id,
+                  uid: _items[i].seller.uid,
+                  name: _items[i].seller.name,
+                  avatar: _items[i].seller.avatar,
+                  token: _items[i].seller.token,
+                  isFollowing: !_items[i].seller.isFollowing,
+                ),
+                interactions: _items[i].interactions,
+              );
+            }
+          }
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'فشل في المتابعة'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error following user: $e');
+
+      // ✅ لو حصل error، ارجع الحالة
+      setState(() {
+        for (var i = 0; i < _items.length; i++) {
+          if (_items[i].seller.id == item.seller.id) {
+            _items[i] = ItemModel(
+              id: _items[i].id,
+              name: _items[i].name,
+              price: _items[i].price,
+              quantity: _items[i].quantity,
+              description: _items[i].description,
+              views: _items[i].views,
+              media: _items[i].media,
+              seller: SellerModel(
+                id: _items[i].seller.id,
+                uid: _items[i].seller.uid,
+                name: _items[i].seller.name,
+                avatar: _items[i].seller.avatar,
+                token: _items[i].seller.token,
+                isFollowing: !_items[i].seller.isFollowing,
+              ),
+              interactions: _items[i].interactions,
+            );
+          }
+        }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('حدث خطأ أثناء المتابعة'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Show item description with statistics
+  void _showItemDescription() async {
+    Navigator.pop(context); // Close more options bottom sheet
+
+    if (_currentIndex >= _items.length) return;
+
+    final item = _items[_currentIndex];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.6,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+        ),
+        child: Column(
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 50,
+              height: 4,
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(2)),
+            ),
+
+            Expanded(
+              child: FutureBuilder<Map<String, dynamic>>(
+                future: ApiService.getItemStats(item.id),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.primary,
+                      ),
+                    );
+                  }
+
+                  if (snapshot.hasError ||
+                      !snapshot.hasData ||
+                      snapshot.data!['success'] != true) {
+                    return const Center(
+                      child: Text(
+                        'فشل في تحميل البيانات',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    );
+                  }
+
+                  final stats = snapshot.data!['data'];
+
+                  return Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Title
+                        const Text(
+                          'وصف المنتج',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Description
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(15),
+                            border: Border.all(color: Colors.black, width: 1),
+                          ),
+                          child: Text(
+                            stats['description'] ?? 'لا يوجد وصف متاح',
+                            style: const TextStyle(
+                              color: Colors.black,
+                              fontSize: 16,
+                              height: 1.5,
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Divider
+                        Container(
+                          height: 1,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.transparent,
+                                AppColors.primary.withOpacity(0.5),
+                                Colors.transparent,
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Statistics
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            Expanded(
+                              child: _buildStatCard(
+                                icon: Iconsax.heart,
+                                title: 'الإعجابات',
+                                value: _formatCount(stats['likes'] ?? 0),
+                                color: Colors.red,
+                              ),
+                            ),
+                            SizedBox(width: 2),
+                            Expanded(
+                              child: _buildStatCard(
+                                icon: Iconsax.eye,
+                                title: 'المشاهدات',
+                                value: _formatCount(stats['views'] ?? 0),
+                                color: Colors.blue,
+                              ),
+                            ),
+                            SizedBox(width: 2),
+                            Expanded(
+                              child: _buildStatCard(
+                                icon: Iconsax.calendar,
+                                title: 'تاريخ النشر',
+                                value: stats['created_at'].toString().split(
+                                  ' ',
+                                )[0],
+                                color: Colors.green,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatCard({
+    required IconData icon,
+    required String title,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: color.withOpacity(0.3), width: 1),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.8),
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(String dateString) {
+    if (dateString.isEmpty) return 'غير محدد';
+
+    try {
+      final date = DateTime.parse(dateString);
+      final now = DateTime.now();
+      final difference = now.difference(date);
+
+      if (difference.inDays > 0) {
+        return '${difference.inDays} يوم';
+      } else if (difference.inHours > 0) {
+        return '${difference.inHours} ساعة';
+      } else if (difference.inMinutes > 0) {
+        return '${difference.inMinutes} دقيقة';
+      } else {
+        return 'الآن';
+      }
+    } catch (e) {
+      return dateString;
+    }
+  }
+
+  // Show report options
+  void _showReportOptions() async {
+    Navigator.pop(context); // Close more options bottom sheet
+
+    final reportReasons = [
+      'محتوى غير لائق',
+      'محتوى مضلل',
+      'انتهاك حقوق الطبع والنشر',
+      'محتوى عنيف',
+      'محتوى إباحي',
+      'بريد عشوائي',
+      'محتوى مخالف للقوانين',
+      'تحرش أو تنمر',
+      'معلومات شخصية',
+      'محتوى مزيف',
+      'أخرى',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F3460)],
+          ),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+        ),
+        child: Column(
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 50,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Title
+            const Text(
+              'بلغ عن المحتوى',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            Text(
+              'اختر سبب البلاغ',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 16,
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                itemCount: reportReasons.length,
+                itemBuilder: (context, index) {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: ListTile(
+                      leading: Icon(
+                        Iconsax.warning_2,
+                        color: Colors.red.withOpacity(0.8),
+                      ),
+                      title: Text(
+                        reportReasons[index],
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                      ),
+                      onTap: () => _submitReport(reportReasons[index]),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _submitReport(String reason) async {
+    Navigator.pop(context); // Close report options
+
+    if (_currentIndex >= _items.length) return;
+
+    final item = _items[_currentIndex];
+    final currentUserId = await AuthService.getCurrentUserId();
+
+    if (currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يجب تسجيل الدخول أولاً'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final result = await ApiService.addReport(
+        itemId: item.id,
+        userId: currentUserId,
+        reason: reason,
+      );
+
+      if (result['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم إرسال البلاغ بنجاح'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'فشل في إرسال البلاغ'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('حدث خطأ أثناء إرسال البلاغ'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Show block user options
+  void _showBlockUserOptions() async {
+    Navigator.pop(context); // Close more options bottom sheet
+
+    final blockReasons = [
+      'محتوى مسيء',
+      'تحرش',
+      'بريد عشوائي',
+      'محتوى مزعج',
+      'انتهاك الخصوصية',
+      'محتوى مخالف',
+      'سلوك غير لائق',
+      'أخرى',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.6,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F3460)],
+          ),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+        ),
+        child: Column(
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 50,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Title
+            const Text(
+              'حظر المستخدم',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            Text(
+              'اختر سبب الحظر',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 16,
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                itemCount: blockReasons.length,
+                itemBuilder: (context, index) {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: ListTile(
+                      leading: Icon(
+                        Iconsax.user_remove,
+                        color: Colors.orange.withOpacity(0.8),
+                      ),
+                      title: Text(
+                        blockReasons[index],
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                      ),
+                      onTap: () => _submitBlockUser(blockReasons[index]),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _submitBlockUser(String reason) async {
+    Navigator.pop(context); // Close block options
+
+    if (_currentIndex >= _items.length) return;
+
+    final item = _items[_currentIndex];
+    final currentUserId = await AuthService.getCurrentUserId();
+
+    if (currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يجب تسجيل الدخول أولاً'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Use the same report system but with a different reason format
+      final result = await ApiService.addReport(
+        itemId: item.id,
+        userId: currentUserId,
+        reason: 'حظر المستخدم: $reason',
+      );
+
+      if (result['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم إرسال طلب الحظر بنجاح'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'فشل في إرسال طلب الحظر'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('حدث خطأ أثناء إرسال طلب الحظر'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _handleLike(ItemModel item) async {
+    if (!_isLoggedIn) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+      return;
+    }
+
+    final currentUserId = await AuthService.getCurrentUserId();
+    if (currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يجب تسجيل الدخول أولاً'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Update UI immediately for better UX
+      setState(() {
+        item.interactions.isLiked = !item.interactions.isLiked;
+        if (item.interactions.isLiked) {
+          item.interactions.likes++;
+        } else {
+          item.interactions.likes--;
+        }
+      });
+
+      // Send request to server
+      final result = await ApiService.toggleLike(
+        itemId: item.id,
+        userId: currentUserId,
+      );
+
+      if (result['success'] != true) {
+        // Revert changes if server request failed
+        setState(() {
+          item.interactions.isLiked = !item.interactions.isLiked;
+          if (item.interactions.isLiked) {
+            item.interactions.likes++;
+          } else {
+            item.interactions.likes--;
+          }
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['error'] ?? 'فشل في تحديث الإعجاب'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      // Revert changes if error occurred
+      setState(() {
+        item.interactions.isLiked = !item.interactions.isLiked;
+        if (item.interactions.isLiked) {
+          item.interactions.likes++;
+        } else {
+          item.interactions.likes--;
+        }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('حدث خطأ أثناء تحديث الإعجاب'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _handleShare(ItemModel item) async {
+    try {
+      String shareText =
+          '''
+🛍️ ${item.name}
+
+💰 السعر: ${item.price} ريال قطري
+
+📝 الوصف: ${item.description}
+
+🏪 متوفر على تطبيق Globee
+تسوق الآن واحصل على أفضل العروض!
+
+#Globee #تسوق #عروض
+''';
+
+      await Share.share(
+        shareText,
+        subject: 'منتج رائع على Globee - ${item.name}',
+      );
+      setState(() {
+        item.interactions.shares++;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('حدث خطأ أثناء المشاركة'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _showCartBottomSheet(ItemModel item) async {
+    if (!_isLoggedIn) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+      return;
+    }
+
+    final currentUserId = await AuthService.getCurrentUserId();
+    if (currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يجب تسجيل الدخول أولاً'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // ✅ جيب الكمية الحالية من السيرفر قبل ما تفتح الـ sheet
+    try {
+      final result = await ApiService.getCartQuantity(
+        itemId: item.id,
+        userId: currentUserId,
+      );
+
+      if (result['success'] == true) {
+        final itemIndex = _items.indexWhere((i) => i.id == item.id);
+        if (itemIndex != -1) {
+          setState(() {
+            _items[itemIndex].interactions.cartQuantity =
+                result['quantity'] ?? 0;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading cart quantity: $e');
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFF1A1A2E),
+                  Color(0xFF16213E),
+                  Color(0xFF0F3460),
+                ],
+              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+            ),
+            child: Column(
+              children: [
+                // Handle bar
+                Container(
+                  margin: const EdgeInsets.only(top: 12),
+                  width: 50,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Title
+                const Text(
+                  'إضافة إلى السلة',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 30),
+
+                // Product info
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    children: [
+                      // Product image
+                      Container(
+                        width: 90,
+                        height: 90,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.2),
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(13),
+                          child: item.media.isNotEmpty
+                              ? Image.network(
+                                  item.media.first,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      color: Colors.grey[300],
+                                      child: const Icon(
+                                        Iconsax.image,
+                                        color: Colors.grey,
+                                        size: 40,
+                                      ),
+                                    );
+                                  },
+                                  loadingBuilder:
+                                      (context, child, loadingProgress) {
+                                        if (loadingProgress == null)
+                                          return child;
+                                        return Container(
+                                          color: Colors.grey[300],
+                                          child: const Center(
+                                            child: CircularProgressIndicator(
+                                              color: AppColors.primary,
+                                              strokeWidth: 2,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                )
+                              : Container(
+                                  color: Colors.grey[300],
+                                  child: const Icon(
+                                    Iconsax.image,
+                                    color: Colors.grey,
+                                    size: 40,
+                                  ),
+                                ),
+                        ),
+                      ),
+
+                      const SizedBox(width: 16),
+
+                      // Product details
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.name,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${item.price} ريال قطري',
+                              style: const TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 30),
+                // Quantity controls
+                _CartQuantityWidget(
+                  itemId: item.id,
+                  userId: currentUserId,
+                  qtt: item.quantity,
+                  onQuantityChanged: (newQuantity) {
+                    final itemIndex = _items.indexWhere((i) => i.id == item.id);
+                    if (itemIndex != -1) {
+                      setState(() {
+                        _items[itemIndex].interactions.cartQuantity =
+                            newQuantity;
+                      });
+                    }
+                    setModalState(() {});
+                  },
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+}
+
+// ✅ Widget السلة
+class _CartQuantityWidget extends StatefulWidget {
+  final String itemId;
+  final String userId;
+  final int qtt;
+  final Function(int) onQuantityChanged;
+
+  const _CartQuantityWidget({
+    required this.itemId,
+    required this.userId,
+    required this.qtt,
+    required this.onQuantityChanged,
+  });
+
+  @override
+  State<_CartQuantityWidget> createState() => _CartQuantityWidgetState();
+}
+
+class _CartQuantityWidgetState extends State<_CartQuantityWidget> {
+  int _currentQuantity = 0;
+  bool _isLoading = true;
+  bool _isUpdating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadQuantity();
+  }
+
+  Future<void> _loadQuantity() async {
+    try {
+      final result = await ApiService.getCartQuantity(
+        itemId: widget.itemId,
+        userId: widget.userId,
+      );
+
+      if (mounted) {
+        setState(() {
+          if (result['success'] == true) {
+            _currentQuantity = result['quantity'] ?? 0;
+          }
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading quantity: $e');
+      if (mounted) {
+        setState(() {
+          _currentQuantity = 0;
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _updateQuantity(bool increase) async {
+    if (_isUpdating) return;
+
+    // ✅ شيك على الكمية قبل ما نبعت للسيرفر
+    if (increase && _currentQuantity >= widget.qtt) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('الكمية المتاحة: ${widget.qtt} فقط'),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    if (!increase && _currentQuantity <= 0) {
+      print('❌ Cannot decrease: quantity is already 0'); // ← Debug
+      return;
+    }
+
+    print(
+      '🔄 Updating quantity: ${increase ? "increase" : "decrease"}',
+    ); // ← Debug
+
+    setState(() {
+      _isUpdating = true;
+    });
+
+    try {
+      Map<String, dynamic> result;
+
+      if (increase) {
+        result = await ApiService.addToCart(
+          itemId: widget.itemId,
+          userId: widget.userId,
+          quantity: 1,
+        );
+      } else {
+        print('📤 Calling removeFromCart API'); // ← Debug
+        result = await ApiService.removeFromCart(
+          itemId: widget.itemId,
+          userId: widget.userId,
+        );
+        print('📥 Remove API response: $result'); // ← Debug
+      }
+
+      if (result['success'] == true) {
+        print(
+          '✅ API Success! New quantity from server: ${result['quantity']}',
+        ); // ← Debug
+
+        if (mounted) {
+          setState(() {
+            // ✅ استخدم الكمية اللي جاية من السيرفر
+            if (result['quantity'] != null) {
+              _currentQuantity = result['quantity'];
+              print(
+                '✅ Updated _currentQuantity to: $_currentQuantity',
+              ); // ← Debug
+            } else {
+              // Fallback
+              if (increase) {
+                _currentQuantity++;
+              } else {
+                if (_currentQuantity > 0) _currentQuantity--;
+              }
+            }
+            _isUpdating = false;
+          });
+          widget.onQuantityChanged(_currentQuantity);
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                increase ? 'تمت الإضافة للسلة' : 'تم التقليل من السلة',
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 1),
+            ),
+          );
+        }
+      } else {
+        print('❌ API Failed: ${result['error']}'); // ← Debug
+
+        // ✅ لو السيرفر رفض بسبب الكمية
+        if (mounted) {
+          setState(() {
+            _isUpdating = false;
+          });
+
+          String errorMessage = result['error'] ?? 'حدث خطأ';
+
+          // ✅ لو في معلومات عن الكمية المتاحة
+          if (result['available_quantity'] != null) {
+            errorMessage =
+                'الكمية المتاحة: ${result['available_quantity']} فقط';
+          }
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('💥 Exception occurred: $e'); // ← Debug
+
+      if (mounted) {
+        setState(() {
+          _isUpdating = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('حدث خطأ في الاتصال'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      );
+    }
+
+    // ✅ متغير يحدد إذا وصلنا للحد الأقصى
+    final bool isMaxQuantity = _currentQuantity >= widget.qtt;
+
+    return Column(
+      children: [
+        // ✅ عرض الكمية المتاحة
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Text(
+            'الكمية المتاحة: ${widget.qtt}',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.7),
+              fontSize: 14,
+            ),
+          ),
+        ),
+
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // زر النقصان
+            GestureDetector(
+              onTap: _isUpdating || _currentQuantity <= 0
+                  ? null
+                  : () => _updateQuantity(false),
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: _isUpdating
+                      ? Colors.grey.withOpacity(0.3)
+                      : _currentQuantity > 0
+                      ? Colors.red.withOpacity(0.8)
+                      : Colors.grey.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(25),
+                ),
+                child: _isUpdating
+                    ? const Center(
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        ),
+                      )
+                    : const Icon(Iconsax.minus, color: Colors.white, size: 24),
+              ),
+            ),
+
+            const SizedBox(width: 30),
+
+            // عرض الكمية
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                // ✅ لو وصل للحد الأقصى، اعرض border أحمر
+                border: Border.all(
+                  color: isMaxQuantity
+                      ? Colors.orange.withOpacity(0.8)
+                      : Colors.white.withOpacity(0.2),
+                  width: 2,
+                ),
+              ),
+              child: Text(
+                _currentQuantity.toString(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 30),
+
+            // زر الزيادة
+            GestureDetector(
+              onTap: _isUpdating || isMaxQuantity
+                  ? null
+                  : () => _updateQuantity(true),
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: _isUpdating
+                      ? Colors.grey.withOpacity(0.3)
+                      : isMaxQuantity
+                      ? Colors.grey.withOpacity(
+                          0.3,
+                        ) // ✅ disable لو وصل للحد الأقصى
+                      : AppColors.primary,
+                  borderRadius: BorderRadius.circular(25),
+                ),
+                child: _isUpdating
+                    ? const Center(
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        ),
+                      )
+                    : Icon(
+                        Iconsax.add,
+                        color: isMaxQuantity
+                            ? Colors.white.withOpacity(0.5)
+                            : Colors.white,
+                        size: 24,
+                      ),
+              ),
+            ),
+          ],
+        ),
+
+        // ✅ رسالة توضيحية لو وصل للحد الأقصى
+        if (isMaxQuantity)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Iconsax.info_circle,
+                  color: Colors.orange.withOpacity(0.8),
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'وصلت للحد الأقصى المتاح',
+                  style: TextStyle(
+                    color: Colors.orange.withOpacity(0.8),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        const SizedBox(height: 20),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(25),
+            ),
+          ),
+          child: const Text(
+            'تم',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
+    );
+  }
+}
