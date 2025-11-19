@@ -78,7 +78,7 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
     String urlx = url;
     String finalFullUrl = urlx.replaceAll(
       url,
-      "https://globee.b-cdn.netx/$itmId/$ext",
+      "https://globee.b-cdn.net/$itmId/$ext",
     );
     if (_isVideoUrl(finalFullUrl.toString().split(']')[0])) {
       return VideoPlayerWidget(

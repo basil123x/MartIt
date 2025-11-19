@@ -77,7 +77,7 @@ try {
             $comment = array(
                 'id' => $row['uid'],
                 'userName' => $row['Fullname'] ?: 'مستخدم',
-                'userAvatar' => "https://globee.b-cdnx.net/users/" . $row['uid'] . "/avatar.jpg",
+                'userAvatar' => "https://globee.b-cdn.net/users/" . $row['uid'] . "/avatar.jpg",
                 'comment' => $row['comment'],
                 'createdAt' => $row['created_at']
             );

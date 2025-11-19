@@ -1,3 +1,4 @@
+import 'package:Globee/core/services/contacts_service.dart';
 import 'package:Globee/shared/providers/app_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -19,17 +20,22 @@ void main() async {
 
   OneSignal.Notifications.addForegroundWillDisplayListener((event) {
     print('OneSignal: notification received: ${event.notification.title}');
-    // لو عايز تعرض الـ notification حتى لو الـ app مفتوح:
-    event.preventDefault(); // امنع العرض التلقائي
-    event.notification.display(); // اعرضها بنفسك
+    event.preventDefault();
+    event.notification.display();
   });
 
   runApp(const GlobeeApp());
 }
 
-class GlobeeApp extends StatelessWidget {
+class GlobeeApp extends StatefulWidget {
   const GlobeeApp({super.key});
 
+  @override
+  State<GlobeeApp> createState() => _GlobeeAppState();
+}
+
+class _GlobeeAppState extends State<GlobeeApp> {
+  
   @override
   Widget build(BuildContext context) {
     return MultiProvider(

@@ -25,10 +25,10 @@ class OneSignalService {
         },
         body: jsonEncode({
           'app_id': _appId,
-          'include_player_ids': [playerId], // ✅ الـ Player ID اللي عايز تبعتله
+          'include_player_ids': [playerId],
           'headings': {'en': title, 'ar': title},
           'contents': {'en': message, 'ar': message},
-          'data': data ?? {}, // Extra data (optional)
+          'data': data ?? {},
         }),
       );
 

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
+import '../../core/services/auth_service.dart';
 import '../../core/models/item_model.dart';
+import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userId;
@@ -23,7 +25,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _hasError = false;
   bool _hasError1 = false;
   String _selectedFilter = 'الأحدث';
-  final List<String> _filters = ['الأحدث', 'الأكثر مشاهدة', 'الأكثر إعجاباً'];
+  final List<String> _filters = ['الأحدث', 'الرائجة', 'الأقدم'];
 
   @override
   void initState() {
@@ -128,7 +130,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
         break;
 
-      case 'الأكثر مشاهدة':
+      case 'الرائجة':
         // ترتيب حسب views (الأكثر أولاً)
         tempList.sort((a, b) {
           int viewsA = int.tryParse(a['views']?.toString() ?? '0') ?? 0;
@@ -137,20 +139,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
         break;
 
-      case 'الأكثر إعجاباً':
-        // ترتيب حسب likes (الأكثر أولاً)
+      case 'الأقدم':
+        // ترتيب حسب created_at أو id (الأقدم أولاً)
         tempList.sort((a, b) {
-          int likesA =
-              int.tryParse(
-                a['likes']?.toString() ?? a['likes_count']?.toString() ?? '0',
-              ) ??
-              0;
-          int likesB =
-              int.tryParse(
-                b['likes']?.toString() ?? b['likes_count']?.toString() ?? '0',
-              ) ??
-              0;
-          return likesB.compareTo(likesA);
+          // لو فيه created_at استخدمه، لو لأ استخدم id
+          if (a['created_at'] != null && b['created_at'] != null) {
+            try {
+              return DateTime.parse(
+                a['created_at'].toString(),
+              ).compareTo(DateTime.parse(b['created_at'].toString()));
+            } catch (e) {
+              // لو فيه مشكلة في parsing التاريخ
+              return 0;
+            }
+          } else if (a['id'] != null && b['id'] != null) {
+            int idA = int.tryParse(a['id'].toString()) ?? 0;
+            int idB = int.tryParse(b['id'].toString()) ?? 0;
+            return idA.compareTo(idB);
+          }
+          return 0;
         });
         break;
     }
@@ -210,11 +217,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
           floating: false,
           pinned: true,
           backgroundColor: AppColors.primary,
-          leading: Container(),
+          leading: FutureBuilder<String?>(
+            future: AuthService.getCurrentUserId(),
+            builder: (context, snapshot) {
+              if (snapshot.hasData && snapshot.data == widget.userId) {
+                print(_profile?.phone);
+                return IconButton(
+                  onPressed: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => EditProfileScreen(
+                          currentName: _profile?.name ?? '',
+                          currentPhone: _profile?.phone ?? '',
+                          currentAvatar: _profile?.avatar ?? '',
+                        ),
+                      ),
+                    );
+                    if (result == true) {
+                      _loadProfile(); // Reload profile after edit
+                    }
+                  },
+                  icon: const Icon(Iconsax.edit, color: AppColors.primary),
+                );
+              }
+              return const SizedBox();
+            },
+          ),
           actions: [
             IconButton(
               onPressed: () => Navigator.pop(context),
-              icon: const Icon(Iconsax.arrow_right_3, color: Colors.white),
+              icon: const Icon(Iconsax.arrow_right_3, color: AppColors.primary),
             ),
           ],
           flexibleSpace: FlexibleSpaceBar(
@@ -223,7 +256,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [AppColors.primary, AppColors.secondary],
+                  colors: [
+                    Color(0xFFD4D4F0),
+                    Color(0xFFC8D4F5),
+                    Color(0xFFB4D4F0),
+                    // AppColors.primary, AppColors.secondary
+                  ],
                 ),
               ),
               child: _buildProfileHeader(),
@@ -254,7 +292,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             height: 120,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 4),
+              border: Border.all(color: AppColors.primary, width: 4),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.2),
@@ -288,7 +326,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Text(
             _profile!.name,
             style: const TextStyle(
-              color: Colors.white,
+              color: AppColors.primary,
               fontSize: 24,
               fontWeight: FontWeight.bold,
             ),
@@ -300,7 +338,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: AppColors.primary.withOpacity(0.2),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
@@ -393,25 +431,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           const SizedBox(height: 20),
 
-          // Load More Button
-          if (_profile!.itemsCount > 6)
-            ElevatedButton(
-              onPressed: () {
-                // TODO: Load more items
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('تحميل المزيد قيد التطوير')),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.secondary,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(25),
-                ),
-              ),
-              child: const Text('تحميل المزيد'),
-            ),
+          // // Load More Button
+          // if (_profile!.itemsCount > 6)
+          //   ElevatedButton(
+          //     onPressed: () {
+          //       // TODO: Load more items
+          //       ScaffoldMessenger.of(context).showSnackBar(
+          //         const SnackBar(content: Text('تحميل المزيد قيد التطوير')),
+          //       );
+          //     },
+          //     style: ElevatedButton.styleFrom(
+          //       backgroundColor: AppColors.secondary,
+          //       foregroundColor: Colors.white,
+          //       minimumSize: const Size(double.infinity, 50),
+          //       shape: RoundedRectangleBorder(
+          //         borderRadius: BorderRadius.circular(25),
+          //       ),
+          //     ),
+          //     child: const Text('تحميل المزيد'),
+          //   ),
         ],
       ),
     );
@@ -437,8 +475,12 @@ class _ProfileItemCardState extends State<ProfileItemCard> {
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: Color(0xFFB4D4F0).withAlpha(40),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: AppColors.primary, width: 2),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -459,7 +501,7 @@ class _ProfileItemCardState extends State<ProfileItemCard> {
                     itemCount: widget.item['media'].length,
                     itemBuilder: (context, i) {
                       return Image.network(
-                        widget.item['media'][i],
+                        "${widget.item['media'][i]}",
                         fit: BoxFit.cover,
                       );
                     },

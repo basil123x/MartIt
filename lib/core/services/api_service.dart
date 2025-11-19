@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:Globee/core/models/item_model.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -29,13 +30,19 @@ class ApiService {
   // Fetch items with pagination for infinite scroll
   static Future<List<ItemModel>> fetchItems({
     required int page,
-    String? userId, // ✅ أضفنا userId parameter
+    String? userId,
+    String? initialItemId,
   }) async {
     try {
       final url = Uri.parse('$baseUrl/sql.php');
 
       // ✅ نبعت user_id لو موجود
-      final body = {'action': 'fetch', 'page': page.toString(), 'limit': '10'};
+      final body = {
+        'action': 'fetch',
+        'page': page.toString(),
+        'limit': '10',
+        'itemSrchId': initialItemId ?? "",
+      };
 
       // ✅ لو في user_id، نضيفه للـ body
       if (userId != null && userId.isNotEmpty) {
@@ -89,7 +96,7 @@ class ApiService {
   static Future getUserProfile(int userId) async {
     try {
       final response = await Dio().get(
-        '$baseUrl/profile.php?user_id=$userId&k=${DateTime.now().millisecondsSinceEpoch}',
+        '$baseUrl/profile.php?user_id=$userId',
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
 
@@ -149,10 +156,15 @@ class ApiService {
     required String comment,
   }) async {
     try {
+      print(DateTime.now().toString());
       final response = await http.post(
         Uri.parse('$baseUrl/comments.php?item_id=$itemId'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'comment': comment, 'user_id': userId}),
+        body: json.encode({
+          'comment': comment,
+          'user_id': userId,
+          'created_atx': DateTime.now().toString(),
+        }),
       );
 
       if (response.statusCode == 200) {
@@ -239,6 +251,8 @@ class ApiService {
   }
 
   // Add to cart
+  // Add to cart with timeout
+  // Add to cart with longer timeout
   static Future<Map<String, dynamic>> addToCart({
     required String itemId,
     required String userId,
@@ -246,17 +260,28 @@ class ApiService {
   }) async {
     try {
       String? oid = await FlutterSecureStorage().read(key: "user_oid");
-      final response = await Dio().post(
-        '$baseUrl/sql.php',
-        data: FormData.fromMap({
-          "action": "add_to_cart",
-          "item_id": itemId,
-          "user_id": userId,
-          "oid": oid,
-          "quantity": quantity.toString(),
-        }),
-        options: Options(headers: {'Content-Type': 'application/json'}),
-      );
+      final response = await Dio()
+          .post(
+            '$baseUrl/sql.php',
+            data: FormData.fromMap({
+              "action": "add_to_cart",
+              "item_id": itemId,
+              "user_id": userId,
+              "oid": oid,
+              "quantity": quantity.toString(),
+            }),
+            options: Options(
+              headers: {'Content-Type': 'application/json'},
+              sendTimeout: const Duration(seconds: 30), // ← ✅ زودها
+              receiveTimeout: const Duration(seconds: 30), // ← ✅ زودها
+            ),
+          )
+          .timeout(
+            const Duration(seconds: 30), // ← ✅ زودها
+            onTimeout: () {
+              throw Exception('انتهت مهلة الاتصال بالخادم');
+            },
+          );
 
       if (response.statusCode == 200) {
         return response.data;
@@ -264,25 +289,37 @@ class ApiService {
         throw Exception('Failed to add to cart: ${response.statusCode}');
       }
     } catch (e) {
+      print('❌ Add to cart error: $e');
       throw Exception('Cart error: $e');
     }
   }
 
-  // Remove from cart
+  // Remove from cart with longer timeout
   static Future<Map<String, dynamic>> removeFromCart({
     required String itemId,
     required String userId,
   }) async {
     try {
-      final response = await Dio().post(
-        '$baseUrl/sql.php',
-        data: FormData.fromMap({
-          "action": "remove_from_cart",
-          "item_id": itemId,
-          "user_id": userId,
-        }),
-        options: Options(headers: {'Content-Type': 'application/json'}),
-      );
+      final response = await Dio()
+          .post(
+            '$baseUrl/sql.php',
+            data: FormData.fromMap({
+              "action": "remove_from_cart",
+              "item_id": itemId,
+              "user_id": userId,
+            }),
+            options: Options(
+              headers: {'Content-Type': 'application/json'},
+              sendTimeout: const Duration(seconds: 30), // ← ✅ زودها
+              receiveTimeout: const Duration(seconds: 30), // ← ✅ زودها
+            ),
+          )
+          .timeout(
+            const Duration(seconds: 30), // ← ✅ زودها
+            onTimeout: () {
+              throw Exception('انتهت مهلة الاتصال بالخادم');
+            },
+          );
 
       if (response.statusCode == 200) {
         return response.data;
@@ -290,6 +327,7 @@ class ApiService {
         throw Exception('Failed to remove from cart: ${response.statusCode}');
       }
     } catch (e) {
+      print('❌ Remove from cart error: $e');
       throw Exception('Cart error: $e');
     }
   }
@@ -325,6 +363,7 @@ class ApiService {
     required String userId,
     int limit = 10,
     int offset = 0,
+    String? initialItemId,
   }) async {
     try {
       final response = await Dio().post(
@@ -334,6 +373,7 @@ class ApiService {
           "user_id": userId,
           "limit": limit.toString(),
           "offset": offset.toString(),
+          'itemSrchId': initialItemId ?? "",
         }),
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
@@ -363,6 +403,520 @@ class ApiService {
       }
     } catch (e) {
       throw Exception('Fetch error: $e');
+    }
+  }
+
+  // Get cart items
+  static Future<Map<String, dynamic>> getCartItems({
+    required String userId,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php',
+        data: FormData.fromMap({"action": "get_from_cart", "user_id": userId}),
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception('Failed to get cart items: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Cart error: $e');
+    }
+  }
+
+  // Update cart quantity
+  static Future<Map<String, dynamic>> updateCartQuantity({
+    required String cartId,
+    required int quantity,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php',
+        data: FormData.fromMap({
+          "action": "update_cart_quantity",
+          "cart_id": cartId,
+          "quantity": quantity.toString(),
+        }),
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception(
+          'Failed to update cart quantity: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      throw Exception('Cart error: $e');
+    }
+  }
+
+  // Add shipping address
+  static Future<Map<String, dynamic>> addShippingAddress({
+    required String fullname,
+    required String mobile,
+    required String email,
+    required String country,
+    required String city,
+    required String zoneNumber,
+    required String streetNumber,
+    required String buildingNumber,
+    required String uid,
+    required String oid,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php',
+        data: FormData.fromMap({
+          "action": "add_shipping_address",
+          "fullname": fullname,
+          "mobile": mobile,
+          "email": email,
+          "country": country,
+          "city": city,
+          "zone_number": zoneNumber,
+          "street_number": streetNumber,
+          "building_number": buildingNumber,
+          "uid": uid,
+          "oid": oid,
+        }),
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception(
+          'Failed to add shipping address: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      throw Exception('Shipping address error: $e');
+    }
+  }
+
+  // Get shipping addresses
+  static Future<Map<String, dynamic>> getShippingAddresses({
+    required String uid,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php',
+        data: FormData.fromMap({
+          "action": "get_shipping_addresses",
+          "uid": uid,
+        }),
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception(
+          'Failed to get shipping addresses: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      throw Exception('Shipping address error: $e');
+    }
+  }
+
+  // Get user sellers
+  static Future<Map<String, dynamic>> getUserSellers({
+    required String userId,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php',
+        data: FormData.fromMap({
+          "action": "get_user_sellers",
+          "user_id": userId,
+        }),
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception('Failed to get user sellers: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Sellers error: $e');
+    }
+  }
+
+  // Update user profile
+  static Future<Map<String, dynamic>> updateUserProfile({
+    required String uid,
+    required String name,
+    required String phone,
+    File? avatar,
+  }) async {
+    try {
+      // First, upload avatar if provided
+      if (avatar != null) {
+        await _uploadAvatar(uid, avatar);
+      }
+
+      // Update user info in database
+      final response = await Dio().post(
+        '$baseUrl/sql.php',
+        data: FormData.fromMap({
+          "action": "update_user_profile",
+          "uid": uid,
+          "name": name,
+          "phone": phone,
+        }),
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception('Failed to update profile: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Profile update error: $e');
+    }
+  }
+
+  // Upload avatar to Bunny.net
+  static Future<void> _uploadAvatar(String uid, File avatar) async {
+    try {
+      List<int> fileBytes = await avatar.readAsBytes();
+
+      await Dio().put(
+        "https://storage.bunnycdn.com/globee-trading/users/$uid/avatar.jpg",
+        data: Stream.fromIterable([fileBytes]),
+        options: Options(
+          headers: {
+            "AccessKey": "18808acb-f5f1-473e-bd84cf669411-20c0-499c",
+            "Content-Type": "application/octet-stream",
+          },
+        ),
+      );
+    } catch (e) {
+      throw Exception('Avatar upload error: $e');
+    }
+  }
+
+  // Clear cart and update OID
+  static Future<Map<String, dynamic>> clearCartAndUpdateOID({
+    required String userId,
+    required String newOid,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php',
+        data: FormData.fromMap({
+          "action": "clear_cart_update_oid",
+          "user_id": userId,
+          "new_oid": newOid,
+        }),
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception(
+          'Failed to clear cart and update OID: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      throw Exception('Clear cart error: $e');
+    }
+  }
+
+  // Get chat messages between two users
+  static Future<Map<String, dynamic>> getChatMessages({
+    required String senderId,
+    required String receiverId,
+    String? conversationId,
+  }) async {
+    try {
+      final data = {
+        "action": "get_chat_messages",
+        "sender_id": senderId,
+        "receiver_id": receiverId,
+      };
+
+      if (conversationId != null && conversationId.isNotEmpty) {
+        data["conversation_id"] = conversationId;
+      }
+
+      final response = await Dio().post(
+        '$baseUrl/sql.php',
+        data: FormData.fromMap(data),
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception('Failed to get chat messages: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Chat messages error: $e');
+    }
+  }
+
+  // Send chat message
+  static Future<Map<String, dynamic>> sendChatMessage({
+    required String senderId,
+    required String receiverId,
+    required String message,
+    String? conversationId,
+    String messageType = 'text',
+    double? locationLat,
+    double? locationLng,
+  }) async {
+    try {
+      final data = {
+        "action": "send_chat_message",
+        "sender_id": senderId,
+        "receiver_id": receiverId,
+        "message": message,
+        "message_type": messageType,
+      };
+
+      print(data);
+
+      if (conversationId != null && conversationId.isNotEmpty) {
+        data["conversation_id"] = conversationId;
+      }
+
+      if (locationLat != null) {
+        data["location_lat"] = locationLat.toString();
+      }
+
+      if (locationLng != null) {
+        data["location_lng"] = locationLng.toString();
+      }
+
+      final response = await Dio().post(
+        '$baseUrl/sql.php',
+        data: FormData.fromMap(data),
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception('Failed to send message: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Send message error: $e');
+    }
+  }
+
+  // Send chat notification
+  static Future<Map<String, dynamic>> sendChatNotification({
+    required String receiverId,
+    required String senderName,
+    required String message,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php',
+        data: FormData.fromMap({
+          "action": "send_chat_notification",
+          "receiver_id": receiverId,
+          "sender_name": senderName,
+          "message": message,
+        }),
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception('Failed to send notification: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Notification error: $e');
+    }
+  }
+
+  // Update user online status
+  static Future<Map<String, dynamic>> updateOnlineStatus({
+    required String userId,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php',
+        data: FormData.fromMap({
+          "action": "update_online_status",
+          "user_id": userId,
+        }),
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception('Failed to update status: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Update status error: $e');
+    }
+  }
+
+  // Get user online status
+  static Future<Map<String, dynamic>> getUserStatus({
+    required String userId,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php',
+        data: FormData.fromMap({
+          "action": "get_user_status",
+          "user_id": userId,
+        }),
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception('Failed to get status: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Get status error: $e');
+    }
+  }
+
+  // Get chat conversations list
+  static Future<Map<String, dynamic>> getChatConversations({
+    required String userId,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php',
+        data: FormData.fromMap({
+          "action": "get_chat_conversations",
+          "user_id": userId,
+        }),
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception('Failed to get conversations: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Conversations error: $e');
+    }
+  }
+
+  // Create order
+  static Future<Map<String, dynamic>> createOrder({
+    required String uid,
+    required String custId,
+    required String oid,
+    required String shipId,
+    required String items,
+    required String totalAmount,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php',
+        data: FormData.fromMap({
+          "action": "create_order",
+          "uid": uid,
+          "cust_id": custId,
+          "oid": oid,
+          "ship_id": shipId,
+          "items": items,
+          "total_amount": totalAmount,
+        }),
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception('Failed to create order: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Create order error: $e');
+    }
+  }
+
+  // Get my orders as buyer
+  static Future<Map<String, dynamic>> getMyOrders({
+    required String custId,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php',
+        data: FormData.fromMap({"action": "get_my_orders", "cust_id": custId}),
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception('Failed to get my orders: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Get my orders error: $e');
+    }
+  }
+
+  // Get customer orders as seller
+  static Future<Map<String, dynamic>> getCustomerOrders({
+    required String uid,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php',
+        data: FormData.fromMap({"action": "get_customer_orders", "uid": uid}),
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception(
+          'Failed to get customer orders: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      throw Exception('Get customer orders error: $e');
+    }
+  }
+
+  // Update order status
+  static Future<Map<String, dynamic>> updateOrderStatus({
+    required String orderId,
+    required String status,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php',
+        data: FormData.fromMap({
+          "action": "update_order_status",
+          "order_id": orderId,
+          "status": status,
+        }),
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception(
+          'Failed to update order status: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      throw Exception('Update order status error: $e');
     }
   }
 }

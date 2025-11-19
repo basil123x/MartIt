@@ -1,4 +1,6 @@
+import 'package:Globee/core/services/onesignal_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:iconsax/iconsax.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
@@ -9,11 +11,13 @@ import '../auth/login_screen.dart';
 class CommentsModal extends StatefulWidget {
   final String itemId;
   final bool isLoggedIn;
+  final ItemModel items;
 
   const CommentsModal({
     super.key,
     required this.itemId,
     required this.isLoggedIn,
+    required this.items,
   });
 
   @override
@@ -40,7 +44,7 @@ class _CommentsModalState extends State<CommentsModal> {
 
     try {
       final response = await ApiService.getComments(int.parse(widget.itemId));
-      
+
       if (response['success'] == true) {
         final List<dynamic> commentsData = response['data'] ?? [];
         setState(() {
@@ -81,9 +85,9 @@ class _CommentsModalState extends State<CommentsModal> {
     try {
       final currentUserId = await AuthService.getCurrentUserId();
       if (currentUserId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('يجب تسجيل الدخول أولاً')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('يجب تسجيل الدخول أولاً')));
         setState(() {
           _isSending = false;
         });
@@ -95,11 +99,18 @@ class _CommentsModalState extends State<CommentsModal> {
         userId: int.parse(currentUserId),
         comment: _commentController.text.trim(),
       );
+      final user = await FlutterSecureStorage().read(key: 'user_name');
+
+      OneSignalService.sendNotificationToUser(
+        playerId: widget.items.seller.token,
+        title: "تعليق جديد من $user",
+        message: _commentController.text.trim(),
+      );
 
       if (response['success'] == true) {
         _commentController.clear();
         _loadComments(); // Reload comments
-        
+
         // Scroll to bottom
         Future.delayed(const Duration(milliseconds: 100), () {
           _scrollController.animateTo(
@@ -109,14 +120,14 @@ class _CommentsModalState extends State<CommentsModal> {
           );
         });
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('فشل في إرسال التعليق')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('فشل في إرسال التعليق')));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('حدث خطأ في إرسال التعليق')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('حدث خطأ في إرسال التعليق')));
     }
 
     setState(() {
@@ -128,10 +139,11 @@ class _CommentsModalState extends State<CommentsModal> {
   Widget build(BuildContext context) {
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     final screenHeight = MediaQuery.of(context).size.height;
-    
+
     return Container(
-      height: keyboardHeight > 0 
-          ? screenHeight * 0.9 // عند فتح الكيبورد
+      height: keyboardHeight > 0
+          ? screenHeight *
+                0.9 // عند فتح الكيبورد
           : screenHeight * 0.8, // الحالة العادية
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -141,7 +153,7 @@ class _CommentsModalState extends State<CommentsModal> {
         children: [
           // Header
           _buildHeader(),
-          
+
           // Comments List
           Expanded(
             child: _isLoading
@@ -149,16 +161,15 @@ class _CommentsModalState extends State<CommentsModal> {
                     child: CircularProgressIndicator(color: AppColors.primary),
                   )
                 : _comments.isEmpty
-                    ? _buildEmptyState()
-                    : _buildCommentsList(),
+                ? _buildEmptyState()
+                : _buildCommentsList(),
           ),
-          
+
           // Comment Input
           _buildCommentInput(),
-          
+
           // Add padding for keyboard
-          if (keyboardHeight > 0)
-            SizedBox(height: keyboardHeight),
+          if (keyboardHeight > 0) SizedBox(height: keyboardHeight),
         ],
       ),
     );
@@ -168,9 +179,7 @@ class _CommentsModalState extends State<CommentsModal> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Colors.grey[200]!),
-        ),
+        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -181,10 +190,7 @@ class _CommentsModalState extends State<CommentsModal> {
           ),
           const Text(
             'التعليقات',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(width: 40), // Balance the close button
         ],
@@ -210,10 +216,7 @@ class _CommentsModalState extends State<CommentsModal> {
           SizedBox(height: 8),
           Text(
             'كن أول من يعلق على هذا المنتج',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey,
-            ),
+            style: TextStyle(fontSize: 14, color: Colors.grey),
           ),
         ],
       ),
@@ -254,9 +257,9 @@ class _CommentsModalState extends State<CommentsModal> {
                   )
                 : null,
           ),
-          
+
           const SizedBox(width: 12),
-          
+
           // Comment Content
           Expanded(
             child: Column(
@@ -268,10 +271,7 @@ class _CommentsModalState extends State<CommentsModal> {
                   children: [
                     Text(
                       _formatTime(comment.createdAt),
-                      style: const TextStyle(
-                        color: Colors.grey,
-                        fontSize: 12,
-                      ),
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
                     ),
                     Text(
                       comment.userName,
@@ -282,9 +282,9 @@ class _CommentsModalState extends State<CommentsModal> {
                     ),
                   ],
                 ),
-                
+
                 const SizedBox(height: 4),
-                
+
                 // Comment Text
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -310,9 +310,7 @@ class _CommentsModalState extends State<CommentsModal> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: Colors.grey[200]!),
-        ),
+        border: Border(top: BorderSide(color: Colors.grey[200]!)),
       ),
       child: SafeArea(
         child: Row(
@@ -334,16 +332,12 @@ class _CommentsModalState extends State<CommentsModal> {
                           strokeWidth: 2,
                         ),
                       )
-                    : const Icon(
-                        Iconsax.send_1,
-                        color: Colors.white,
-                        size: 20,
-                      ),
+                    : const Icon(Iconsax.send_1, color: Colors.white, size: 20),
               ),
             ),
-            
+
             const SizedBox(width: 12),
-            
+
             // Text Input
             Expanded(
               child: Container(

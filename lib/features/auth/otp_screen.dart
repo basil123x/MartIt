@@ -32,12 +32,31 @@ class _OTPScreenState extends State<OTPScreen> {
   bool _isLoading = false;
   String _enteredOTP = '';
 
+  Future sendOTP() async {
+    await Dio().post(
+      "https://www.wasenderapi.com/api/send-message",
+      options: Options(
+        headers: {
+          "Authorization":
+              "Bearer 0026eac5ee3215e52331670750d298b91e8c6e97988bdeddb156455f459d4b57",
+          "Content-Type": "application/json",
+        },
+      ),
+      data: {
+        "to": "+974${widget.phoneNumber}",
+        "text":
+            "${widget.generatedOTP} is Your Verification Code. Don\'t Share This code with anyone",
+      },
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     // Auto focus first field
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNodes[0].requestFocus();
+      sendOTP();
     });
   }
 
@@ -305,32 +324,32 @@ class _OTPScreenState extends State<OTPScreen> {
                           ),
 
                           // Debug info (remove in production)
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: AppColors.lightGrey,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              children: [
-                                Text(
-                                  'للاختبار فقط:',
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(fontWeight: FontWeight.w600),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'كود التحقق: ${widget.generatedOTP}',
-                                  style: Theme.of(context).textTheme.bodyLarge
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.primary,
-                                        letterSpacing: 2,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          // Container(
+                          //   padding: const EdgeInsets.all(16),
+                          //   decoration: BoxDecoration(
+                          //     color: AppColors.lightGrey,
+                          //     borderRadius: BorderRadius.circular(12),
+                          //   ),
+                          //   child: Column(
+                          //     children: [
+                          //       Text(
+                          //         'للاختبار فقط:',
+                          //         style: Theme.of(context).textTheme.bodySmall
+                          //             ?.copyWith(fontWeight: FontWeight.w600),
+                          //       ),
+                          //       const SizedBox(height: 4),
+                          //       Text(
+                          //         'كود التحقق: ${widget.generatedOTP}',
+                          //         style: Theme.of(context).textTheme.bodyLarge
+                          //             ?.copyWith(
+                          //               fontWeight: FontWeight.bold,
+                          //               color: AppColors.primary,
+                          //               letterSpacing: 2,
+                          //             ),
+                          //       ),
+                          //     ],
+                          //   ),
+                          // ),
                         ],
                       ),
                     ),

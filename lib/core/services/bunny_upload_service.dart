@@ -14,6 +14,7 @@ class BunnyUploadService {
   static Future<List<String>> uploadMediaFiles({
     required List<String> filePaths,
     required String itemId,
+    Function(int current, int total, double progress)? onProgress,
   }) async {
     List<String> uploadedUrls = [];
 
@@ -26,7 +27,15 @@ class BunnyUploadService {
         final fileName = '${i + 1}$extension';
         final remotePath = '$itemId/$fileName';
 
-        final uploadUrl = await _uploadFile(file, remotePath);
+        final uploadUrl = await _uploadFile(
+          file,
+          remotePath,
+          onProgress: (progress) {
+            if (onProgress != null) {
+              onProgress(i + 1, filePaths.length, progress);
+            }
+          },
+        );
         if (uploadUrl != null) {
           uploadedUrls.add(uploadUrl);
         }
@@ -39,7 +48,11 @@ class BunnyUploadService {
     }
   }
 
-  static Future<String?> _uploadFile(File file, String remotePath) async {
+  static Future<String?> _uploadFile(
+    File file,
+    String remotePath, {
+    Function(double progress)? onProgress,
+  }) async {
     try {
       final bytes = await file.readAsBytes();
 
@@ -54,6 +67,9 @@ class BunnyUploadService {
         ),
         onSendProgress: (sent, total) {
           final progress = total != 0 ? sent / total : 0.0;
+          if (onProgress != null) {
+            onProgress(progress);
+          }
           print(
             'Uploading $remotePath: ${(progress * 100).toStringAsFixed(1)}%',
           );

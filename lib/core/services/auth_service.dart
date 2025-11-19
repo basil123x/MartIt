@@ -30,6 +30,11 @@ class AuthService {
     return await getCurrentUID();
   }
 
+  // Get current user OID
+  static Future<String?> getCurrentOID() async {
+    return await _storage.read(key: 'user_oid');
+  }
+
   // Get current user phone
   static Future<String?> getCurrentPhone() async {
     return await _storage.read(key: _phoneKey);

@@ -1,5 +1,7 @@
 import 'package:Globee/core/services/onesignal_service.dart';
+import 'package:Globee/core/services/onesignal_service_web.dart';
 import 'package:Globee/features/add_product/add_product_screen.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:iconsax/iconsax.dart';
@@ -19,6 +21,10 @@ import '../search/search_screen.dart';
 import '../profile/profile_screen.dart';
 import '../comments/comments_modal.dart';
 import '../camera/camera_screen.dart';
+import '../cart/shopping_cart_screen.dart';
+import '../chat/conversations_screen.dart';
+import '../orders/my_orders_screen.dart';
+import '../orders/customer_orders_screen.dart';
 
 class TikTokFeedScreen extends StatefulWidget {
   final String? initialItemId;
@@ -93,12 +99,14 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           userId: currentUserId,
           limit: 10,
           offset: _items.length,
+          initialItemId: widget.initialItemId,
         );
       } else {
         // ✅ لو مش مسجل، نستخدم fetchItems عادي (بدون user_id)
         items = await ApiService.fetchItems(
           page: _currentPage,
-          userId: uid, // ✅ مفيش user_id
+          userId: uid,
+          initialItemId: widget.initialItemId,
         );
       }
 
@@ -271,7 +279,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
               children: [
                 IconButton(
                   onPressed: () {
-                    Navigator.push(
+                    Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(
                         builder: (context) => const SearchScreen(),
@@ -455,8 +463,11 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                 context: context,
                 isScrollControlled: true,
                 backgroundColor: Colors.transparent,
-                builder: (context) =>
-                    CommentsModal(itemId: item.id, isLoggedIn: _isLoggedIn),
+                builder: (context) => CommentsModal(
+                  itemId: item.id,
+                  isLoggedIn: _isLoggedIn,
+                  items: item,
+                ),
               );
             },
           ),
@@ -481,26 +492,29 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           ),
 
           // Shopping Cart Button
-          _buildActionButton(
-            child: Column(
-              children: [
-                const Icon(
-                  Iconsax.shopping_cart,
-                  color: Colors.white,
-                  size: 32,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _formatCount(item.interactions.cartQuantity),
-                  style: const TextStyle(
+          Visibility(
+            visible: _currentUserId == item.seller.id ? false : true,
+            child: _buildActionButton(
+              child: Column(
+                children: [
+                  const Icon(
+                    Iconsax.shopping_cart,
                     color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
+                    size: 32,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatCount(item.interactions.cartQuantity),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              onTap: () => _showCartBottomSheet(item),
             ),
-            onTap: () => _showCartBottomSheet(item),
           ),
         ],
       ),
@@ -717,18 +731,34 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
               ),
               Visibility(
                 visible: isVisible,
-                child: _buildMoreOption(Iconsax.bag_2, 'طلبات العملاء', () {}),
+                child: _buildMoreOption(
+                  Iconsax.bag_2,
+                  'طلبات العملاء',
+                  _showCustomerOrders,
+                ),
               ),
               Visibility(
                 visible: isVisible,
-                child: _buildMoreOption(Iconsax.shopping_bag, 'طلباتي', () {}),
+                child: _buildMoreOption(
+                  Iconsax.shopping_bag,
+                  'طلباتي',
+                  _showMyOrders,
+                ),
               ),
               Visibility(
                 visible: isVisible,
                 child: _buildMoreOption(
                   Iconsax.shopping_cart,
                   'عرض سلة التسوق',
-                  () {},
+                  _showShoppingCart,
+                ),
+              ),
+              Visibility(
+                visible: isVisible,
+                child: _buildMoreOption(
+                  Iconsax.message,
+                  'المحادثات',
+                  _showConversations,
                 ),
               ),
               _buildMoreOption(
@@ -760,6 +790,90 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
       leading: Icon(icon, color: AppColors.primary),
       title: Text(title),
       onTap: onTap,
+    );
+  }
+
+  void _showShoppingCart() async {
+    Navigator.pop(context); // Close bottom sheet
+
+    final currentUserId = await AuthService.getCurrentUserId();
+    if (currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يجب تسجيل الدخول أولاً'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ShoppingCartScreen(userId: currentUserId),
+      ),
+    );
+  }
+
+  void _showConversations() async {
+    Navigator.pop(context); // Close bottom sheet
+
+    final currentUserId = await AuthService.getCurrentUserId();
+    if (currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يجب تسجيل الدخول أولاً'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ConversationsScreen(userId: currentUserId),
+      ),
+    );
+  }
+
+  void _showCustomerOrders() async {
+    Navigator.pop(context); // Close bottom sheet
+
+    final currentUserId = await AuthService.getCurrentUserId();
+    if (currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يجب تسجيل الدخول أولاً'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const CustomerOrdersScreen()),
+    );
+  }
+
+  void _showMyOrders() async {
+    Navigator.pop(context); // Close bottom sheet
+
+    final currentUserId = await AuthService.getCurrentUserId();
+    if (currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يجب تسجيل الدخول أولاً'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const MyOrdersScreen()),
     );
   }
 
@@ -1082,8 +1196,6 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
         );
 
         final user = await FlutterSecureStorage().read(key: 'user_name');
-        print(item.seller.token);
-
         OneSignalService.sendNotificationToUser(
           playerId: item.seller.token,
           title: "متابعة مشتري",
@@ -1401,7 +1513,12 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F3460)],
+            colors: [
+              // Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F3460)
+              Color(0xFFD4D4F0),
+              Color(0xFFC8D4F5),
+              Color(0xFFB4D4F0),
+            ],
           ),
           borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
         ),
@@ -1413,7 +1530,8 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
               width: 50,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.3),
+                // color: Colors.white.withOpacity(0.3),
+                color: const Color(0xFF1A1A2E).withOpacity(0.3),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -1424,7 +1542,8 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
             const Text(
               'بلغ عن المحتوى',
               style: TextStyle(
-                color: Colors.white,
+                // color: Colors.white,
+                color: Color(0xFF1A1A2E),
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),
@@ -1435,7 +1554,8 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
             Text(
               'اختر سبب البلاغ',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
+                // color: Colors.white.withOpacity(0.7),
+                color: const Color(0xFF1A1A2E).withOpacity(0.7),
                 fontSize: 16,
               ),
             ),
@@ -1450,10 +1570,12 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                   return Container(
                     margin: const EdgeInsets.only(bottom: 10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
+                      // color: Colors.white.withOpacity(0.1),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(15),
                       border: Border.all(
-                        color: Colors.white.withOpacity(0.2),
+                        // color: Colors.white.withOpacity(0.2),
+                        color: Colors.red.withOpacity(0.2),
                         width: 1,
                       ),
                     ),
@@ -1465,7 +1587,8 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                       title: Text(
                         reportReasons[index],
                         style: const TextStyle(
-                          color: Colors.white,
+                          // color: Colors.white,
+                          color: Color(0xFF1A1A2E),
                           fontSize: 16,
                         ),
                       ),
@@ -1488,6 +1611,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
     final item = _items[_currentIndex];
     final currentUserId = await AuthService.getCurrentUserId();
+    final currentUserName = await AuthService.getCurrentName();
 
     if (currentUserId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1513,6 +1637,20 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
             backgroundColor: Colors.green,
           ),
         );
+        final request = await Dio().post(
+          "https://www.Globee-Trading.com/app2026/sql.php",
+          data: FormData.fromMap({"action": "get_tokens"}),
+        );
+        List player_ids = request.data['player_ids'];
+        List<String> setPlayers = [];
+        for (var player_id in player_ids) {
+          setPlayers.add(player_id['player_id'].toString());
+          await OneSignalServiceWebSys.sendNotificationToMultipleUsers(
+            playerIds: setPlayers,
+            title: "ابلاغ جديد",
+            message: "لديكم إبلاغ جديد من المستخدم $currentUserName",
+          );
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1556,7 +1694,12 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F3460)],
+            colors: [
+              // Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F3460)
+              Color(0xFFD4D4F0),
+              Color(0xFFC8D4F5),
+              Color(0xFFB4D4F0),
+            ],
           ),
           borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
         ),
@@ -1568,7 +1711,8 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
               width: 50,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.3),
+                // color: Colors.white.withOpacity(0.3),
+                color: const Color(0xFF1A1A2E).withOpacity(0.3),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -1579,7 +1723,8 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
             const Text(
               'حظر المستخدم',
               style: TextStyle(
-                color: Colors.white,
+                // color: Colors.white,
+                color: Color(0xFF1A1A2E),
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),
@@ -1590,7 +1735,8 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
             Text(
               'اختر سبب الحظر',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
+                // color: Colors.white.withOpacity(0.7),
+                color: const Color(0xFF1A1A2E).withOpacity(0.7),
                 fontSize: 16,
               ),
             ),
@@ -1605,10 +1751,12 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                   return Container(
                     margin: const EdgeInsets.only(bottom: 10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
+                      // color: Colors.white.withOpacity(0.1),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(15),
                       border: Border.all(
-                        color: Colors.white.withOpacity(0.2),
+                        // color: Colors.white.withOpacity(0.2),
+                        color: Colors.orange.withOpacity(0.2),
                         width: 1,
                       ),
                     ),
@@ -1620,7 +1768,8 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                       title: Text(
                         blockReasons[index],
                         style: const TextStyle(
-                          color: Colors.white,
+                          // color: Colors.white,
+                          color: Color(0xFF1A1A2E),
                           fontSize: 16,
                         ),
                       ),
@@ -1669,6 +1818,20 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
             backgroundColor: Colors.green,
           ),
         );
+        final request = await Dio().post(
+          "https://www.Globee-Trading.com/app2026/sql.php",
+          data: FormData.fromMap({"action": "get_tokens"}),
+        );
+        List player_ids = request.data['player_ids'];
+        List<String> setPlayers = [];
+        for (var player_id in player_ids) {
+          setPlayers.add(player_id['player_id'].toString());
+          await OneSignalServiceWebSys.sendNotificationToMultipleUsers(
+            playerIds: setPlayers,
+            title: "حظر مستخدم جديد",
+            message: "حظر المستخدم: $reason",
+          );
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1708,13 +1871,23 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
     }
 
     try {
-      // Update UI immediately for better UX
+      final user = await FlutterSecureStorage().read(key: 'user_name');
       setState(() {
         item.interactions.isLiked = !item.interactions.isLiked;
         if (item.interactions.isLiked) {
           item.interactions.likes++;
+          OneSignalService.sendNotificationToUser(
+            playerId: item.seller.token,
+            title: "إعجاب على المنتج ${item.name}",
+            message: "تم الإعجاب من قبل $user",
+          );
         } else {
           item.interactions.likes--;
+          OneSignalService.sendNotificationToUser(
+            playerId: item.seller.token,
+            title: "إعجاب على المنتج ${item.name}",
+            message: "تم إلغاء الإعجاب من قبل $user",
+          );
         }
       });
 
@@ -1777,11 +1950,17 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
 #Globee #تسوق #عروض
 ''';
-
+      final user = await FlutterSecureStorage().read(key: 'user_name');
       await Share.share(
         shareText,
         subject: 'منتج رائع على Globee - ${item.name}',
-      );
+      ).then((_) {
+        OneSignalService.sendNotificationToUser(
+          playerId: item.seller.token,
+          title: "مشاركة جديدة من $user",
+          message: "لقد تمت مشاركة منتجك ${item.name} من قبل المستخدم $user",
+        );
+      });
       setState(() {
         item.interactions.shares++;
       });
@@ -1840,162 +2019,179 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) {
-          return Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFF1A1A2E),
-                  Color(0xFF16213E),
-                  Color(0xFF0F3460),
+          return Directionality(
+            textDirection: TextDirection.rtl,
+            child: Container(
+              // decoration: const BoxDecoration(
+              //   gradient: LinearGradient(
+              //     begin: Alignment.topCenter,
+              //     end: Alignment.bottomCenter,
+              //     colors: [
+              //       Color(0xFF1A1A2E),
+              //       Color(0xFF16213E),
+              //       Color(0xFF0F3460),
+              //     ],
+              //   ),
+              //   borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+              // ),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFFD4D4F0),
+                    Color(0xFFC8D4F5),
+                    Color(0xFFB4D4F0),
+                  ],
+                ),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+              ),
+              child: Column(
+                children: [
+                  // Handle bar
+                  Container(
+                    margin: const EdgeInsets.only(top: 12),
+                    width: 50,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Title
+                  const Text(
+                    'إضافة إلى السلة',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  // Product info
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      children: [
+                        // Product image
+                        Container(
+                          width: 90,
+                          height: 90,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(15),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.2),
+                              width: 2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(13),
+                            child: item.media.isNotEmpty
+                                ? Image.network(
+                                    item.media.first,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        color: Colors.grey[300],
+                                        child: const Icon(
+                                          Iconsax.image,
+                                          color: Colors.grey,
+                                          size: 40,
+                                        ),
+                                      );
+                                    },
+                                    loadingBuilder:
+                                        (context, child, loadingProgress) {
+                                          if (loadingProgress == null)
+                                            return child;
+                                          return Container(
+                                            color: Colors.grey[300],
+                                            child: const Center(
+                                              child: CircularProgressIndicator(
+                                                color: AppColors.primary,
+                                                strokeWidth: 2,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                  )
+                                : Container(
+                                    color: Colors.grey[300],
+                                    child: const Icon(
+                                      Iconsax.image,
+                                      color: Colors.grey,
+                                      size: 40,
+                                    ),
+                                  ),
+                          ),
+                        ),
+
+                        const SizedBox(width: 16),
+
+                        // Product details
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.name,
+                                style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                '${item.price} ريال قطري',
+                                style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 30),
+                  // Quantity controls
+                  _CartQuantityWidget(
+                    itemId: item.id,
+                    userId: currentUserId,
+                    qtt: item.quantity,
+                    onQuantityChanged: (newQuantity) {
+                      final itemIndex = _items.indexWhere(
+                        (i) => i.id == item.id,
+                      );
+                      if (itemIndex != -1) {
+                        setState(() {
+                          _items[itemIndex].interactions.cartQuantity =
+                              newQuantity;
+                        });
+                      }
+                      setModalState(() {});
+                    },
+                  ),
                 ],
               ),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-            ),
-            child: Column(
-              children: [
-                // Handle bar
-                Container(
-                  margin: const EdgeInsets.only(top: 12),
-                  width: 50,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // Title
-                const Text(
-                  'إضافة إلى السلة',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-
-                const SizedBox(height: 30),
-
-                // Product info
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Row(
-                    children: [
-                      // Product image
-                      Container(
-                        width: 90,
-                        height: 90,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(15),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.2),
-                            width: 2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(13),
-                          child: item.media.isNotEmpty
-                              ? Image.network(
-                                  item.media.first,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      color: Colors.grey[300],
-                                      child: const Icon(
-                                        Iconsax.image,
-                                        color: Colors.grey,
-                                        size: 40,
-                                      ),
-                                    );
-                                  },
-                                  loadingBuilder:
-                                      (context, child, loadingProgress) {
-                                        if (loadingProgress == null)
-                                          return child;
-                                        return Container(
-                                          color: Colors.grey[300],
-                                          child: const Center(
-                                            child: CircularProgressIndicator(
-                                              color: AppColors.primary,
-                                              strokeWidth: 2,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                )
-                              : Container(
-                                  color: Colors.grey[300],
-                                  child: const Icon(
-                                    Iconsax.image,
-                                    color: Colors.grey,
-                                    size: 40,
-                                  ),
-                                ),
-                        ),
-                      ),
-
-                      const SizedBox(width: 16),
-
-                      // Product details
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.name,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '${item.price} ريال قطري',
-                              style: const TextStyle(
-                                color: AppColors.primary,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 30),
-                // Quantity controls
-                _CartQuantityWidget(
-                  itemId: item.id,
-                  userId: currentUserId,
-                  qtt: item.quantity,
-                  onQuantityChanged: (newQuantity) {
-                    final itemIndex = _items.indexWhere((i) => i.id == item.id);
-                    if (itemIndex != -1) {
-                      setState(() {
-                        _items[itemIndex].interactions.cartQuantity =
-                            newQuantity;
-                      });
-                    }
-                    setModalState(() {});
-                  },
-                ),
-              ],
             ),
           );
         },
@@ -2085,9 +2281,7 @@ class _CartQuantityWidgetState extends State<_CartQuantityWidget> {
       return;
     }
 
-    print(
-      '🔄 Updating quantity: ${increase ? "increase" : "decrease"}',
-    ); // ← Debug
+    print('🔄 Updating quantity: ${increase ? "increase" : "decrease"}');
 
     setState(() {
       _isUpdating = true;
@@ -2203,144 +2397,116 @@ class _CartQuantityWidgetState extends State<_CartQuantityWidget> {
 
     return Column(
       children: [
-        // ✅ عرض الكمية المتاحة
-        Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: Text(
-            'الكمية المتاحة: ${widget.qtt}',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 14,
-            ),
-          ),
-        ),
-
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // زر النقصان
-            GestureDetector(
-              onTap: _isUpdating || _currentQuantity <= 0
-                  ? null
-                  : () => _updateQuantity(false),
-              child: Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: _isUpdating
-                      ? Colors.grey.withOpacity(0.3)
-                      : _currentQuantity > 0
-                      ? Colors.red.withOpacity(0.8)
-                      : Colors.grey.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(25),
-                ),
-                child: _isUpdating
-                    ? const Center(
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
+        const SizedBox(height: 20),
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // زر النقصان
+              GestureDetector(
+                onTap: _isUpdating || _currentQuantity <= 0
+                    ? null
+                    : () => _updateQuantity(false),
+                child: Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: _isUpdating
+                        ? Colors.grey.withOpacity(0.3)
+                        : _currentQuantity > 0
+                        ? Colors.red.withOpacity(0.8)
+                        : Colors.grey.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(25),
+                  ),
+                  child: _isUpdating
+                      ? const Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
                           ),
+                        )
+                      : const Icon(
+                          Iconsax.minus,
+                          color: Colors.white,
+                          size: 24,
                         ),
-                      )
-                    : const Icon(Iconsax.minus, color: Colors.white, size: 24),
-              ),
-            ),
-
-            const SizedBox(width: 30),
-
-            // عرض الكمية
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                // ✅ لو وصل للحد الأقصى، اعرض border أحمر
-                border: Border.all(
-                  color: isMaxQuantity
-                      ? Colors.orange.withOpacity(0.8)
-                      : Colors.white.withOpacity(0.2),
-                  width: 2,
                 ),
               ),
-              child: Text(
-                _currentQuantity.toString(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+
+              const SizedBox(width: 30),
+
+              // عرض الكمية
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
                 ),
-              ),
-            ),
-
-            const SizedBox(width: 30),
-
-            // زر الزيادة
-            GestureDetector(
-              onTap: _isUpdating || isMaxQuantity
-                  ? null
-                  : () => _updateQuantity(true),
-              child: Container(
-                width: 50,
-                height: 50,
                 decoration: BoxDecoration(
-                  color: _isUpdating
-                      ? Colors.grey.withOpacity(0.3)
-                      : isMaxQuantity
-                      ? Colors.grey.withOpacity(
-                          0.3,
-                        ) // ✅ disable لو وصل للحد الأقصى
-                      : AppColors.primary,
-                  borderRadius: BorderRadius.circular(25),
-                ),
-                child: _isUpdating
-                    ? const Center(
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        ),
-                      )
-                    : Icon(
-                        Iconsax.add,
-                        color: isMaxQuantity
-                            ? Colors.white.withOpacity(0.5)
-                            : Colors.white,
-                        size: 24,
-                      ),
-              ),
-            ),
-          ],
-        ),
-
-        // ✅ رسالة توضيحية لو وصل للحد الأقصى
-        if (isMaxQuantity)
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Iconsax.info_circle,
-                  color: Colors.orange.withOpacity(0.8),
-                  size: 16,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'وصلت للحد الأقصى المتاح',
-                  style: TextStyle(
-                    color: Colors.orange.withOpacity(0.8),
-                    fontSize: 12,
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.2),
+                    width: 2,
                   ),
                 ),
-              ],
-            ),
+                child: Text(
+                  _currentQuantity.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 30),
+
+              // زر الزيادة
+              GestureDetector(
+                onTap: _isUpdating || isMaxQuantity
+                    ? null
+                    : () => _updateQuantity(true),
+                child: Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: _isUpdating
+                        ? Colors.grey.withOpacity(0.3)
+                        : isMaxQuantity
+                        ? Colors.grey.withOpacity(
+                            0.3,
+                          ) // ✅ disable لو وصل للحد الأقصى
+                        : AppColors.primary,
+                    borderRadius: BorderRadius.circular(25),
+                  ),
+                  child: _isUpdating
+                      ? const Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          ),
+                        )
+                      : Icon(
+                          Iconsax.add,
+                          color: isMaxQuantity
+                              ? Colors.white.withOpacity(0.5)
+                              : Colors.white,
+                          size: 24,
+                        ),
+                ),
+              ),
+            ],
           ),
+        ),
 
         const SizedBox(height: 20),
         ElevatedButton(

@@ -34,7 +34,7 @@ try {
         $profile = array(
             'id' => $row['id'],
             'name' => $row['Fullname'],
-            'avatar' => "https://globee.b-cdnx.net/users/" . $row['id'] . "/avatar.jpg",
+            'avatar' => "https://globee.b-cdn.net/users/" . $row['id'] . "/avatar.jpg",
             'itemsCount' => (int)$row['items_count']
         );
         

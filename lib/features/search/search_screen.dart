@@ -75,115 +75,128 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
         backgroundColor: Colors.white,
-        elevation: 0,
-        leading: Container(),
-        actions: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Iconsax.arrow_right_3, color: Colors.black),
-          ),
-        ],
-        title: Container(
-          height: 45,
-          decoration: BoxDecoration(
-            color: Colors.grey[100],
-            borderRadius: BorderRadius.circular(25),
-          ),
-          child: TextField(
-            controller: _searchController,
-            autofocus: true,
-            textAlign: TextAlign.right,
-            decoration: const InputDecoration(
-              hintText: 'ابحث عن المنتجات...',
-              hintStyle: TextStyle(color: Colors.grey),
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 12,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          title: Container(
+            height: 45,
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(25),
+            ),
+            child: TextField(
+              controller: _searchController,
+              autofocus: true,
+              textAlign: TextAlign.right,
+              decoration: InputDecoration(
+                hintText: 'ابحث عن المنتجات...',
+                hintStyle: TextStyle(color: Colors.grey),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
+                prefixIcon: IconButton(
+                  onPressed: () {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => TikTokFeedScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Iconsax.arrow_right, color: Colors.grey),
+                ),
+                suffixIcon: Visibility(
+                  visible: _searchController.text != "" ? true : false,
+                  child: IconButton(
+                    onPressed: () => _searchController.clear(),
+                    icon: Icon(Iconsax.close_square, color: Colors.red),
+                  ),
+                ),
               ),
-              suffixIcon: Icon(Iconsax.search_normal, color: Colors.grey),
             ),
           ),
         ),
-      ),
-      body: Column(
-        children: [
-          if (_isLoading)
-            const Padding(
-              padding: EdgeInsets.all(20),
-              child: Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
-              ),
-            ),
-
-          if (!_isLoading && _hasSearched && _searchResults.isEmpty)
-            const Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Iconsax.search_normal, size: 64, color: Colors.grey),
-                    SizedBox(height: 16),
-                    Text(
-                      'لا توجد نتائج',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.grey,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'جرب البحث بكلمات مختلفة',
-                      style: TextStyle(fontSize: 14, color: Colors.grey),
-                    ),
-                  ],
+        body: Column(
+          children: [
+            if (_isLoading)
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Center(
+                  child: CircularProgressIndicator(color: AppColors.primary),
                 ),
               ),
-            ),
 
-          if (!_isLoading && _searchResults.isNotEmpty)
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _searchResults.length,
-                itemBuilder: (context, index) {
-                  final item = _searchResults[index];
-                  return _buildSearchResultItem(item);
-                },
-              ),
-            ),
-
-          if (!_hasSearched)
-            const Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Iconsax.search_normal, size: 64, color: Colors.grey),
-                    SizedBox(height: 16),
-                    Text(
-                      'ابحث عن المنتجات',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.grey,
-                        fontWeight: FontWeight.w500,
+            if (!_isLoading && _hasSearched && _searchResults.isEmpty)
+              const Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Iconsax.search_normal, size: 64, color: Colors.grey),
+                      SizedBox(height: 16),
+                      Text(
+                        'لا توجد نتائج',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'اكتب اسم المنتج الذي تبحث عنه',
-                      style: TextStyle(fontSize: 14, color: Colors.grey),
-                    ),
-                  ],
+                      SizedBox(height: 8),
+                      Text(
+                        'جرب البحث بكلمات مختلفة',
+                        style: TextStyle(fontSize: 14, color: Colors.grey),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-        ],
+
+            if (!_isLoading && _searchResults.isNotEmpty)
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _searchResults.length,
+                  itemBuilder: (context, index) {
+                    final item = _searchResults[index];
+                    return _buildSearchResultItem(item);
+                  },
+                ),
+              ),
+
+            if (!_hasSearched)
+              const Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Iconsax.search_normal, size: 64, color: Colors.grey),
+                      SizedBox(height: 16),
+                      Text(
+                        'ابحث عن المنتجات',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'اكتب اسم المنتج الذي تبحث عنه',
+                        style: TextStyle(fontSize: 14, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -191,7 +204,8 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget _buildSearchResultItem(dynamic item) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
+      color: Color(0xFFB4D4F0).withAlpha(40),
+      elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
         contentPadding: const EdgeInsets.all(12),
@@ -218,10 +232,9 @@ class _SearchScreenState extends State<SearchScreen> {
         title: Text(
           item['name'] ?? '',
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          textAlign: TextAlign.right,
         ),
         subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 4),
             Text(
@@ -231,13 +244,11 @@ class _SearchScreenState extends State<SearchScreen> {
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
               ),
-              textAlign: TextAlign.right,
             ),
             const SizedBox(height: 4),
             Text(
               'البائع: ${item['seller']['name']}',
               style: const TextStyle(color: Colors.grey, fontSize: 12),
-              textAlign: TextAlign.right,
             ),
           ],
         ),

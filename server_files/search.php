@@ -43,7 +43,7 @@ try {
                 $mediaArray = explode(',', $row['media']);
                 $firstMedia = trim($mediaArray[0]);
                 if (!empty($firstMedia)) {
-                    $thumbnail = "https://globee.b-cdnx.net/" . $row['id'] . "/" . $firstMedia;
+                    $thumbnail = "https://globee.b-cdn.net/" . $row['id'] . "/" . $firstMedia;
                 }
             }
             

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:isolate';
 import 'package:Globee/core/services/onesignal_service.dart';
 import 'package:Globee/core/services/onesignal_service_web.dart';
+import 'package:Globee/core/services/upload_notification_service.dart';
 import 'package:Globee/features/home/tiktok_feed_screen.dart';
 import 'package:Globee/shared/providers/app_provider.dart';
 import 'package:dio/dio.dart';
@@ -611,19 +612,33 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   void _startBackgroundUpload(Map<String, dynamic> data) async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      data['appDir'] = dir.path;
       final appProvider = Provider.of<AppProvider>(context, listen: false);
+      final notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
-      // Start isolate for background processing
-      Isolate.spawn(_runBackgroundUpload, data);
+      // Initialize notification service
+      await UploadNotificationService.initialize();
+
+      // Show initial notification
+      await UploadNotificationService.showUploadProgress(
+        id: notificationId,
+        title: 'جاري رفع المنتج',
+        body: 'جاري تحضير الملفات...',
+        progress: 0,
+        maxProgress: 100,
+      );
+
+      // Start background upload without isolate
+      _runBackgroundUploadWithNotification(data, notificationId);
       appProvider.allMedia.clear();
     } catch (e) {
       print('Error starting background upload: $e');
     }
   }
 
-  static void _runBackgroundUpload(Map<String, dynamic> data) async {
+  void _runBackgroundUploadWithNotification(
+    Map<String, dynamic> data,
+    int notificationId,
+  ) async {
     try {
       print("🚀 Starting product upload: ${data['name']}");
 
@@ -632,9 +647,21 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
       // Step 1: Upload media files to Bunny.net
       print("📤 Uploading ${mediaFiles.length} media files...");
+
       final uploadedUrls = await BunnyUploadService.uploadMediaFiles(
         filePaths: mediaFiles,
         itemId: itemId,
+        onProgress: (current, total, progress) async {
+          final overallProgress =
+              ((current - 1) / total * 100 + progress * 100 / total).toInt();
+          await UploadNotificationService.showUploadProgress(
+            id: notificationId,
+            title: 'جاري رفع المنتج',
+            body: 'رفع الملف $current من $total - ${overallProgress}%',
+            progress: overallProgress,
+            maxProgress: 100,
+          );
+        },
       );
 
       if (uploadedUrls.isEmpty) {
@@ -668,6 +695,13 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
       if (updateResult['success'] == true) {
         print("✅ Product uploaded successfully: ${data['name']}");
+
+        // Show success notification
+        await UploadNotificationService.showUploadComplete(
+          id: notificationId,
+          title: 'تم رفع المنتج بنجاح',
+          body: 'تم رفع منتج ${data['name']} بنجاح',
+        );
         final request = await Dio().post(
           "https://www.Globee-Trading.com/app2026/sql.php",
           data: FormData.fromMap({"action": "get_tokens"}),
@@ -684,34 +718,53 @@ class _AddProductScreenState extends State<AddProductScreen> {
           );
         }
 
-        final requestUsers = await Dio().post(
-          "https://www.Globee-Trading.com/app2026/sql.php",
-          data: FormData.fromMap({
-            "action": "get_token_followers",
-            "user_id": data['uid'],
-          }),
-          options: Options(headers: {'Content-Type': 'application/json'}),
-        );
-        List<String> tokens = [];
+        // final requestUsers = await Dio().post(
+        //   "https://www.Globee-Trading.com/app2026/sql.php",
+        //   data: FormData.fromMap({
+        //     "action": "get_token_followers",
+        //     "user_id": data['uid'],
+        //   }),
+        //   options: Options(headers: {'Content-Type': 'application/json'}),
+        // );
+        // List<String> tokens = [];
 
-        for (var token in requestUsers.data['data']) {
-          tokens.add(token['user_token']);
-        }
-        OneSignalService.sendNotificationToMultipleUsers(
-          playerIds: tokens,
-          title: "يوجد منتج جديد",
-          message:
-              "تم رفع منتج جديد إسمه ${data['name']} بسعر ${data['price']} لا تفوته",
-        );
+        // for (var token in requestUsers.data['data']) {
+        //   tokens.add(token['user_token']);
+        // }
+        // OneSignalService.sendNotificationToMultipleUsers(
+        //   playerIds: tokens,
+        //   title: "يوجد منتج جديد",
+        //   message:
+        //       "تم رفع منتج جديد إسمه ${data['name']} بسعر ${data['price']} لا تفوته",
+        // );
       } else {
         print("❌ Failed to update database: ${updateResult['error']}");
+
+        // Show error notification
+        await UploadNotificationService.showUploadError(
+          id: notificationId,
+          title: 'فشل رفع المنتج',
+          body: 'حدث خطأ أثناء رفع المنتج',
+        );
       }
 
       data.clear();
       mediaFiles.clear();
     } catch (e) {
       print("❌ Error uploading product: $e");
+
+      // Show error notification
+      await UploadNotificationService.showUploadError(
+        id: notificationId,
+        title: 'فشل رفع المنتج',
+        body: 'حدث خطأ: ${e.toString()}',
+      );
     }
+  }
+
+  // Keep old method for compatibility
+  static void _runBackgroundUpload(Map<String, dynamic> data) async {
+    // This method is kept for backward compatibility but not used
   }
 
   void _showError(String message) {

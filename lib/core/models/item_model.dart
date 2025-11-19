@@ -173,12 +173,14 @@ class CommentModel {
 class UserProfileModel {
   final String id;
   final String name;
+  final String phone;
   final String avatar;
   final int itemsCount;
 
   UserProfileModel({
     required this.id,
     required this.name,
+    required this.phone,
     required this.avatar,
     required this.itemsCount,
   });
@@ -187,6 +189,7 @@ class UserProfileModel {
     return UserProfileModel(
       id: json['id']?.toString() ?? '',
       name: json['name'] ?? '',
+      phone: json['phone'] ?? '',
       avatar: json['avatar'] ?? '',
       itemsCount: int.tryParse(json['itemsCount']?.toString() ?? '0') ?? 0,
     );
