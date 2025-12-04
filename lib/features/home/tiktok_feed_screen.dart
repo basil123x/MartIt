@@ -3,6 +3,7 @@ import 'package:Globee/core/services/onesignal_service_web.dart';
 import 'package:Globee/features/add_product/add_product_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
@@ -72,7 +73,11 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
     });
   }
 
-  Future<void> _loadItems({bool isRefresh = false, String? uid}) async {
+  Future<void> _loadItems({
+    bool isRefresh = false,
+    String? uid,
+    String? initiItem,
+  }) async {
     if (_isLoading) return;
     print("SSSSSS $uid");
 
@@ -99,14 +104,14 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           userId: currentUserId,
           limit: 10,
           offset: _items.length,
-          initialItemId: widget.initialItemId,
+          initialItemId: initiItem == "" ? initiItem : widget.initialItemId,
         );
       } else {
         // ✅ لو مش مسجل، نستخدم fetchItems عادي (بدون user_id)
         items = await ApiService.fetchItems(
           page: _currentPage,
           userId: uid,
-          initialItemId: widget.initialItemId,
+          initialItemId: initiItem == "" ? initiItem : widget.initialItemId,
         );
       }
 
@@ -139,86 +144,115 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: _isLoading && _items.isEmpty
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            )
-          : _items.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Iconsax.box, size: 64, color: Colors.white),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'لا توجد منتجات',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                    ),
+    return WillPopScope(
+      onWillPop: () async {
+        // تعرض Dialog لتأكيد الخروج
+        bool exitApp =
+            await showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Text('تأكيد الخروج'),
+                content: Text('هل تريد الخروج من التطبيق؟'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: Text('لا'),
                   ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => _loadItems(isRefresh: true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text('إعادة المحاولة'),
+                  TextButton(
+                    onPressed: () => SystemNavigator.pop(),
+                    child: Text('نعم'),
                   ),
                 ],
               ),
-            )
-          : Stack(
-              children: [
-                // Video Feed
-                PageView.builder(
-                  controller: _pageController,
-                  scrollDirection: Axis.vertical,
-                  onPageChanged: (index) {
-                    // ✅ نحسب الـ actual index باستخدام modulo
-                    final actualIndex = index % _items.length;
+            ) ??
+            false;
 
-                    setState(() {
-                      _currentIndex = actualIndex;
-                    });
-
-                    // ✅ لو وصل لآخر 3 أصناف، نجيب أصناف جديدة
-                    if (actualIndex >= _items.length - 3 && !_isLoading) {
-                      _loadItems(uid: _items[actualIndex].seller.id);
-                    }
-                  },
-                  itemCount: _items.isEmpty
-                      ? 0
-                      : null, // ✅ null = infinite scroll
-                  itemBuilder: (context, index) {
-                    if (_items.isEmpty) {
-                      return const Center(
-                        child: CircularProgressIndicator(
-                          color: AppColors.primary,
-                        ),
-                      );
-                    }
-
-                    // ✅ نستخدم modulo عشان نعيد تدوير الأصناف
-                    final actualIndex = index % _items.length;
-                    return _buildVideoItem(_items[actualIndex]);
-                  },
+        return exitApp; // لو true، يخرج التطبيق، لو false، يبقى داخل
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: _isLoading && _items.isEmpty
+            ? const Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              )
+            : _items.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Iconsax.box, size: 64, color: Colors.white),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'لا توجد منتجات',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => _loadItems(isRefresh: true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('إعادة المحاولة'),
+                    ),
+                  ],
                 ),
+              )
+            : Stack(
+                children: [
+                  // Video Feed
+                  PageView.builder(
+                    controller: _pageController,
+                    scrollDirection: Axis.vertical,
+                    onPageChanged: (index) {
+                      // ✅ نحسب الـ actual index باستخدام modulo
+                      final actualIndex = index % _items.length;
 
-                // Top Bar
-                _buildTopBar(),
+                      setState(() {
+                        _currentIndex = actualIndex;
+                      });
 
-                // Side Actions
-                _buildSideActions(),
+                      // ✅ لو وصل لآخر 3 أصناف، نجيب أصناف جديدة
+                      if (actualIndex >= _items.length - 3 && !_isLoading) {
+                        _loadItems(
+                          uid: _items[actualIndex].seller.id,
+                          initiItem: "",
+                        );
+                      }
+                    },
+                    itemCount: _items.isEmpty
+                        ? 0
+                        : null, // ✅ null = infinite scroll
+                    itemBuilder: (context, index) {
+                      if (_items.isEmpty) {
+                        return const Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.primary,
+                          ),
+                        );
+                      }
 
-                // Bottom Info
-                _buildBottomInfo(),
-              ],
-            ),
+                      // ✅ نستخدم modulo عشان نعيد تدوير الأصناف
+                      final actualIndex = index % _items.length;
+                      return _buildVideoItem(_items[actualIndex]);
+                    },
+                  ),
+
+                  // Top Bar
+                  _buildTopBar(),
+
+                  // Side Actions
+                  _buildSideActions(),
+
+                  // Bottom Info
+                  _buildBottomInfo(),
+                ],
+              ),
+      ),
     );
   }
 
@@ -279,7 +313,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
               children: [
                 IconButton(
                   onPressed: () {
-                    Navigator.pushReplacement(
+                    Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => const SearchScreen(),
@@ -574,27 +608,67 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           const SizedBox(height: 8),
 
           // Price
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Iconsax.tag, color: Colors.white, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  '${item.price} ريال',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
                 ),
-              ],
-            ),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Iconsax.tag, color: Colors.white, size: 16),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${item.price} ريال',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: 10),
+              item.quantity == 0
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'نفذ من المخزون',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : Text(
+                      "${item.quantity} ${item.quantity >= 3 && item.quantity <= 9 ? "Pcs" : "Pc"}",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+            ],
           ),
         ],
       ),
@@ -610,6 +684,8 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           ? MediaViewerWidget(
               mediaUrls: item.media,
               itmId: item.id,
+              itmIdx: item.idx,
+              storeid: item.storeid,
               autoPlayVideo: true,
               showControls: false,
               showIndicators: item.media.length > 1,
@@ -680,23 +756,6 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
   }
 
   void _showMoreOptions() async {
-    bool isVisible = false;
-    String? uid = await AuthService.getCurrentUID();
-    AuthService.getUserStatus(uid).then((val) {
-      if (val['status'] == '0') {
-        setState(() {
-          isVisible = false;
-        });
-      } else if (val['status'] == '2') {
-        setState(() {
-          isVisible = false;
-        });
-      } else {
-        setState(() {
-          isVisible = true;
-        });
-      }
-    });
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -721,45 +780,26 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
               const SizedBox(height: 20),
               Text('المزيد', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 20),
-              Visibility(
-                visible: isVisible,
-                child: _buildMoreOption(
-                  Iconsax.user,
-                  'عرض الملف الشخصي',
-                  _showCurrentUserProfile,
-                ),
+              _buildMoreOption(
+                Iconsax.user,
+                'عرض الملف الشخصي',
+                _showCurrentUserProfile,
               ),
-              Visibility(
-                visible: isVisible,
-                child: _buildMoreOption(
-                  Iconsax.bag_2,
-                  'طلبات العملاء',
-                  _showCustomerOrders,
-                ),
+              _buildMoreOption(
+                Iconsax.bag_2,
+                'طلبات العملاء',
+                _showCustomerOrders,
               ),
-              Visibility(
-                visible: isVisible,
-                child: _buildMoreOption(
-                  Iconsax.shopping_bag,
-                  'طلباتي',
-                  _showMyOrders,
-                ),
+              _buildMoreOption(Iconsax.shopping_bag, 'طلباتي', _showMyOrders),
+              _buildMoreOption(
+                Iconsax.shopping_cart,
+                'عرض سلة التسوق',
+                _showShoppingCart,
               ),
-              Visibility(
-                visible: isVisible,
-                child: _buildMoreOption(
-                  Iconsax.shopping_cart,
-                  'عرض سلة التسوق',
-                  _showShoppingCart,
-                ),
-              ),
-              Visibility(
-                visible: isVisible,
-                child: _buildMoreOption(
-                  Iconsax.message,
-                  'المحادثات',
-                  _showConversations,
-                ),
+              _buildMoreOption(
+                Iconsax.message,
+                'المحادثات',
+                _showConversations,
               ),
               _buildMoreOption(
                 Iconsax.document_text,
@@ -1143,6 +1183,8 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
             // ✅ اعمل ItemModel جديد بالكامل
             _items[i] = ItemModel(
               id: _items[i].id,
+              idx: _items[i].idx,
+              storeid: _items[i].storeid,
               name: _items[i].name,
               price: _items[i].price,
               quantity: _items[i].quantity,
@@ -1208,6 +1250,8 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
             if (_items[i].seller.id == item.seller.id) {
               _items[i] = ItemModel(
                 id: _items[i].id,
+                idx: _items[i].idx,
+                storeid: _items[i].storeid,
                 name: _items[i].name,
                 price: _items[i].price,
                 quantity: _items[i].quantity,
@@ -1244,6 +1288,8 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           if (_items[i].seller.id == item.seller.id) {
             _items[i] = ItemModel(
               id: _items[i].id,
+              idx: _items[i].idx,
+              storeid: _items[i].storeid,
               name: _items[i].name,
               price: _items[i].price,
               quantity: _items[i].quantity,

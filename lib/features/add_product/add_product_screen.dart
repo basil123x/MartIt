@@ -7,6 +7,7 @@ import 'package:Globee/features/home/tiktok_feed_screen.dart';
 import 'package:Globee/shared/providers/app_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_barcode_scanner_plus/flutter_barcode_scanner_plus.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:path_provider/path_provider.dart';
@@ -32,8 +33,13 @@ class AddProductScreen extends StatefulWidget {
 
 class _AddProductScreenState extends State<AddProductScreen> {
   final PageController _mediaController = PageController();
+
+  final TextEditingController _barcodeController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _engnameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _description_arb_Controller =
+      TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _quantityController = TextEditingController();
   final TextEditingController _categoryController = TextEditingController();
@@ -48,7 +54,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   Future insertOneRecord() async {
     var request = await Dio().post(
       'https://Globee-Trading.com/app2026/sql.php',
-      data: FormData.fromMap({'action': 'insertNewOne'}),
+      data: FormData.fromMap({'action': 'insertNewOne', 'store_id': '1'}),
     );
     setState(() {
       _currentItemId = request.data['item_id'].toString();
@@ -75,7 +81,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   @override
   Widget build(BuildContext context) {
-    print(_currentItemId);
     _isUploading = false;
     return Scaffold(
       backgroundColor: Colors.white,
@@ -106,10 +111,64 @@ class _AddProductScreenState extends State<AddProductScreen> {
             const SizedBox(height: 24),
 
             // Product Name
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: () async {
+                    String barcodeScanRes =
+                        await FlutterBarcodeScanner.scanBarcode(
+                          '#ff6666',
+                          "Cancel",
+                          false,
+                          ScanMode.DEFAULT,
+                        );
+
+                    setState(() {
+                      _barcodeController.text = barcodeScanRes;
+                    });
+                  },
+                  child: Container(
+                    margin: EdgeInsets.only(top: 30),
+                    width: 45,
+                    height: 45,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Iconsax.scan,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+                SizedBox(width: 10),
+                Expanded(
+                  child: _buildTextField(
+                    controller: _barcodeController,
+                    label: 'الباركود',
+                    hint: 'أدخل باركود المنتج',
+                    icon: Iconsax.scan,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 24),
+
+            // Product Name
             _buildTextField(
               controller: _nameController,
-              label: 'اسم المنتج',
-              hint: 'أدخل اسم المنتج',
+              label: 'اسم المنتج بالعربي',
+              hint: 'أدخل اسم المنتج بالعربي',
+              icon: Iconsax.box,
+            ),
+            const SizedBox(height: 24),
+            // Product Name
+            _buildTextField(
+              controller: _engnameController,
+              label: 'اسم المنتج بالإنجليزي',
+              hint: 'أدخل اسم المنتج بالإنجليزي',
               icon: Iconsax.box,
             ),
 
@@ -117,9 +176,20 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
             // Description
             _buildTextField(
+              controller: _description_arb_Controller,
+              label: 'الوصف بالعربي',
+              hint: 'أدخل وصف المنتج بالعربي',
+              icon: Iconsax.document_text,
+              maxLines: 3,
+            ),
+
+            const SizedBox(height: 16),
+
+            // Description
+            _buildTextField(
               controller: _descriptionController,
-              label: 'الوصف',
-              hint: 'أدخل وصف المنتج',
+              label: 'الوصف بالإنجليزي',
+              hint: 'أدخل وصف المنتج بالإنجليزي',
               icon: Iconsax.document_text,
               maxLines: 3,
             ),
@@ -275,6 +345,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 top: 16,
                 right: 16,
                 child: FloatingActionButton(
+                  elevation: 0,
                   mini: true,
                   backgroundColor: AppColors.primary,
                   onPressed: _showAddMoreMediaBottomSheet,
@@ -583,8 +654,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
       'itemId': _currentItemId,
       'uid': uid,
       'userName': userName,
+      'barcode': _barcodeController.text.trim(),
       'name': _nameController.text.trim(),
+      'eng': _engnameController.text.trim(),
       'description': _descriptionController.text.trim(),
+      '_description_arb_Controller': _description_arb_Controller.text.trim(),
       'price': _priceController.text.trim(),
       'quantity': _quantityController.text.trim(),
       'category': _categoryController.text.trim(),
@@ -683,8 +757,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
       final updateResult = await DatabaseService.updateItem(
         itemId: itemId,
         uid: data['uid'],
+        barcode: data['barcode'],
         name: data['name'],
+        eng: data['eng'],
         description: data['description'],
+        description_arb: data['_description_arb_Controller'],
         category: data['category'],
         price: data['price'],
         quantity: data['quantity'],
@@ -717,26 +794,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 "تم رفع منتج جديد بواسطة ${data['userName']} في النظام. اضغط هنا لعرض التفاصيل أو متابعة النشاط.",
           );
         }
-
-        // final requestUsers = await Dio().post(
-        //   "https://www.Globee-Trading.com/app2026/sql.php",
-        //   data: FormData.fromMap({
-        //     "action": "get_token_followers",
-        //     "user_id": data['uid'],
-        //   }),
-        //   options: Options(headers: {'Content-Type': 'application/json'}),
-        // );
-        // List<String> tokens = [];
-
-        // for (var token in requestUsers.data['data']) {
-        //   tokens.add(token['user_token']);
-        // }
-        // OneSignalService.sendNotificationToMultipleUsers(
-        //   playerIds: tokens,
-        //   title: "يوجد منتج جديد",
-        //   message:
-        //       "تم رفع منتج جديد إسمه ${data['name']} بسعر ${data['price']} لا تفوته",
-        // );
       } else {
         print("❌ Failed to update database: ${updateResult['error']}");
 

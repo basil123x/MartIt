@@ -1,6 +1,10 @@
+import 'dart:io';
+
+import 'package:Globee/features/update/update_screen.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
-import 'package:rive/rive.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';
@@ -67,9 +71,54 @@ class _SplashScreenState extends State<SplashScreen>
     }
   }
 
+  Future<void> checkForForceUpdate() async {
+    try {
+      final dio = Dio();
+      String platform = "";
+      if (Platform.isIOS) {
+        setState(() {
+          platform = "IOS";
+        });
+      } else {
+        setState(() {
+          platform = "Android";
+        });
+      }
+
+      final response = await dio.get(
+        'https://www.Globee-Trading.com/app2026/get_update_info.php?platform=$platform&k=${DateTime.now().millisecondsSinceEpoch}',
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        final latestVersion = data['latest_version'];
+        final forceUpdate = data['force_update'].toString() == "1";
+        final message = data['message'];
+        final storeUrl = data['store_link'];
+
+        final packageInfo = await PackageInfo.fromPlatform();
+        final currentVersion = packageInfo.version;
+
+        if (forceUpdate && currentVersion != latestVersion) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) {
+                return ForceUpdateScreen(message: message, storeUrl: storeUrl);
+              },
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print("Error while checking for update: $e");
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    checkForForceUpdate();
     _initializeAnimations();
     _checkAndSaveContact();
     _navigateToHome();
@@ -169,11 +218,9 @@ class _SplashScreenState extends State<SplashScreen>
                                   30,
                                 ), // كان 40
                                 child: Padding(
-                                  padding: const EdgeInsets.all(
-                                    30,
-                                  ), // إضافة padding للتحكم بحجم الأنيميشن داخل الـ container
-                                  child: RiveAnimation.asset(
-                                    'assets/animations/Globee.riv',
+                                  padding: const EdgeInsets.all(30),
+                                  child: Image.asset(
+                                    "assets/images/Logo.png",
                                     fit: BoxFit.contain,
                                   ),
                                 ),

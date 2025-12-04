@@ -42,8 +42,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final otp = AuthService.generateOTP();
 
-    // Simulate network delay
-    await Future.delayed(const Duration(seconds: 1));
 
     setState(() {
       _isLoading = false;

@@ -101,14 +101,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   vertical: 12,
                 ),
                 prefixIcon: IconButton(
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => TikTokFeedScreen(),
-                      ),
-                    );
-                  },
+                  onPressed: () {},
                   icon: const Icon(Iconsax.arrow_right, color: Colors.grey),
                 ),
                 suffixIcon: Visibility(
@@ -202,6 +195,18 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildSearchResultItem(dynamic item) {
+    String thumbnail = "";
+    switch (item['store_id']) {
+      case '1':
+        thumbnail =
+            "https://globee.b-cdn.net/Globee/${item['id']}/${item['fmedia']}";
+        break;
+      case '2':
+        thumbnail =
+            "https://www.gfnursery.net/s2024/assets/items/${item['idx']}.png";
+        break;
+      default:
+    }
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       color: Color(0xFFB4D4F0).withAlpha(40),
@@ -216,11 +221,11 @@ class _SearchScreenState extends State<SearchScreen> {
             borderRadius: BorderRadius.circular(8),
             color: Colors.grey[200],
           ),
-          child: item['thumbnail'] != null && item['thumbnail'].isNotEmpty
+          child: thumbnail != ''
               ? ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: Image.network(
-                    item['thumbnail'],
+                    thumbnail,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
                       return const Icon(Iconsax.image, color: Colors.grey);

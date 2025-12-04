@@ -22,8 +22,11 @@ class DatabaseService {
   static Future<Map<String, dynamic>> updateItem({
     required String itemId,
     required String uid,
+    required String barcode,
     required String name,
+    required String eng,
     required String description,
+    required String description_arb,
     required String category,
     required String price,
     required String quantity,
@@ -38,8 +41,11 @@ class DatabaseService {
           'action': 'insert',
           'item_id': itemId,
           'uid': uid,
+          'barcode': barcode,
           'name': name,
+          'eng': eng,
           'description': description,
+          'description_arb': description_arb,
           'category': category,
           'price': price,
           'qtt': quantity,
@@ -56,7 +62,7 @@ class DatabaseService {
     }
   }
 
-  static Future<Map<String, dynamic>> followUser({ 
+  static Future<Map<String, dynamic>> followUser({
     required String buyerId,
     required String userId,
     String? userToken,

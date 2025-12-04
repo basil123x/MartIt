@@ -1,5 +1,7 @@
 class ItemModel {
   final String id;
+  final String idx;
+  final String storeid;
   final String name;
   final String price;
   final int quantity;
@@ -11,6 +13,8 @@ class ItemModel {
 
   ItemModel({
     required this.id,
+    required this.idx,
+    required this.storeid,
     required this.name,
     required this.price,
     required this.quantity,
@@ -43,6 +47,8 @@ class ItemModel {
 
     return ItemModel(
       id: json['id'].toString(),
+      idx: json['idx'].toString(),
+      storeid: json['storeid'].toString(),
       name: json['name'] ?? '',
       price: json['price']?.toString() ?? '0',
       quantity: int.tryParse(json['quantity']?.toString() ?? '0') ?? 0,
@@ -63,6 +69,8 @@ class ItemModel {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'idx': idx,
+      'storeid': storeid,
       'name': name,
       'price': price,
       'quantity': quantity,

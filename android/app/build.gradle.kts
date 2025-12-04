@@ -4,50 +4,74 @@ plugins {
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+import java.util.Properties
+import java.io.FileInputStream
+
+// Try both possible locations for key.properties
+val keystorePropertiesFile = rootProject.file("key.properties").takeIf { it.exists() }
+    ?: rootProject.file("app/key.properties")
+
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        load(FileInputStream(keystorePropertiesFile))
+    }
+}
 
 android {
     namespace = "com.mazo.market"
-    compileSdk = 36 // Android 15+ for 16KB page size support
+    compileSdk = 36
     ndkVersion = "27.0.12077973"
 
-    signingConfigs {
-        create("release") {
-            keyAlias = "globee-keystore"
-            keyPassword = "A122%133z."
-            storeFile = file("globee.keystore")
-            storePassword = "A122%133z."
-        }
-    }
-
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
         isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = "17"
     }
 
     defaultConfig {
         applicationId = "com.mazo.market"
-        minSdk = flutter.minSdkVersion // Minimum SDK for modern Android features
-        targetSdk = 35 // Target Android 15+ for 16KB page size support
+        minSdk = 24
+        targetSdk = 36
         multiDexEnabled = true
-        versionCode = 4
-        versionName = "1.0.0"
+        versionCode = 10  // Incremented version
+        versionName = "1.0.1"
         
         // Enable 16KB page size support
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+            abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86_64"))
+        }
+    }
+
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
         }
     }
 
     buildTypes {
+        getByName("debug") {
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
         getByName("release") {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
-                isMinifyEnabled = false
-                isShrinkResources = false
+            }
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
     
@@ -71,5 +95,8 @@ flutter {
 
 dependencies {
     implementation("com.google.android.material:material:1.12.0")
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    implementation("androidx.multidex:multidex:2.0.1")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
+    
+    // NO Play Core libraries - they're deprecated and incompatible with SDK 34+
 }

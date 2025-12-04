@@ -7,6 +7,8 @@ import 'video_player_widget.dart';
 class MediaViewerWidget extends StatefulWidget {
   final List<String> mediaUrls;
   final String itmId;
+  final String itmIdx;
+  final String storeid;
   final bool autoPlayVideo;
   final bool showControls;
   final bool showIndicators;
@@ -15,6 +17,8 @@ class MediaViewerWidget extends StatefulWidget {
     super.key,
     required this.mediaUrls,
     required this.itmId,
+    required this.itmIdx,
+    required this.storeid,
     this.autoPlayVideo = true,
     this.showControls = false,
     this.showIndicators = true,
@@ -52,7 +56,12 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
     }
 
     if (widget.mediaUrls.length == 1) {
-      return _buildSingleMedia(widget.mediaUrls.first, widget.itmId);
+      return _buildSingleMedia(
+        widget.mediaUrls.first,
+        widget.itmId,
+        widget.itmIdx,
+        widget.storeid,
+      );
     }
 
     return Stack(
@@ -66,20 +75,41 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
           },
           itemCount: widget.mediaUrls.length,
           itemBuilder: (context, index) {
-            return _buildSingleMedia(widget.mediaUrls[index], widget.itmId);
+            return _buildSingleMedia(
+              widget.mediaUrls[index],
+              widget.itmId,
+              widget.itmIdx,
+              widget.storeid,
+            );
           },
         ),
       ],
     );
   }
 
-  Widget _buildSingleMedia(String url, String itmId) {
+  Widget _buildSingleMedia(
+    String url,
+    String itmId,
+    String itmIdx,
+    String storeid,
+  ) {
     String ext = url.toString().split('/').last;
     String urlx = url;
-    String finalFullUrl = urlx.replaceAll(
-      url,
-      "https://globee.b-cdn.net/$itmId/$ext",
-    );
+    String imgUrl = "";
+    String compName = "";
+    print("IIIIIIII $itmIdx");
+    switch (storeid) {
+      case "2":
+        compName = "GlobalFarm";
+        imgUrl = itmIdx != ''
+            ? "https://gfnursery.net/s2024/assets/items/$itmIdx.png"
+            : "https://globee.b-cdn.net/$compName/$itmId/$ext";
+        break;
+      default:
+        imgUrl = "https://globee.b-cdn.net/$itmId/$ext";
+        break;
+    }
+    String finalFullUrl = urlx.replaceAll(url, imgUrl);
     if (_isVideoUrl(finalFullUrl.toString().split(']')[0])) {
       return VideoPlayerWidget(
         networkUrl: finalFullUrl.toString().split(']')[0],
