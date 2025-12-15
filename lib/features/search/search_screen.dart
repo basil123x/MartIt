@@ -205,6 +205,10 @@ class _SearchScreenState extends State<SearchScreen> {
         thumbnail =
             "https://www.gfnursery.net/s2024/assets/items/${item['idx']}.png";
         break;
+      case '3':
+        thumbnail =
+            "https://ges.qa/gesqatar/sys2025/attx/itmx/${item['idx']}.png";
+        break;
       default:
     }
     return Card(

@@ -370,7 +370,6 @@ class ApiService {
         '$baseUrl/sql.php',
         data: FormData.fromMap({
           "action": "fetch_with_likes",
-          "user_id": userId,
           "limit": limit.toString(),
           "offset": offset.toString(),
           'itemSrchId': initialItemId ?? "",

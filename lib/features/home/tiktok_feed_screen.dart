@@ -1,6 +1,7 @@
 import 'package:Globee/core/services/onesignal_service.dart';
 import 'package:Globee/core/services/onesignal_service_web.dart';
 import 'package:Globee/features/add_product/add_product_screen.dart';
+import 'package:Globee/shared/providers/app_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +9,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
@@ -1123,19 +1125,31 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
   void _pickImageFromGallery() async {
     final ImagePicker picker = ImagePicker();
-    final List<XFile> images = await picker.pickMultiImage();
-
-    if (images.isNotEmpty) {
-      final List<String> imagePaths = images
+    await picker.pickMultiImage().then((result) async {
+      // Create new item first
+      final List<String> imagePaths = result
           .map((image) => image.path)
           .toList();
+      print(imagePaths);
+      var procx = Provider.of<AppProvider>(context, listen: false);
+      procx.allMedia.addAll(imagePaths);
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => AddProductScreen(mediaFiles: imagePaths),
+          builder: (context) => AddProductScreen(mediaFiles: []),
         ),
       );
-    }
+    });
+
+    // if (images.isNotEmpty) {
+
+    //   Navigator.push(
+    //     context,
+    //     MaterialPageRoute(
+    //       builder: (context) => AddProductScreen(mediaFiles: imagePaths),
+    //     ),
+    //   );
+    // }
   }
 
   void _pickVideoFromGallery() async {

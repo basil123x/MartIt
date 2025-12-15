@@ -105,6 +105,12 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
             ? "https://gfnursery.net/s2024/assets/items/$itmIdx.png"
             : "https://globee.b-cdn.net/$compName/$itmId/$ext";
         break;
+      case "3":
+        compName = "GES";
+        imgUrl = itmIdx != ''
+            ? "https://ges.qa/gesqatar/sys2025/attx/itmx/$itmIdx.png"
+            : "https://globee.b-cdn.net/$compName/$itmId/$ext";
+        break;
       default:
         imgUrl = "https://globee.b-cdn.net/$itmId/$ext";
         break;

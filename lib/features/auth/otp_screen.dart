@@ -324,32 +324,32 @@ class _OTPScreenState extends State<OTPScreen> {
                           ),
 
                           // Debug info (remove in production)
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: AppColors.lightGrey,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              children: [
-                                Text(
-                                  'للاختبار فقط:',
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(fontWeight: FontWeight.w600),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'كود التحقق: ${widget.generatedOTP}',
-                                  style: Theme.of(context).textTheme.bodyLarge
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.primary,
-                                        letterSpacing: 2,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          // Container(
+                          //   padding: const EdgeInsets.all(16),
+                          //   decoration: BoxDecoration(
+                          //     color: AppColors.lightGrey,
+                          //     borderRadius: BorderRadius.circular(12),
+                          //   ),
+                          //   child: Column(
+                          //     children: [
+                          //       Text(
+                          //         'للاختبار فقط:',
+                          //         style: Theme.of(context).textTheme.bodySmall
+                          //             ?.copyWith(fontWeight: FontWeight.w600),
+                          //       ),
+                          //       const SizedBox(height: 4),
+                          //       Text(
+                          //         'كود التحقق: ${widget.generatedOTP}',
+                          //         style: Theme.of(context).textTheme.bodyLarge
+                          //             ?.copyWith(
+                          //               fontWeight: FontWeight.bold,
+                          //               color: AppColors.primary,
+                          //               letterSpacing: 2,
+                          //             ),
+                          //       ),
+                          //     ],
+                          //   ),
+                          // ),
                         ],
                       ),
                     ),
