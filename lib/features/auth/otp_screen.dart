@@ -34,18 +34,38 @@ class _OTPScreenState extends State<OTPScreen> {
 
   Future sendOTP() async {
     await Dio().post(
-      "https://www.wasenderapi.com/api/send-message",
+      "https://graph.facebook.com/v22.0/864750030063011/messages",
       options: Options(
         headers: {
           "Authorization":
-              "Bearer 0026eac5ee3215e52331670750d298b91e8c6e97988bdeddb156455f459d4b57",
+              "Bearer EAARdmJyGWR8BQFt5X7HNKf8VgWenQaRnZAUqzVblLiLVajePwBHuF1xY2R5jFtA8mvMFZA8aXrNUwV6sAl7ePgP7RY5vH8KJKGcEbLA6elpJiZBnoYrj4K7tFYf3Hc090iasLTFdjlk9BWa7UmDXvoSjc1JSx7MG2jDyLJnf5ow74b8XTvmZCpkfZCc4RoC3rYQZDZD",
           "Content-Type": "application/json",
         },
       ),
       data: {
-        "to": "+974${widget.phoneNumber}",
-        "text":
-            "${widget.generatedOTP} is Your Verification Code. Don\'t Share This code with anyone",
+        "messaging_product": "whatsapp",
+        "to": "974${widget.phoneNumber}",
+        "type": "template",
+        "template": {
+          "name": "send_otp",
+          "language": {"code": "ar"},
+          "components": [
+            {
+              "type": "body",
+              "parameters": [
+                {"type": "text", "text": widget.generatedOTP},
+              ],
+            },
+            {
+              "type": "button",
+              "sub_type": "url",
+              "index": 0,
+              "parameters": [
+                {"type": "text", "text": widget.generatedOTP},
+              ],
+            },
+          ],
+        },
       },
     );
   }
