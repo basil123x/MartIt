@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:Globee/features/update/update_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/app_colors.dart';
@@ -25,51 +24,6 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<double> _logoAnimation;
   late Animation<double> _textAnimation;
   late Animation<Offset> _slideAnimation;
-  bool _contactSaved = false;
-
-  Future<void> _checkAndSaveContact() async {
-    // استنى شوية عشان الـ UI يبني
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    final prefs = await SharedPreferences.getInstance();
-    final isFirstLaunch = prefs.getBool('first_launch') ?? true;
-
-    if (isFirstLaunch && mounted) {
-      if (await FlutterContacts.requestPermission()) {
-        try {
-          final contact = Contact()
-            ..name.first = 'Globee'
-            ..name.last = 'Trading'
-            ..phones = [Phone('71402613', label: PhoneLabel.mobile)];
-
-          await contact.insert();
-
-          if (mounted) {
-            setState(() => _contactSaved = true);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('✅ تم حفظ رقم الدعم في جهات الاتصال'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 3),
-              ),
-            );
-          }
-
-          await prefs.setBool('first_launch', false);
-        } catch (e) {
-          print('خطأ في حفظ جهة الاتصال: $e');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('⚠️ لم يتم حفظ رقم الدعم'),
-                backgroundColor: Colors.orange,
-              ),
-            );
-          }
-        }
-      }
-    }
-  }
 
   Future<void> checkForForceUpdate() async {
     try {
@@ -120,7 +74,6 @@ class _SplashScreenState extends State<SplashScreen>
     super.initState();
     checkForForceUpdate();
     _initializeAnimations();
-    _checkAndSaveContact();
     _navigateToHome();
   }
 

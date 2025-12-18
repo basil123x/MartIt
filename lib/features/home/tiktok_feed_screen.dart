@@ -48,6 +48,10 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
   int _currentPage = 0;
   String? _currentItemId;
   String? _currentUserId;
+  List<String> _categories = [];
+  String?
+  _selectedCategory; // ✅ الفلتر الحالي - null = الكل، غير null = تصنيف محدد
+  bool _isLoadingCategories = false;
 
   @override
   void initState() {
@@ -72,16 +76,40 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
       _isLoggedIn = isLoggedIn;
       _currentUserId = _currentUserIdx;
       _loadItems(uid: _currentUserId);
+      _loadCategories();
     });
+  }
+
+  Future<void> _loadCategories() async {
+    if (_isLoadingCategories) return;
+
+    setState(() {
+      _isLoadingCategories = true;
+    });
+
+    try {
+      final categories = await ApiService.getCategories();
+      setState(() {
+        _categories = categories;
+        _isLoadingCategories = false;
+      });
+    } catch (e) {
+      print('Error loading categories: $e');
+      setState(() {
+        _isLoadingCategories = false;
+      });
+    }
   }
 
   Future<void> _loadItems({
     bool isRefresh = false,
     String? uid,
     String? initiItem,
+    String? category,
   }) async {
     if (_isLoading) return;
     print("SSSSSS $uid");
+    print("Category Filter: $category");
 
     setState(() {
       _isLoading = true;
@@ -105,20 +133,26 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
         items = await ApiService.fetchItemsWithLikes(
           userId: currentUserId,
           limit: 10,
-          offset: _items.length,
+          offset: isRefresh ? 0 : _items.length,
           initialItemId: initiItem == "" ? initiItem : widget.initialItemId,
+          category: category,
         );
       } else {
         // ✅ لو مش مسجل، نستخدم fetchItems عادي (بدون user_id)
         items = await ApiService.fetchItems(
-          page: _currentPage,
+          page: isRefresh ? 0 : _currentPage,
           userId: uid,
           initialItemId: initiItem == "" ? initiItem : widget.initialItemId,
+          category: category,
         );
       }
 
       setState(() {
-        _items.addAll(items);
+        if (isRefresh) {
+          _items = items;
+        } else {
+          _items.addAll(items);
+        }
         _isLoading = false;
         _currentPage++;
       });
@@ -136,8 +170,11 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           action: SnackBarAction(
             label: 'إعادة المحاولة',
             textColor: Colors.white,
-            onPressed: () =>
-                _loadItems(isRefresh: true, uid: _items[0].seller.id),
+            onPressed: () => _loadItems(
+              isRefresh: true,
+              uid: _items[0].seller.id,
+              category: _selectedCategory,
+            ),
           ),
         ),
       );
@@ -194,7 +231,10 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
-                      onPressed: () => _loadItems(isRefresh: true),
+                      onPressed: () => _loadItems(
+                        isRefresh: true,
+                        category: _selectedCategory,
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
@@ -218,11 +258,15 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                         _currentIndex = actualIndex;
                       });
 
-                      // ✅ لو وصل لآخر 3 أصناف، نجيب أصناف جديدة
+                      // ✅ لو وصل لآخر 3 أصناف، نجيب أصناف جديدة مع الفلتر الحالي
                       if (actualIndex >= _items.length - 3 && !_isLoading) {
+                        print(
+                          '🔄 Loading more items with category: ${_selectedCategory ?? "ALL"}',
+                        );
                         _loadItems(
                           uid: _items[actualIndex].seller.id,
                           initiItem: "",
+                          category: _selectedCategory, // ✅ نستخدم الفلتر الحالي
                         );
                       }
                     },
@@ -246,6 +290,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
                   // Top Bar
                   _buildTopBar(),
+
+                  // Categories Bar
+                  _buildCategoriesBar(),
 
                   // Side Actions
                   _buildSideActions(),
@@ -313,33 +360,184 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
             // Actions
             Row(
               children: [
-                IconButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const SearchScreen(),
+                Stack(
+                  children: [
+                    Positioned(
+                      left: 1,
+                      top: 1,
+                      child: IconButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SearchScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(
+                          Iconsax.search_normal,
+                          color: Colors.black45,
+                          size: 28,
+                        ),
                       ),
-                    );
-                  },
-                  icon: const Icon(
-                    Iconsax.search_normal,
-                    color: Colors.white,
-                    size: 28,
-                  ),
+                    ),
+                    IconButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SearchScreen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(
+                        Iconsax.search_normal,
+                        color: Colors.white,
+                        size: 28,
+                      ),
+                    ),
+                  ],
                 ),
                 if (_isLoggedIn)
-                  IconButton(
-                    onPressed: _showMoreOptions,
-                    icon: const Icon(
-                      Iconsax.more,
-                      color: Colors.white,
-                      size: 28,
-                    ),
+                  Stack(
+                    children: [
+                      Positioned(
+                        left: 1,
+                        top: 1,
+                        child: IconButton(
+                          onPressed: _showMoreOptions,
+                          icon: const Icon(
+                            Iconsax.more,
+                            color: Colors.black45,
+                            size: 28,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: _showMoreOptions,
+                        icon: const Icon(
+                          Iconsax.more,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
+                    ],
                   ),
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoriesBar() {
+    if (_categories.isEmpty) return const SizedBox();
+
+    return Positioned(
+      top: 100, // تحت الأيقونات العلوية
+      left: 0,
+      right: 0,
+      child: Container(
+        height: 50,
+        decoration: BoxDecoration(),
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: _categories.length + 1, // +1 للكل
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              // زر "الكل"
+              return _buildCategoryChip(
+                label: 'الكل',
+                isSelected: _selectedCategory == null,
+                onTap: () {
+                  if (_selectedCategory == null)
+                    return; // لو مختار بالفعل، متعملش حاجة
+
+                  setState(() {
+                    _selectedCategory = null;
+                  });
+                  // تحديث قائمة المنتجات - جلب الكل
+                  _loadItems(
+                    isRefresh: true,
+                    uid: _currentUserId,
+                    category: null,
+                  );
+                },
+              );
+            }
+
+            final category = _categories[index - 1];
+            return _buildCategoryChip(
+              label: category,
+              isSelected: _selectedCategory == category,
+              onTap: () {
+                if (_selectedCategory == category)
+                  return; // لو مختار بالفعل، متعملش حاجة
+
+                setState(() {
+                  _selectedCategory = category;
+                });
+                // تحديث قائمة المنتجات حسب الفئة
+                _loadItems(
+                  isRefresh: true,
+                  uid: _currentUserId,
+                  category: category,
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(left: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : Colors.white.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.primary
+                : Colors.white.withOpacity(0.3),
+            width: 1.5,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              shadows: const [
+                Shadow(
+                  offset: Offset(1, 1),
+                  blurRadius: 2,
+                  color: Colors.black45,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -459,10 +657,29 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           _buildActionButton(
             child: Column(
               children: [
-                Icon(
-                  item.interactions.isLiked ? Iconsax.heart5 : Iconsax.heart,
-                  color: item.interactions.isLiked ? Colors.red : Colors.white,
-                  size: 32,
+                Stack(
+                  children: [
+                    Positioned(
+                      left: 0,
+                      top: 1,
+                      child: Icon(
+                        Iconsax.heart,
+                        color: item.interactions.isLiked
+                            ? Colors.red
+                            : Colors.black45,
+                        size: 33,
+                      ),
+                    ),
+                    Icon(
+                      item.interactions.isLiked
+                          ? Iconsax.heart5
+                          : Iconsax.heart,
+                      color: item.interactions.isLiked
+                          ? Colors.red
+                          : Colors.white,
+                      size: 32,
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -470,7 +687,14 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w900,
+                    shadows: [
+                      Shadow(
+                        offset: Offset(2, 2),
+                        blurRadius: 1,
+                        color: Colors.black,
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -482,7 +706,20 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           _buildActionButton(
             child: Column(
               children: [
-                const Icon(Iconsax.message, color: Colors.white, size: 32),
+                Stack(
+                  children: [
+                    Positioned(
+                      left: 1,
+                      top: 1,
+                      child: Icon(
+                        Iconsax.message,
+                        color: Colors.black45,
+                        size: 32,
+                      ),
+                    ),
+                    const Icon(Iconsax.message, color: Colors.white, size: 32),
+                  ],
+                ),
                 const SizedBox(height: 4),
                 Text(
                   _formatCount(item.interactions.comments),
@@ -490,6 +727,13 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                     color: Colors.white,
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
+                    shadows: [
+                      Shadow(
+                        offset: Offset(2, 2),
+                        blurRadius: 1,
+                        color: Colors.black,
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -512,7 +756,20 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           _buildActionButton(
             child: Column(
               children: [
-                const Icon(Iconsax.share, color: Colors.white, size: 32),
+                Stack(
+                  children: [
+                    Positioned(
+                      left: 1,
+                      top: 1,
+                      child: Icon(
+                        Iconsax.share,
+                        size: 32,
+                        color: Colors.black45,
+                      ),
+                    ),
+                    const Icon(Iconsax.share, color: Colors.white, size: 32),
+                  ],
+                ),
                 const SizedBox(height: 4),
                 Text(
                   _formatCount(item.interactions.shares),
@@ -520,6 +777,13 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                     color: Colors.white,
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
+                    shadows: [
+                      Shadow(
+                        offset: Offset(2, 2),
+                        blurRadius: 1,
+                        color: Colors.black,
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -533,10 +797,23 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
             child: _buildActionButton(
               child: Column(
                 children: [
-                  const Icon(
-                    Iconsax.shopping_cart,
-                    color: Colors.white,
-                    size: 32,
+                  Stack(
+                    children: [
+                      Positioned(
+                        left: 1,
+                        top: 1,
+                        child: Icon(
+                          Iconsax.shopping_cart,
+                          size: 32,
+                          color: Colors.black45,
+                        ),
+                      ),
+                      const Icon(
+                        Iconsax.shopping_cart,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -545,6 +822,13 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                       color: Colors.white,
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
+                      shadows: [
+                        Shadow(
+                          offset: Offset(2, 2),
+                          blurRadius: 1,
+                          color: Colors.black,
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -577,102 +861,125 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
       left: 16,
       right: 80,
       bottom: 100,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Iconsax.user, color: Colors.white, size: 16),
-              const SizedBox(width: 8),
-              Text(
-                item.seller.name,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+      child: Container(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Iconsax.user, color: Colors.white, size: 16),
+                const SizedBox(width: 8),
+                Text(
+                  item.seller.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    shadows: [
+                      Shadow(
+                        offset: Offset(1, 1),
+                        blurRadius: 3,
+                        color: Colors.black26,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 8),
-
-          // Product Title
-          Text(
-            item.name,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+              ],
             ),
-          ),
 
-          const SizedBox(height: 8),
+            const SizedBox(height: 8),
 
-          // Price
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Iconsax.tag, color: Colors.white, size: 16),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${item.price} ريال',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
+            // Product Title
+            Text(
+              item.name,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                shadows: [
+                  Shadow(
+                    offset: Offset(1, 1),
+                    blurRadius: 3,
+                    color: Colors.black26,
+                  ),
+                ],
               ),
-              SizedBox(width: 10),
-              item.quantity == 0
-                  ? Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
+            ),
+
+            const SizedBox(height: 8),
+
+            // Price
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Iconsax.tag, color: Colors.white, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${item.price} ريال',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'نفذ من المخزون',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                    ],
+                  ),
+                ),
+                SizedBox(width: 10),
+                item.quantity == 0
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'نفذ من المخزون',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
+                      )
+                    : Text(
+                        "${item.quantity} ${item.quantity >= 3 && item.quantity <= 9 ? "Pcs" : "Pc"}",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          shadows: [
+                            Shadow(
+                              offset: Offset(1, 1),
+                              blurRadius: 3,
+                              color: Colors.black26,
+                            ),
+                          ],
+                        ),
                       ),
-                    )
-                  : Text(
-                      "${item.quantity} ${item.quantity >= 3 && item.quantity <= 9 ? "Pcs" : "Pc"}",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1140,16 +1447,6 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
         ),
       );
     });
-
-    // if (images.isNotEmpty) {
-
-    //   Navigator.push(
-    //     context,
-    //     MaterialPageRoute(
-    //       builder: (context) => AddProductScreen(mediaFiles: imagePaths),
-    //     ),
-    //   );
-    // }
   }
 
   void _pickVideoFromGallery() async {

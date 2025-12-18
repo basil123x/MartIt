@@ -787,7 +787,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         List<String> setPlayers = [];
         for (var player_id in player_ids) {
           setPlayers.add(player_id['player_id'].toString());
-          await OneSignalServiceWebSys.sendNotificationToMultipleUsers(
+          await OneSignalService.sendNotificationToMultipleUsers(
             playerIds: setPlayers,
             title: "المستخدم: ${data['userName']} رفع منتج جديد",
             message:

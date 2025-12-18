@@ -32,6 +32,7 @@ class ApiService {
     required int page,
     String? userId,
     String? initialItemId,
+    String? category,
   }) async {
     try {
       final url = Uri.parse('$baseUrl/sql.php');
@@ -42,12 +43,20 @@ class ApiService {
         'page': page.toString(),
         'limit': '10',
         'itemSrchId': initialItemId ?? "",
+        'store_id': '2', // ✅ فلترة بـ Global Farm فقط
       };
 
       // ✅ لو في user_id، نضيفه للـ body
       if (userId != null && userId.isNotEmpty) {
         body['user_id'] = userId;
       }
+
+      // ✅ لو في category، نضيفه للـ body
+      if (category != null && category.isNotEmpty) {
+        body['category'] = category;
+      }
+
+      print('📦 fetchItems Request: $body');
 
       final response = await http.post(
         url,
@@ -364,16 +373,28 @@ class ApiService {
     int limit = 10,
     int offset = 0,
     String? initialItemId,
+    String? category,
   }) async {
     try {
+      final Map<String, dynamic> requestData = {
+        "action": "fetch_with_likes",
+        "user_id": userId,
+        "limit": limit.toString(),
+        "offset": offset.toString(),
+        'itemSrchId': initialItemId ?? "",
+        'store_id': '2', // ✅ فلترة بـ Global Farm فقط
+      };
+
+      // ✅ لو في category، نضيفه للـ request
+      if (category != null && category.isNotEmpty) {
+        requestData['category'] = category;
+      }
+
+      print('📦 fetchItemsWithLikes Request: $requestData');
+
       final response = await Dio().post(
         '$baseUrl/sql.php',
-        data: FormData.fromMap({
-          "action": "fetch_with_likes",
-          "limit": limit.toString(),
-          "offset": offset.toString(),
-          'itemSrchId': initialItemId ?? "",
-        }),
+        data: FormData.fromMap(requestData),
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
 
@@ -916,6 +937,38 @@ class ApiService {
       }
     } catch (e) {
       throw Exception('Update order status error: $e');
+    }
+  }
+
+  // Get categories/groups
+  static Future<List<String>> getCategories({String? storeId}) async {
+    try {
+      final data = {
+        "action": "get_group",
+        "store_id": "2", // ✅ جلب تصنيفات Global Farm فقط
+      };
+
+      final response = await Dio().post(
+        '$baseUrl/sql.php',
+        data: FormData.fromMap(data),
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
+      if (response.statusCode == 200) {
+        final result = response.data;
+        if (result['success'] == true) {
+          final List<dynamic> categoriesData = result['data'] ?? [];
+          return categoriesData
+              .map((item) => item['category'] as String)
+              .toList();
+        } else {
+          throw Exception(result['error'] ?? 'Failed to get categories');
+        }
+      } else {
+        throw Exception('Failed to get categories: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Get categories error: $e');
     }
   }
 }

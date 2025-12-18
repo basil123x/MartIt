@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/services/auth_service.dart';
@@ -159,6 +160,17 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         profileImage: _selectedImage?.path,
       );
 
+      String? oneToken = OneSignal.User.pushSubscription.id;
+
+      await Dio().post(
+        "https://www.Globee-Trading.com/app2026/sql.php",
+        data: FormData.fromMap({
+          "action": "update_token",
+          "phone": widget.phoneNumber,
+          "player_id": oneToken,
+        }),
+      );
+
       final request = await Dio().post(
         "https://www.Globee-Trading.com/app2026/sql.php",
         data: FormData.fromMap({"action": "get_tokens"}),
@@ -169,7 +181,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         setState(() {
           setPlayers.add(player_id['player_id'].toString());
         });
-        await OneSignalServiceWebSys.sendNotificationToMultipleUsers(
+        print(setPlayers);
+        await OneSignalService.sendNotificationToMultipleUsers(
           playerIds: setPlayers,
           title: "مستخدم جديد انضم إلى التطبيق",
           message:

@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:Globee/core/services/contacts_service.dart';
 import 'package:Globee/shared/providers/app_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:restart_app/restart_app.dart';
@@ -16,6 +16,10 @@ import 'features/splash/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
   OneSignal.initialize("ddec3249-5f16-4870-9c32-682a704559b6");
   await OneSignal.Notifications.requestPermission(true);
   OneSignal.Notifications.addClickListener((event) {
