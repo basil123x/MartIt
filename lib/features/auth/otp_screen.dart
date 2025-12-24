@@ -12,11 +12,13 @@ import 'create_account_screen.dart';
 class OTPScreen extends StatefulWidget {
   final String phoneNumber;
   final String generatedOTP;
+  final String countryCode;
 
   const OTPScreen({
     super.key,
     required this.phoneNumber,
     required this.generatedOTP,
+    required this.countryCode,
   });
 
   @override
@@ -44,7 +46,7 @@ class _OTPScreenState extends State<OTPScreen> {
       ),
       data: {
         "messaging_product": "whatsapp",
-        "to": "974${widget.phoneNumber}",
+        "to": "${widget.countryCode}${widget.phoneNumber}",
         "type": "template",
         "template": {
           "name": "send_otp",
@@ -205,7 +207,6 @@ class _OTPScreenState extends State<OTPScreen> {
 
   @override
   Widget build(BuildContext context) {
-    print(widget.generatedOTP);
     return GestureDetector(
       onTap: () {
         FocusScope.of(context).unfocus();
@@ -281,7 +282,8 @@ class _OTPScreenState extends State<OTPScreen> {
                                         text: 'أدخل الكود المرسل إلى\n',
                                       ),
                                       TextSpan(
-                                        text: '+974 ${widget.phoneNumber}',
+                                        text:
+                                            '${widget.countryCode} ${widget.phoneNumber}',
                                         style: const TextStyle(
                                           fontWeight: FontWeight.w600,
                                           color: AppColors.primary,

@@ -30,27 +30,24 @@ try {
             $category = isset($_POST['category']) ? $conn->real_escape_string($_POST['category']) : '';
             
             // Debug logging
-            error_log("📦 fetch - Store ID: $store_id, Category: " . ($category ? $category : 'NULL'));
-            $img_url = "";
-            switch ($store_id) {
-                case '2':
-                    $img_url = "https://globee.b-cdn.net/GlobalFarm/";
-                    break;
-                case '3':
-                    $img_url = "https://globee.b-cdn.net/GES/";
-                    break;
-                default:
-                    $img_url = "https://globee.b-cdn.net/";
-                    break;
-            }
+            error_log("📦 fetch - Category received: " . ($category ? $category : 'NULL'));
+            $img_url = "https://globee.b-cdn.net/";
+            // switch ($store_id) {
+            //     case '2':
+            //         $img_url = "https://globee.b-cdn.net/GlobalFarm/";
+            //         break;
+            //     case '3':
+            //         $img_url = "https://globee.b-cdn.net/GES/";
+            //         break;
+            //     default:
+                    
+            //         break;
+            // }
             $d1 = "";
             $d2 = "";
             $d3 = "";
             if ($itemSrchId) {
                 $d1 = "AND Items.id = '$itemSrchId'";
-            }
-            if ($store_id) {
-                $d2 = "AND Items.store_id = '$store_id'";
             }
             if (!empty($category)) {
                 $d3 = "AND Items.category = '$category'";
@@ -103,9 +100,10 @@ try {
                 SELECT user_id, buyer_id
                 FROM Followers " . (!empty($user_id) ? "WHERE buyer_id = '$user_id'" : "WHERE 1=0") . "
             ) followers ON Users.uid = followers.user_id
-            WHERE Items.Visibility = 'Public' AND Items.status = 1 $d1 $d2 $d3
+            WHERE Items.Visibility = 'Public' AND Items.status = 1 $d1 $d3
             ORDER BY RAND()
             LIMIT $limit OFFSET $offset";
+
         
             // Debug: Log the SQL query
             error_log("📦 fetch SQL: " . $sql);
@@ -161,7 +159,7 @@ try {
                 'success' => true,
                 'data' => $items,
                 'page' => $page,
-                'hasMore' => count($items) >= $limit
+                'hasMore' => count($items) >= $limit,
             );
             break;
             
@@ -688,27 +686,33 @@ try {
             $store_id = isset($_POST['store_id']) ? trim($_POST['store_id']) : '1';
             $date = date('Y-m-d');
         
-           
-                if (empty($phone)) {
-                    $response = array(
-                        'success' => false,
-                        'error' => 'رقم الهاتف مطلوب'
-                    );
-                    break;
-                }
-                
-
-                $sql = "INSERT INTO Users(Fullname, PhoneNumber, uid, oid, Created_at, status, player_id, store_id) VALUES('$name', '$phone', '$uid', '$oid', '$date', '0', '$player_id', '$store_id')";
+            if (empty($phone)) {
+                $response = array(
+                    'success' => false,
+                    'error' => 'رقم الهاتف مطلوب'
+                );
+                break;
+            }
             
+            $userExists = $conn->query("SELECT PhoneNumber, uid FROM Users WHERE PhoneNumber = '$phone'");
+            
+            if (mysqli_num_rows($userExists) > 0) {
+                // المستخدم موجود - لا تضيف
+                $response = array(
+                    'success' => false,
+                    'error' => 'المستخدم موجود بالفعل'
+                );
+            } else {
+                // المستخدم غير موجود - أضف
+                $sql = "INSERT INTO Users(Fullname, PhoneNumber, uid, oid, Created_at, status, player_id, store_id) VALUES('$name', '$phone', '$uid', '$oid', '$date', '0', '$player_id', '$store_id')";
+                $conn->query("UPDATE employees SET player_id = '$player_id' WHERE phone = '$phone'");
                 $result = $conn->query($sql);
                 
                 $response = array(
                     'success' => true,
-                    'sql' => $sql
+                    'message' => 'تم إضافة المستخدم بنجاح'
                 );
-                
-            
-            
+            }
             break;
         case 'get_tokens':
                 $empnumbers = '71402613';
@@ -724,17 +728,6 @@ try {
                 $response = array(
                     'success' => true,
                     'player_ids' => $player_ids
-                );
-            break;
-        case 'update_token':
-                $phone = isset($_POST['phone']) ? trim($_POST['phone']) : '';
-                $player_id = isset($_POST['player_id']) ? trim($_POST['player_id']) : '';
-                
-                $sql = "UPDATE employees SET player_id = '$player_id' WHERE phone = '$phone'";
-                $conn->query($sql);
-                
-                $response = array(
-                    'success' => true,
                 );
             break;
 
@@ -855,27 +848,13 @@ try {
             $category = isset($_POST['category']) ? $conn->real_escape_string($_POST['category']) : '';
             
             // Debug logging
-            error_log("📦 fetch_with_likes - Store ID: $store_id, Category: " . ($category ? $category : 'NULL'));
-            $img_url = "";
-            switch ($store_id) {
-                case '2':
-                    $img_url = "https://globee.b-cdn.net/GlobalFarm/";
-                    break;
-                case '3':
-                    $img_url = "https://globee.b-cdn.net/GES/";
-                    break;
-                default:
-                    $img_url = "https://globee.b-cdn.net/";
-                    break;
-            }
+            error_log("📦 fetch_with_likes - Category received: " . ($category ? $category : 'NULL'));
+            $img_url = "https://globee.b-cdn.net/";
             $d1 = "";
             $d2 = "";
             $d3 = "";
             if ($itemSrchId) {
                 $d1 = "AND Items.id = '$itemSrchId'";
-            }
-            if ($store_id) {
-                $d2 = "AND Items.store_id = '$store_id'";
             }
             if (!empty($category)) {
                 $d3 = "AND Items.category = '$category'";
@@ -930,13 +909,10 @@ try {
                     WHERE user_id = '$user_id'
                     GROUP BY item_id
                 ) cart_count ON Items.id = cart_count.item_id
-                WHERE Items.Visibility = 'Public' AND Items.status = 1 $d1 $d2 $d3
-                ORDER BY Items.created_at DESC 
+                WHERE Items.Visibility = 'Public' AND Items.status = 1 $d1 $d3
+                ORDER BY RAND()
                 LIMIT $limit OFFSET $offset";
         
-                // Debug: Log the SQL query
-                error_log("📦 fetch_with_likes SQL: " . $sql);
-                
                 $result = $conn->query($sql);
                 
                 if ($result) {
@@ -1514,16 +1490,29 @@ try {
             }
 
             try {
-                $sql = "SELECT DISTINCT
-                    Users.uid as seller_id,
-                    Users.Fullname as seller_name,
-                    Users.player_id as seller_token
-                FROM Cart 
-                LEFT JOIN Items ON Cart.item_id = Items.id
-                LEFT JOIN Users ON Items.uid = Users.uid
-                WHERE Cart.user_id = '$user_id'
-                AND Users.uid IS NOT NULL
-                ORDER BY Users.Fullname ASC";
+                $sql = "SELECT 
+                    Users.uid AS seller_id,
+                    Users.Fullname AS seller_name,
+                    Users.player_id AS seller_token,
+                    (
+                        SELECT conversation_id 
+                        FROM Chat_Messages 
+                        WHERE  Chat_Messages.seller_id = '$user_id'
+                        ORDER BY Chat_Messages.id DESC 
+                        LIMIT 1
+                    ) AS conversation_id
+                FROM
+                    Users
+                INNER JOIN Items ON Items.uid = Users.uid
+                INNER JOIN Cart ON Cart.item_id = Items.id AND Cart.user_id = '$user_id'
+                WHERE
+                    Users.uid IS NOT NULL
+                GROUP BY 
+                    Users.uid,
+                    Users.Fullname,
+                    Users.player_id
+                ORDER BY
+                    Users.Fullname ASC";
 
                 $result = $conn->query($sql);
                 $sellers = array();
@@ -1534,7 +1523,8 @@ try {
                             'id' => (string)$row['seller_id'],
                             'name' => (string)$row['seller_name'],
                             'avatar' => "https://globee.b-cdn.net/users/" . $row['seller_id'] . "/avatar.jpg",
-                            'token' => (string)($row['seller_token'] ?? '')
+                            'token' => (string)($row['seller_token'] ?? ''),
+                            'conv_id' => (string)($row['conversation_id'] ?? '')
                         );
                         
                         $sellers[] = $seller;
@@ -1675,8 +1665,8 @@ try {
                 $conversation_id = uniqid('conv_', true);
             }
             
-            $sql = "INSERT INTO Chat_Messages (sender_id, receiver_id, message, conversation_id, message_type, location_lat, location_lng, timestamp, is_read) 
-                    VALUES ('$sender_id', '$receiver_id', '$message', '$conversation_id', '$message_type', " . 
+            $sql = "INSERT INTO Chat_Messages (sender_id, receiver_id, seller_id, message, conversation_id, message_type, location_lat, location_lng, timestamp, is_read) 
+                    VALUES ('$sender_id', '$receiver_id', '$receiver_id', '$message', '$conversation_id', '$message_type', " . 
                     ($location_lat ? "'$location_lat'" : "NULL") . ", " . 
                     ($location_lng ? "'$location_lng'" : "NULL") . ", NOW(), 0)";
             
@@ -1727,11 +1717,6 @@ try {
         case 'get_chat_conversations':
             $user_id = isset($_POST['user_id']) ? $conn->real_escape_string($_POST['user_id']) : '';
             $store_id = isset($_POST['store_id']) ? $conn->real_escape_string($_POST['store_id']) : '';
-            $conver = "";
-            if ($store_id != "1")
-            {
-                $conver = "WHERE u.store_id = '$store_id'";
-            }
             
             if (empty($user_id)) {
                 $response = ['success' => false, 'error' => 'معرف المستخدم مطلوب'];
@@ -1772,7 +1757,6 @@ try {
                 GROUP BY conversation_id
             ) as unread_counts
                 ON unread_counts.conversation_id = lm.conversation_id
-            $conver
             ORDER BY last_message_time DESC;
 ";
             
@@ -2074,16 +2058,22 @@ try {
         case 'get_group':
             $store_id = isset($_POST['store_id']) ? $conn->real_escape_string($_POST['store_id']) : '';
             
+            // Debug logging
+            error_log("📦 get_group - Store ID received: " . ($store_id ? $store_id : 'NULL'));
+            
             try {
                 // بناء الاستعلام
-                $sql = "SELECT DISTINCT category FROM Items WHERE category IS NOT NULL AND category != '' AND category != 'null'";
+                $sql = "SELECT DISTINCT category FROM Items WHERE Visibility = 'Public' AND status = 1 AND category IS NOT NULL AND category != '' AND category != 'null'";
                 
                 // إضافة شرط المتجر إذا كان محدداً
-                if (!empty($store_id) && $store_id != '1') {
-                    $sql .= " AND store_id = '$store_id'";
-                }
+                // if (!empty($store_id) && $store_id != '1') {
+                //     $sql .= " AND store_id = '$store_id'";
+                // }
                 
                 $sql .= " ORDER BY category ASC";
+                
+                // Debug: Log the SQL query
+                error_log("📦 get_group SQL: " . $sql);
                 
                 $result = $conn->query($sql);
                 
@@ -2111,6 +2101,132 @@ try {
                 $response = [
                     'success' => false,
                     'error' => 'خطأ في جلب المجموعات: ' . $e->getMessage()
+                ];
+            }
+            break;
+
+        // =====================================
+        // تسجيل الدخول بالبريد الإلكتروني
+        // =====================================
+        case 'login_with_email':
+            $email = isset($_POST['email']) ? $conn->real_escape_string($_POST['email']) : '';
+            $password = isset($_POST['password']) ? $_POST['password'] : '';
+            
+            try {
+                $sql = "SELECT uid, oid, Fullname, Email, Password FROM Users WHERE Email = '$email'";
+                $result = $conn->query($sql);
+                
+                if ($result && $result->num_rows > 0) {
+                    $user = $result->fetch_assoc();
+                    
+                    if (hash_equals($user['Password'], $password)) {
+                        $response = [
+                            'success' => true,
+                            'message' => 'تم تسجيل الدخول بنجاح',
+                            'data' => [
+                                'id' => $user['uid'],
+                                'oid' => $user['oid'],
+                                'name' => $user['Fullname'],
+                                'email' => $user['Email']
+                            ]
+                        ];
+                    } else {
+                        $response = [
+                            'success' => false,
+                            'message' => 'كلمة المرور غير صحيحة'
+                        ];
+                    }
+                } else {
+                    $response = [
+                        'success' => false,
+                        'message' => 'المستخدم غير موجود'
+                    ];
+                }
+            } catch (Exception $e) {
+                $response = [
+                    'success' => false,
+                    'error' => 'خطأ في تسجيل الدخول: ' . $e->getMessage()
+                ];
+            }
+            break;
+
+        // =====================================
+        // إنشاء حساب بالبريد الإلكتروني
+        // =====================================
+        case 'create_email_account':
+            $name = isset($_POST['name']) ? $conn->real_escape_string($_POST['name']) : '';
+            $email = isset($_POST['email']) ? $conn->real_escape_string($_POST['email']) : '';
+            $password = isset($_POST['password']) ? $_POST['password'] : '';
+            $player_id = isset($_POST['player_id']) ? $conn->real_escape_string($_POST['player_id']) : '';
+            $avatar_url = isset($_POST['avatar_url']) ? $conn->real_escape_string($_POST['avatar_url']) : '';
+            
+            try {
+                $check_sql = "SELECT uid FROM Users WHERE Email = '$email'";
+                $check_result = $conn->query($check_sql);
+                
+                if ($check_result && $check_result->num_rows > 0) {
+                    $response = [
+                        'success' => false,
+                        'message' => 'البريد الإلكتروني مسجل مسبقاً'
+                    ];
+                } else {
+                    $uid = rand(1000, 9999);
+                    $oid = rand(1000, 9999);
+                    
+                    $sql = "INSERT INTO Users (uid, oid, Fullname, Email, Password, player_id, avatar_url, created_at) 
+                            VALUES ('$uid', '$oid', '$name', '$email', '$password', '$player_id', '$avatar_url', NOW())";
+                    
+                    if ($conn->query($sql)) {
+                        $response = [
+                            'success' => true,
+                            'message' => 'تم إنشاء الحساب بنجاح',
+                            'data' => [
+                                'id' => (string)$uid,
+                                'oid' => (string)$oid,
+                                'name' => $name,
+                                'email' => $email
+                            ]
+                        ];
+                    } else {
+                        $response = [
+                            'success' => false,
+                            'error' => 'فشل في إنشاء الحساب: ' . $conn->error
+                        ];
+                    }
+                }
+            } catch (Exception $e) {
+                $response = [
+                    'success' => false,
+                    'error' => 'خطأ في إنشاء الحساب: ' . $e->getMessage()
+                ];
+            }
+            break;
+
+        // =====================================
+        // تحديث FCM Token
+        // =====================================
+        case 'update_fcm_token':
+            $email = isset($_POST['email']) ? $conn->real_escape_string($_POST['email']) : '';
+            $fcm_token = isset($_POST['fcm_token']) ? $conn->real_escape_string($_POST['fcm_token']) : '';
+            
+            try {
+                $sql = "UPDATE Users SET player_id = '$fcm_token' WHERE Email = '$email'";
+                
+                if ($conn->query($sql)) {
+                    $response = [
+                        'success' => true,
+                        'message' => 'تم تحديث التوكن بنجاح'
+                    ];
+                } else {
+                    $response = [
+                        'success' => false,
+                        'error' => 'فشل في تحديث التوكن: ' . $conn->error
+                    ];
+                }
+            } catch (Exception $e) {
+                $response = [
+                    'success' => false,
+                    'error' => 'خطأ في تحديث التوكن: ' . $e->getMessage()
                 ];
             }
             break;
@@ -2144,7 +2260,5 @@ try {
 }
 
 
-
-// Return JSON response
 echo json_encode($response, true);
 ?>

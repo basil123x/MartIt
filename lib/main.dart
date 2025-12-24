@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:Globee/features/chat/chat_screen.dart';
+import 'package:Globee/firebase_options.dart';
 import 'package:Globee/shared/providers/app_provider.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -24,6 +26,7 @@ void main() async {
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   OneSignal.initialize("ddec3249-5f16-4870-9c32-682a704559b6");
   await OneSignal.Notifications.requestPermission(true);

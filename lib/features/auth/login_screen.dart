@@ -6,14 +6,14 @@ import '../../core/constants/app_strings.dart';
 import '../../core/services/auth_service.dart';
 import 'otp_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class LoginScreenx extends StatefulWidget {
+  const LoginScreenx({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<LoginScreenx> createState() => _LoginScreenxState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenxState extends State<LoginScreenx> {
   final TextEditingController _phoneController = TextEditingController();
   bool _isValidPhone = false;
   bool _isLoading = false;
@@ -42,18 +42,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final otp = AuthService.generateOTP();
 
-
     setState(() {
       _isLoading = false;
     });
 
     // Navigate to OTP screen
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) =>
-            OTPScreen(phoneNumber: _phoneController.text, generatedOTP: otp),
-      ),
-    );
+    // Navigator.of(context).push(
+    //   MaterialPageRoute(
+    //     builder: (context) =>
+    //         OTPScreen(countryCode: '',phoneNumber: _phoneController.text, generatedOTP: otp),
+    //   ),
+    // );
   }
 
   @override
