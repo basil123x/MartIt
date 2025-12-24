@@ -10,19 +10,19 @@ import '../../core/models/chat_model.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ChatScreen extends StatefulWidget {
-  final String sellerId;
-  final String sellerName;
-  final String sellerAvatar;
-  final String sellerToken;
+  final String receiverId;
+  final String? receiverName;
+  final String? receiverAvatar;
+  final String? receiverToken;
   final String? conversationId;
   final bool isOnline;
 
   const ChatScreen({
     super.key,
-    required this.sellerId,
-    required this.sellerName,
-    required this.sellerAvatar,
-    required this.sellerToken,
+    required this.receiverId,
+    this.receiverName,
+    this.receiverAvatar,
+    this.receiverToken,
     this.conversationId,
     this.isOnline = false,
   });
@@ -38,6 +38,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool _isLoading = true;
   bool _isSending = false;
   String? _currentUserId;
+  String? _currentUserName;
+  String? _currentUserAvatar;
   String? _currentConversationId;
   bool _isOnline = false;
   Timer? _statusUpdateTimer;
@@ -89,6 +91,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Future<void> _initializeChat() async {
     _currentUserId = await AuthService.getCurrentUserId();
+    _currentUserName = await AuthService.getCurrentName();
+    _currentUserAvatar = await AuthService.getCurrentProfileImage();
     _currentConversationId = widget.conversationId;
     if (_currentUserId != null) {
       // Update own status immediately
@@ -100,7 +104,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Future<void> _checkUserStatus() async {
     try {
-      final result = await ApiService.getUserStatus(userId: widget.sellerId);
+      final result = await ApiService.getUserStatus(userId: widget.receiverId);
       if (result['success'] == true && mounted) {
         final minutesAgo = result['minutes_ago'] ?? 999;
         setState(() {
@@ -121,8 +125,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     try {
       final result = await ApiService.getChatMessages(
         senderId: _currentUserId!,
-        receiverId: widget.sellerId,
-        conversationId: _currentConversationId,
+        receiverId: widget.receiverId,
       );
 
       if (result['success'] == true) {
@@ -173,7 +176,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     try {
       final result = await ApiService.sendChatMessage(
         senderId: _currentUserId!,
-        receiverId: widget.sellerId,
+        receiverId: widget.receiverId,
         message: messageText,
         conversationId: _currentConversationId,
         messageType: locationMessage != null ? 'location' : 'text',
@@ -196,7 +199,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               result['message_id']?.toString() ??
               DateTime.now().millisecondsSinceEpoch.toString(),
           senderId: _currentUserId!,
-          receiverId: widget.sellerId,
+          receiverId: widget.receiverId,
           message: messageText,
           timestamp: DateTime.now(),
           isRead: false,
@@ -211,11 +214,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _scrollToBottom();
 
         String? name = await AuthService.getCurrentName() ?? 'مستخدم';
-        await OneSignalService.sendNotificationToUser(
-          playerId: widget.sellerToken,
-          title: name,
-          message: messageText,
-        );
+
+        if (widget.receiverToken != null) {
+          await OneSignalService.sendNotificationToUser(
+            playerId: widget.receiverToken!,
+            title: name,
+            message: messageText,
+            data: {
+              "receiverId": _currentUserId ?? '',
+              "receiverName": _currentUserName ?? '',
+              "receiverAvatar": _currentUserAvatar ?? '',
+              "receiverToken": '',
+              "conversationId": _currentConversationId ?? '',
+              "isOnline": false,
+            },
+          );
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -252,7 +266,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    print(widget.sellerId);
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -271,13 +284,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               CircleAvatar(
                 radius: 20,
                 backgroundColor: AppColors.primary,
-                backgroundImage: widget.sellerAvatar.isNotEmpty
-                    ? NetworkImage(widget.sellerAvatar)
+                backgroundImage:
+                    widget.receiverAvatar != null &&
+                        widget.receiverAvatar!.isNotEmpty
+                    ? NetworkImage(widget.receiverAvatar!)
                     : null,
-                child: widget.sellerAvatar.isEmpty
+                child:
+                    widget.receiverAvatar == null ||
+                        widget.receiverAvatar!.isEmpty
                     ? Text(
-                        widget.sellerName.isNotEmpty
-                            ? widget.sellerName[0]
+                        widget.receiverName != null &&
+                                widget.receiverName!.isNotEmpty
+                            ? widget.receiverName![0]
                             : 'S',
                         style: const TextStyle(
                           color: Colors.white,
@@ -293,7 +311,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.sellerName,
+                      widget.receiverName ?? 'مستخدم',
                       style: const TextStyle(
                         // color: Colors.white,
                         color: Color(0xFF1A1A2E),
@@ -382,7 +400,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ),
           const SizedBox(height: 8),
           Text(
-            'أرسل رسالة لبدء المحادثة مع ${widget.sellerName}',
+            'أرسل رسالة لبدء المحادثة مع ${widget.receiverName ?? "المستخدم"}',
             style: TextStyle(
               // color: Colors.white.withOpacity(0.7),
               color: const Color(0xFF1A1A2E).withOpacity(0.7),
@@ -409,12 +427,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             CircleAvatar(
               radius: 16,
               backgroundColor: AppColors.primary,
-              backgroundImage: widget.sellerAvatar.isNotEmpty
-                  ? NetworkImage(widget.sellerAvatar)
+              backgroundImage:
+                  widget.receiverAvatar != null &&
+                      widget.receiverAvatar!.isNotEmpty
+                  ? NetworkImage(widget.receiverAvatar!)
                   : null,
-              child: widget.sellerAvatar.isEmpty
+              child:
+                  widget.receiverAvatar == null ||
+                      widget.receiverAvatar!.isEmpty
                   ? Text(
-                      widget.sellerName.isNotEmpty ? widget.sellerName[0] : 'S',
+                      widget.receiverName != null &&
+                              widget.receiverName!.isNotEmpty
+                          ? widget.receiverName![0]
+                          : 'S',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12,
@@ -566,14 +591,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             CircleAvatar(
               radius: 16,
               backgroundColor: AppColors.secondary,
-              child: Text(
-                'أ',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              backgroundImage:
+                  _currentUserAvatar != null && _currentUserAvatar!.isNotEmpty
+                  ? NetworkImage(_currentUserAvatar!)
+                  : null,
+              child: _currentUserAvatar == null || _currentUserAvatar!.isEmpty
+                  ? Text(
+                      _currentUserName != null && _currentUserName!.isNotEmpty
+                          ? _currentUserName![0]
+                          : 'أ',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                  : null,
             ),
           ],
         ],

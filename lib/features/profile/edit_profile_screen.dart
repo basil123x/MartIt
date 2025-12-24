@@ -295,18 +295,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Widget build(BuildContext context) {
     print(widget.currentPhone);
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0E27),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           onPressed: () => Navigator.pop(context),
-          icon: const Icon(Iconsax.arrow_right_3, color: Colors.white),
+          icon: const Icon(Iconsax.arrow_square_left, color: AppColors.primary),
         ),
         title: const Text(
           'تعديل الملف الشخصي',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.primary,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
@@ -368,7 +368,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           ),
                           child: const Icon(
                             Iconsax.camera,
-                            color: Colors.white,
+                            color: AppColors.white,
                             size: 16,
                           ),
                         ),
@@ -491,21 +491,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       controller: controller,
       keyboardType: keyboardType,
       validator: validator,
-      style: const TextStyle(color: Colors.white),
+      style: const TextStyle(color: AppColors.primary),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+        labelStyle: TextStyle(color: AppColors.primary.withOpacity(0.7)),
         prefixIcon: Icon(icon, color: AppColors.primary),
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: Colors.white.withOpacity(0.1),
+        fillColor: AppColors.primary.withOpacity(0.1),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+          borderSide: BorderSide(color: AppColors.primary.withOpacity(0.2)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+          borderSide: BorderSide(color: AppColors.primary.withOpacity(0.2)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),

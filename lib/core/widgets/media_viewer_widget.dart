@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:iconsax/iconsax.dart';
 import '../constants/app_colors.dart';
 import 'video_player_widget.dart';
@@ -48,7 +49,7 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
   Widget build(BuildContext context) {
     if (widget.mediaUrls.isEmpty) {
       return Container(
-        color: Colors.grey[300],
+        color: Colors.black,
         child: const Center(
           child: Icon(Iconsax.image, size: 64, color: Colors.grey),
         ),
@@ -127,10 +128,8 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
         imageUrl: finalFullUrl.toString().split(']')[0],
         fit: BoxFit.contain,
         placeholder: (context, url) => Container(
-          color: Colors.grey[300],
-          child: const Center(
-            child: CircularProgressIndicator(color: AppColors.primary),
-          ),
+          color: Colors.black,
+          child: const Center(child: SpinKitPulse(color: AppColors.white)),
         ),
         errorWidget: (context, url, error) => Container(
           color: Colors.grey[300],

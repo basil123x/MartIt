@@ -74,8 +74,8 @@ class AuthService {
     String name, {
     String? profileImage,
   }) async {
-    final uid = 1000 + Random().nextInt(9999);
-    final oid = 1000 + Random().nextInt(9999);
+    final uid = 1000 + Random().nextInt(9000);
+    final oid = 1000 + Random().nextInt(9000);
     String? userId = OneSignal.User.pushSubscription.id;
     await Dio().post(
       '$baseUrl/sql.php',

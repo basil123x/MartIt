@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:Globee/features/chat/chat_screen.dart';
 import 'package:Globee/shared/providers/app_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,19 +15,46 @@ import 'core/constants/app_theme.dart';
 import 'core/constants/app_strings.dart';
 import 'features/splash/splash_screen.dart';
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
+
   OneSignal.initialize("ddec3249-5f16-4870-9c32-682a704559b6");
   await OneSignal.Notifications.requestPermission(true);
+
   OneSignal.Notifications.addClickListener((event) {
     print('OneSignal: notification clicked: ${event.notification.title}');
-    // هنا تقدر تعمل navigation للصفحة اللي عايزها
-    // مثلاً لو في data في الـ notification:
-    // String? pageId = event.notification.additionalData?['page_id'];
+
+    // استخرج البيانات من الـ notification
+    final additionalData = event.notification.additionalData;
+
+    if (additionalData != null) {
+      final sellerId = additionalData['receiverId'];
+      final sellerName = additionalData['receiverName'] ?? 'Unknown';
+      final sellerAvatar = additionalData['receiverAvatar'] ?? '';
+      final sellerToken = additionalData['receiverToken'] ?? '';
+      final convers = additionalData['conversationId'] ?? '';
+
+      // استخدام navigatorKey للـ navigation
+      navigatorKey.currentState?.push(
+        MaterialPageRoute(
+          builder: (context) => ChatScreen(
+            receiverId: sellerId,
+            receiverName: sellerName,
+            receiverAvatar: sellerAvatar,
+            receiverToken: sellerToken,
+            conversationId: convers,
+            isOnline: false,
+          ),
+        ),
+      );
+    }
   });
 
   OneSignal.Notifications.addForegroundWillDisplayListener((event) {
@@ -115,6 +143,7 @@ class _GlobeeAppState extends State<GlobeeApp> {
       child: MaterialApp(
         title: AppStrings.appName,
         theme: AppTheme.lightTheme,
+        navigatorKey: navigatorKey,
         darkTheme: AppTheme.darkTheme,
         themeMode: ThemeMode.light,
         debugShowCheckedModeBanner: false,

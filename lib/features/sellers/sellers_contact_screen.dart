@@ -162,16 +162,16 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                       onTap: () {
                         Navigator.pop(context);
                         // Create new conversation (no conversationId = new conversation)
+                        print(seller.convId);
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (context) => ChatScreen(
-                              sellerId: seller.id,
-                              sellerName: seller.name,
-                              sellerAvatar: seller.avatar,
-                              sellerToken: seller.token,
-                              conversationId:
-                                  null, // New conversation for each order
+                              receiverId: seller.id,
+                              receiverName: seller.name,
+                              receiverAvatar: seller.avatar,
+                              receiverToken: seller.token,
+                              conversationId: seller.convId,
                               isOnline:
                                   false, // TODO: Implement real-time online status
                             ),
@@ -534,12 +534,14 @@ class SellerContactModel {
   final String name;
   final String avatar;
   final String token;
+  final String convId;
 
   SellerContactModel({
     required this.id,
     required this.name,
     required this.avatar,
     required this.token,
+    required this.convId,
   });
 
   factory SellerContactModel.fromJson(Map<String, dynamic> json) {
@@ -548,10 +550,17 @@ class SellerContactModel {
       name: json['name']?.toString() ?? '',
       avatar: json['avatar']?.toString() ?? '',
       token: json['token']?.toString() ?? '',
+      convId: json['convId']?.toString() ?? '',
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {'id': id, 'name': name, 'avatar': avatar, 'token': token};
+    return {
+      'id': id,
+      'name': name,
+      'avatar': avatar,
+      'token': token,
+      'convId': convId,
+    };
   }
 }

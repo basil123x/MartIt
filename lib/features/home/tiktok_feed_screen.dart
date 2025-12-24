@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:Globee/core/services/onesignal_service.dart';
 import 'package:Globee/core/services/onesignal_service_web.dart';
 import 'package:Globee/features/add_product/add_product_screen.dart';
@@ -9,6 +11,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/constants/app_colors.dart';
@@ -28,6 +31,7 @@ import '../cart/shopping_cart_screen.dart';
 import '../chat/conversations_screen.dart';
 import '../orders/my_orders_screen.dart';
 import '../orders/customer_orders_screen.dart';
+import 'package:http/http.dart' as http;
 
 class TikTokFeedScreen extends StatefulWidget {
   final String? initialItemId;
@@ -319,14 +323,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                 String? uid = await AuthService.getCurrentUID();
                 if (_isLoggedIn) {
                   AuthService.getUserStatus(uid).then((val) {
-                    if (val['status'] == '0') {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('في انتظار مراجعة المشرفين.'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    } else if (val['status'] == '2') {
+                    if (val['status'] == '2') {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text(
@@ -2294,23 +2291,34 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
   void _handleShare(ItemModel item) async {
     try {
+      final response = await http.get(
+        Uri.parse("https://globee.b-cdn.net/${item.id}/1.jpg"),
+      );
+      final bytes = response.bodyBytes;
+
+      // حفظ الصورة في ملف مؤقت
+      final tempDir = await getTemporaryDirectory();
+      final file = await File('${tempDir.path}/shared_image.png').create();
+      await file.writeAsBytes(bytes);
+
+      final box = context.findRenderObject() as RenderBox?;
       String shareText =
           '''
-🛍️ ${item.name}
+  إسم المنتج:   ${item.name}
 
-💰 السعر: ${item.price} ريال قطري
+  💰 السعر: ${item.price} ريال قطري
 
-📝 الوصف: ${item.description}
+  📝 الوصف: ${item.description}
 
-🏪 متوفر على تطبيق Globee
-تسوق الآن واحصل على أفضل العروض!
+  تسوق الأن على تطبيق Globee
 
-#Globee #تسوق #عروض
-''';
+  ''';
       final user = await FlutterSecureStorage().read(key: 'user_name');
-      await Share.share(
-        shareText,
-        subject: 'منتج رائع على Globee - ${item.name}',
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: shareText,
+        subject: 'منتج رائع على GlobalFarm - ${item.name}',
+        sharePositionOrigin: box!.localToGlobal(Offset.zero) & box.size,
       ).then((_) {
         OneSignalService.sendNotificationToUser(
           playerId: item.seller.token,
@@ -2332,6 +2340,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
   }
 
   void _showCartBottomSheet(ItemModel item) async {
+    bool isAdded = false;
     if (!_isLoggedIn) {
       Navigator.push(
         context,
@@ -2369,6 +2378,15 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
       }
     } catch (e) {
       print('Error loading cart quantity: $e');
+    }
+
+    String imgStore = "";
+
+    switch (item.storeid) {
+      case '3':
+        imgStore = 'https://ges.qa/gesqatar/sys2025/attx/itmx/${item.idx}.png';
+        break;
+      default:
     }
 
     showModalBottomSheet(
@@ -2455,9 +2473,38 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(13),
-                            child: item.media.isNotEmpty
+                            child: item.idx.isNotEmpty
                                 ? Image.network(
-                                    item.media.first,
+                                    imgStore,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        color: Colors.grey[300],
+                                        child: const Icon(
+                                          Iconsax.image,
+                                          color: Colors.grey,
+                                          size: 40,
+                                        ),
+                                      );
+                                    },
+                                    loadingBuilder:
+                                        (context, child, loadingProgress) {
+                                          if (loadingProgress == null)
+                                            return child;
+                                          return Container(
+                                            color: Colors.grey[300],
+                                            child: const Center(
+                                              child: CircularProgressIndicator(
+                                                color: AppColors.primary,
+                                                strokeWidth: 2,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                  )
+                                : item.media.isNotEmpty
+                                ? Image.network(
+                                    imgStore,
                                     fit: BoxFit.cover,
                                     errorBuilder: (context, error, stackTrace) {
                                       return Container(
@@ -2585,7 +2632,7 @@ class _CartQuantityWidgetState extends State<_CartQuantityWidget> {
   int _currentQuantity = 0;
   bool _isLoading = true;
   bool _isUpdating = false;
-
+  bool isAdded = false;
   @override
   void initState() {
     super.initState();
@@ -2634,7 +2681,7 @@ class _CartQuantityWidgetState extends State<_CartQuantityWidget> {
     }
 
     if (!increase && _currentQuantity <= 0) {
-      print('❌ Cannot decrease: quantity is already 0'); // ← Debug
+      print('❌ Cannot decrease: quantity is already 0');
       return;
     }
 
@@ -2672,9 +2719,12 @@ class _CartQuantityWidgetState extends State<_CartQuantityWidget> {
             // ✅ استخدم الكمية اللي جاية من السيرفر
             if (result['quantity'] != null) {
               _currentQuantity = result['quantity'];
-              print(
-                '✅ Updated _currentQuantity to: $_currentQuantity',
-              ); // ← Debug
+              print('✅ Updated _currentQuantity to: $_currentQuantity');
+              if (_currentQuantity == 0) {
+                setState(() {
+                  isAdded = false;
+                });
+              }
             } else {
               // Fallback
               if (increase) {
@@ -2686,16 +2736,6 @@ class _CartQuantityWidgetState extends State<_CartQuantityWidget> {
             _isUpdating = false;
           });
           widget.onQuantityChanged(_currentQuantity);
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                increase ? 'تمت الإضافة للسلة' : 'تم التقليل من السلة',
-              ),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 1),
-            ),
-          );
         }
       } else {
         print('❌ API Failed: ${result['error']}'); // ← Debug
@@ -2827,7 +2867,12 @@ class _CartQuantityWidgetState extends State<_CartQuantityWidget> {
               GestureDetector(
                 onTap: _isUpdating || isMaxQuantity
                     ? null
-                    : () => _updateQuantity(true),
+                    : () {
+                        _updateQuantity(true);
+                        setState(() {
+                          isAdded = true;
+                        });
+                      },
                 child: Container(
                   width: 50,
                   height: 50,
@@ -2867,7 +2912,15 @@ class _CartQuantityWidgetState extends State<_CartQuantityWidget> {
 
         const SizedBox(height: 20),
         ElevatedButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => isAdded
+              ? Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        ShoppingCartScreen(userId: widget.userId),
+                  ),
+                )
+              : Navigator.pop(context),
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primary,
             padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
@@ -2875,8 +2928,8 @@ class _CartQuantityWidgetState extends State<_CartQuantityWidget> {
               borderRadius: BorderRadius.circular(25),
             ),
           ),
-          child: const Text(
-            'تم',
+          child: Text(
+            isAdded ? 'الذهاب إلى السلة' : 'تم',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
         ),

@@ -159,18 +159,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         _nameController.text.trim(),
         profileImage: _selectedImage?.path,
       );
-
-      String? oneToken = OneSignal.User.pushSubscription.id;
-
-      await Dio().post(
-        "https://www.Globee-Trading.com/app2026/sql.php",
-        data: FormData.fromMap({
-          "action": "update_token",
-          "phone": widget.phoneNumber,
-          "player_id": oneToken,
-        }),
-      );
-
       final request = await Dio().post(
         "https://www.Globee-Trading.com/app2026/sql.php",
         data: FormData.fromMap({"action": "get_tokens"}),
@@ -181,7 +169,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         setState(() {
           setPlayers.add(player_id['player_id'].toString());
         });
-        print(setPlayers);
         await OneSignalService.sendNotificationToMultipleUsers(
           playerIds: setPlayers,
           title: "مستخدم جديد انضم إلى التطبيق",
@@ -189,8 +176,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               "تم تسجيل مستخدم جديد في النظام. اضغط هنا لعرض التفاصيل أو متابعة النشاط.",
         );
       }
-
-      // Navigate to home screen
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => const TikTokFeedScreen()),
         (route) => false,

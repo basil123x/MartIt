@@ -411,10 +411,10 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
             context,
             MaterialPageRoute(
               builder: (context) => ChatScreen(
-                sellerId: conversation.participantId,
-                sellerName: conversation.participantName,
-                sellerAvatar: conversation.participantAvatar,
-                sellerToken: conversation.participantToken,
+                receiverId: conversation.participantId,
+                receiverName: conversation.participantName,
+                receiverAvatar: conversation.participantAvatar,
+                receiverToken: conversation.participantToken,
                 conversationId: conversation.conversationId,
                 isOnline: _onlineStatuses[conversation.participantId] ?? false,
               ),

@@ -36,6 +36,7 @@ class CartItemModel {
 
 class CartItem {
   final String id;
+  final String idx;
   final String name;
   final String price;
   final int availableQuantity;
@@ -43,6 +44,7 @@ class CartItem {
 
   CartItem({
     required this.id,
+    required this.idx,
     required this.name,
     required this.price,
     required this.availableQuantity,
@@ -52,6 +54,7 @@ class CartItem {
   factory CartItem.fromJson(Map<String, dynamic> json) {
     return CartItem(
       id: json['id']?.toString() ?? '',
+      idx: json['idx']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       price: json['price']?.toString() ?? '0',
       availableQuantity: json['available_quantity'] ?? 0,
@@ -74,10 +77,7 @@ class CartSeller {
   final String id;
   final String name;
 
-  CartSeller({
-    required this.id,
-    required this.name,
-  });
+  CartSeller({required this.id, required this.name});
 
   factory CartSeller.fromJson(Map<String, dynamic> json) {
     return CartSeller(
@@ -87,9 +87,6 @@ class CartSeller {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-    };
+    return {'id': id, 'name': name};
   }
 }
