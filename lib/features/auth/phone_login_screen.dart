@@ -228,8 +228,6 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
     });
   }
 
-  
-
   void _showCountryPicker() {
     showModalBottomSheet(
       context: context,
@@ -663,25 +661,6 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
                                               ),
                                             ],
                                           ),
-                                  ),
-                                ),
-                                SizedBox(height: 30),
-                                GestureDetector(
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            const LoginScreen(),
-                                      ),
-                                    );
-                                  },
-                                  child: Text(
-                                    'جرب طريقة أخرى',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: AppColors.primaryLight,
-                                    ),
                                   ),
                                 ),
                               ],

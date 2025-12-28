@@ -1,3 +1,4 @@
+import 'package:Globee/features/auth/login.dart';
 import 'package:Globee/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -40,20 +41,8 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNodes[0].requestFocus();
-      _showOTPMessage();
+      sendOTPEmail();
     });
-  }
-
-  void _showOTPMessage() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'سنرسل لك رمز التحقق على بريدك الإلكتروني: $_generatedOTP',
-        ),
-        backgroundColor: AppColors.success,
-        duration: const Duration(seconds: 5),
-      ),
-    );
   }
 
   void _onOTPChanged(int index, String value) {
@@ -188,6 +177,40 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
     );
   }
 
+  sendOTPEmail() async {
+    var request = await Dio().post(
+      "https://api.brevo.com/v3/smtp/email",
+      options: Options(
+        headers: {
+          "accept": "application/json",
+          "api-key":
+              "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",
+          "content-type": "application/json",
+        },
+      ),
+      data: {
+        "sender": {
+          "email": "info@globee-trading.com",
+          "name": "Globee Trading LLC",
+        },
+        "subject": "بريد رمز التحقق",
+        "templateId": 2,
+        "params": {"OTP": _generatedOTP},
+        "messageVersions": [
+          {
+            "to": [
+              {"email": widget.email, "name": "Customer"},
+            ],
+            "params": {"OTP": _generatedOTP},
+            "subject": "بريد رمز التحقق",
+          },
+        ],
+      },
+    );
+    print(request);
+  }
+
+  // 666402
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -330,6 +353,35 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
                                       ),
                                     ],
                                   ),
+                                ),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                const LoginScreen(),
+                                          ),
+                                        );
+                                      },
+                                      child: Text(
+                                        'جرب طريقة أخرى',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: AppColors.primaryLight,
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      'ألم يصلك الكود ؟',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: Colors.black),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),

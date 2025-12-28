@@ -86,6 +86,7 @@ class AuthService {
         "name": name,
         "phone": phone,
         "player_id": userId,
+        "login_type": "Phone",
       }),
     );
 

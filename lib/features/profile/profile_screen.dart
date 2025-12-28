@@ -230,12 +230,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         builder: (context) => EditProfileScreen(
                           currentName: _profile?.name ?? '',
                           currentPhone: _profile?.phone ?? '',
+                          currentType: _profile?.type ?? '',
                           currentAvatar: _profile?.avatar ?? '',
+                          currentUid: _profile?.uid ?? '',
                         ),
                       ),
                     );
                     if (result == true) {
-                      _loadProfile(); // Reload profile after edit
+                      _loadProfile();
                     }
                   },
                   icon: const Icon(Iconsax.edit, color: AppColors.primary),
@@ -279,6 +281,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildProfileHeader() {
+    print(_profile?.type);
     return Container(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -303,20 +306,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             child: CircleAvatar(
               radius: 56,
-              backgroundImage: _profile!.avatar.isNotEmpty
-                  ? NetworkImage(_profile!.avatar)
-                  : null,
+              backgroundImage: NetworkImage(
+                _profile?.type == 'Phone'
+                    ? "https://globee.b-cdn.net/users/${_profile?.uid}/avatar.jpg?k=${DateTime.now().millisecondsSinceEpoch}"
+                    : _profile!.avatar,
+              ),
               backgroundColor: Colors.white,
-              child: _profile!.avatar.isEmpty
-                  ? Text(
-                      _profile!.name.isNotEmpty ? _profile!.name[0] : 'U',
-                      style: const TextStyle(
-                        fontSize: 40,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
-                      ),
-                    )
-                  : null,
             ),
           ),
 

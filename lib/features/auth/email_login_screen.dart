@@ -389,25 +389,6 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                                   ),
                                 ),
 
-                                const SizedBox(height: 12),
-
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: TextButton(
-                                    onPressed: () {},
-                                    child: Text(
-                                      'نسيت كلمة المرور؟',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                            color: const Color(0xFF6366F1),
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                    ),
-                                  ),
-                                ),
-
                                 const SizedBox(height: 30),
 
                                 SizedBox(
@@ -476,36 +457,6 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                                             ],
                                           ),
                                   ),
-                                ),
-
-                                const SizedBox(height: 20),
-
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      'ليس لديك حساب؟',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                            color: AppColors.textSecondary,
-                                          ),
-                                    ),
-                                    TextButton(
-                                      onPressed: () {},
-                                      child: Text(
-                                        'إنشاء حساب جديد',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                              color: const Color(0xFF6366F1),
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                      ),
-                                    ),
-                                  ],
                                 ),
                               ],
                             ),

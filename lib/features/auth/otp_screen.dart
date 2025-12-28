@@ -1,3 +1,4 @@
+import 'package:Globee/features/auth/login.dart';
 import 'package:Globee/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -341,6 +342,35 @@ class _OTPScreenState extends State<OTPScreen> {
                                       ),
                                     ],
                                   ),
+                                ),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                const LoginScreen(),
+                                          ),
+                                        );
+                                      },
+                                      child: Text(
+                                        'جرب طريقة أخرى',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: AppColors.primaryLight,
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      'ألم يصلك الكود ؟',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: Colors.black),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),

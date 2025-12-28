@@ -182,6 +182,8 @@ class UserProfileModel {
   final String id;
   final String name;
   final String phone;
+  final String type;
+  final String uid;
   final String avatar;
   final int itemsCount;
 
@@ -189,6 +191,8 @@ class UserProfileModel {
     required this.id,
     required this.name,
     required this.phone,
+    required this.type,
+    required this.uid,
     required this.avatar,
     required this.itemsCount,
   });
@@ -198,6 +202,8 @@ class UserProfileModel {
       id: json['id']?.toString() ?? '',
       name: json['name'] ?? '',
       phone: json['phone'] ?? '',
+      type: json['type'] ?? '',
+      uid: json['uid'] ?? '',
       avatar: json['avatar'] ?? '',
       itemsCount: int.tryParse(json['itemsCount']?.toString() ?? '0') ?? 0,
     );

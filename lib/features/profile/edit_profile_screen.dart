@@ -9,13 +9,17 @@ import '../../core/services/api_service.dart';
 class EditProfileScreen extends StatefulWidget {
   final String currentName;
   final String currentPhone;
+  final String currentType;
   final String currentAvatar;
+  final String currentUid;
 
   const EditProfileScreen({
     super.key,
     required this.currentName,
     required this.currentPhone,
+    required this.currentType,
     required this.currentAvatar,
+    required this.currentUid,
   });
 
   @override
@@ -342,19 +346,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         radius: 57,
                         backgroundImage: _selectedImage != null
                             ? FileImage(_selectedImage!)
-                            : (widget.currentAvatar.isNotEmpty
-                                  ? NetworkImage(widget.currentAvatar)
-                                  : null),
+                            : NetworkImage(
+                                widget.currentType == 'Phone'
+                                    ? "https://globee.b-cdn.net/users/${widget.currentUid}/avatar.jpg?k=${DateTime.now().millisecondsSinceEpoch}"
+                                    : widget.currentAvatar,
+                              ),
                         backgroundColor: Colors.grey[300],
-                        child:
-                            _selectedImage == null &&
-                                widget.currentAvatar.isEmpty
-                            ? Icon(
-                                Iconsax.user,
-                                size: 50,
-                                color: Colors.grey[600],
-                              )
-                            : null,
                       ),
                       Positioned(
                         bottom: 0,

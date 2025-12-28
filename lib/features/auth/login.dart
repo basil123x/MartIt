@@ -170,6 +170,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             "email": val.email,
                             "avatar_url": val.photoUrl,
                             "player_id": userId,
+                            "login_type": "Google",
                           }),
                         );
                         await FlutterSecureStorage().write(
@@ -204,27 +205,23 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 16),
 
-                Visibility(
-                  visible: Platform.isIOS ? true : false,
-                  child: _buildLoginOptionButton(
-                    context: context,
-                    imageTxt: "assets/images/social/apple.png",
-                    isimg: true,
-                    title: 'سجل بواسطة أبل',
-                    gradient: LinearGradient(
-                      colors: [
-                        AppColors.primary,
-                        AppColors.primary.withValues(alpha: 0.8),
-                      ],
+                Opacity(
+                  opacity: 0.4,
+                  child: Visibility(
+                    visible: Platform.isIOS ? true : false,
+                    child: _buildLoginOptionButton(
+                      context: context,
+                      imageTxt: "assets/images/social/apple.png",
+                      isimg: true,
+                      title: 'سجل بواسطة أبل',
+                      subtitle: 'قريباً',
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.primary,
+                          AppColors.primary.withValues(alpha: 0.8),
+                        ],
+                      ),
                     ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const PhoneLoginScreen(),
-                        ),
-                      );
-                    },
                   ),
                 ),
 
@@ -258,6 +255,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   icon: Iconsax.sms,
                   isimg: false,
                   title: 'التسجيل بالبريد الإلكتروني',
+
                   gradient: LinearGradient(
                     colors: [const Color(0xFF6366F1), const Color(0xFF8B5CF6)],
                   ),
@@ -273,25 +271,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 16),
 
-                _buildLoginOptionButton(
-                  context: context,
-                  imageTxt: "assets/images/social/face.png",
-                  isimg: true,
-                  title: 'سجل بواسطة الفيسبوك',
-                  gradient: LinearGradient(
-                    colors: [
-                      AppColors.primary,
-                      AppColors.primary.withValues(alpha: 0.8),
-                    ],
+                Opacity(
+                  opacity: 0.4,
+                  child: _buildLoginOptionButton(
+                    context: context,
+                    imageTxt: "assets/images/social/face.png",
+                    isimg: true,
+                    title: 'سجل بواسطة الفيسبوك',
+                    subtitle: 'قريباً',
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.primary,
+                        AppColors.primary.withValues(alpha: 0.8),
+                      ],
+                    ),
                   ),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const PhoneLoginScreen(),
-                      ),
-                    );
-                  },
                 ),
 
                 const SizedBox(height: 50),
@@ -318,8 +312,9 @@ class _LoginScreenState extends State<LoginScreen> {
     String? imageTxt,
     bool? isimg,
     required String title,
+    String? subtitle,
     required Gradient gradient,
-    required VoidCallback onTap,
+    VoidCallback? onTap,
   }) {
     return InkWell(
       onTap: onTap,
@@ -357,12 +352,25 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                        Visibility(
+                          visible: subtitle != null ? true : false,
+                          child: Text(
+                            subtitle ?? "",
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      ],
                     ),
                     Icon(
                       Icons.arrow_forward_ios,
