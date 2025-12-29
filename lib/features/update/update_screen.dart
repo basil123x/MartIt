@@ -33,6 +33,8 @@ class _ForceUpdateScreenState extends State<ForceUpdateScreen> {
 
   @override
   Widget build(BuildContext context) {
+    print(widget.message);
+    print(widget.storeUrl);
     return Scaffold(
       backgroundColor: AppColors.primary,
       body: Center(
@@ -63,26 +65,24 @@ class _ForceUpdateScreenState extends State<ForceUpdateScreen> {
             const SizedBox(height: 30),
             Container(
               margin: EdgeInsets.symmetric(horizontal: 10),
-              child: Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    _launchStore();
-                  },
-                  child: Container(
-                    alignment: Alignment.center,
-                    width: double.maxFinite,
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      "تحديث الأن",
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                      ),
+              child: GestureDetector(
+                onTap: () {
+                  _launchStore();
+                },
+                child: Container(
+                  alignment: Alignment.center,
+                  width: double.maxFinite,
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    "تحديث الأن",
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),

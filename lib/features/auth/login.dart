@@ -152,53 +152,58 @@ class _LoginScreenState extends State<LoginScreen> {
                         MaterialPageRoute(builder: (context) => SplashScreen()),
                       );
                     } else {
-                      unawaited(
-                        GoogleSignIn.instance.initialize(
-                          serverClientId:
-                              "736610217893-4biei54dv0a4gh85776sfbech2sasnh7.apps.googleusercontent.com",
-                        ),
-                      );
-                      await GoogleSignIn.instance.authenticate().then((
-                        val,
-                      ) async {
-                        String? userId = OneSignal.User.pushSubscription.id;
-                        var response = await Dio().post(
-                          "https://globee-trading.com/app2026/sql.php",
-                          data: FormData.fromMap({
-                            "action": "create_social_account",
-                            "name": val.displayName,
-                            "email": val.email,
-                            "avatar_url": val.photoUrl,
-                            "player_id": userId,
-                            "login_type": "Google",
-                          }),
-                        );
-                        await FlutterSecureStorage().write(
-                          key: "user_uid",
-                          value: response.data['data']['id'],
-                        );
-                        await FlutterSecureStorage().write(
-                          key: "user_oid",
-                          value: response.data['data']['oid'],
-                        );
-                        FlutterSecureStorage().write(
-                          key: 'social_name',
-                          value: val.displayName,
-                        );
-                        FlutterSecureStorage().write(
-                          key: 'social_email',
-                          value: val.email,
-                        );
-                        FlutterSecureStorage().write(
-                          key: 'social_avatar',
-                          value: val.photoUrl,
-                        );
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(
-                            builder: (context) => SplashScreen(),
+                      try {
+                        unawaited(
+                          GoogleSignIn.instance.initialize(
+                            serverClientId:
+                                "736610217893-4biei54dv0a4gh85776sfbech2sasnh7.apps.googleusercontent.com",
                           ),
                         );
-                      });
+                        await GoogleSignIn.instance.authenticate().then((
+                          val,
+                        ) async {
+                          String? userId = OneSignal.User.pushSubscription.id;
+                          var response = await Dio().post(
+                            "https://globee-trading.com/app2026/sql.php",
+                            data: FormData.fromMap({
+                              "action": "create_social_account",
+                              "name": val.displayName,
+                              "email": val.email,
+                              "avatar_url": val.photoUrl,
+                              "player_id": userId,
+                              "login_type": "Google",
+                            }),
+                          );
+                          await FlutterSecureStorage().write(
+                            key: "user_uid",
+                            value: response.data['data']['id'],
+                          );
+                          await FlutterSecureStorage().write(
+                            key: "user_oid",
+                            value: response.data['data']['oid'],
+                          );
+                          FlutterSecureStorage().write(
+                            key: 'social_name',
+                            value: val.displayName,
+                          );
+                          FlutterSecureStorage().write(
+                            key: 'social_email',
+                            value: val.email,
+                          );
+                          FlutterSecureStorage().write(
+                            key: 'social_avatar',
+                            value: val.photoUrl,
+                          );
+                          Navigator.of(context).pushReplacement(
+                            MaterialPageRoute(
+                              builder: (context) => SplashScreen(),
+                            ),
+                          );
+                        });
+                      } catch (e) {
+                        print("Login failed: $e");
+                        // هنا ممكن تعرض رسالة للمستخدم بدل ما التطبيق يقفل
+                      }
                     }
                   },
                 ),
