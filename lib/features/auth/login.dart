@@ -1,14 +1,7 @@
-import 'dart:async';
 import 'dart:io';
-
-import 'package:Globee/features/splash/splash_screen.dart';
-import 'package:dio/dio.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import 'phone_login_screen.dart';
@@ -117,94 +110,99 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                   onTap: () async {
-                    String? social_name = await FlutterSecureStorage().read(
-                      key: 'social_name',
+                    final supabase = Supabase.instance.client;
+                    await supabase.auth.signInWithOAuth(
+                      OAuthProvider.google,
+                      authScreenLaunchMode: LaunchMode.platformDefault,
                     );
-                    String? social_email = await FlutterSecureStorage().read(
-                      key: 'social_email',
-                    );
-                    String? social_avatar = await FlutterSecureStorage().read(
-                      key: 'social_avatar',
-                    );
+                    // String? social_name = await FlutterSecureStorage().read(
+                    //   key: 'social_name',
+                    // );
+                    // String? social_email = await FlutterSecureStorage().read(
+                    //   key: 'social_email',
+                    // );
+                    // String? social_avatar = await FlutterSecureStorage().read(
+                    //   key: 'social_avatar',
+                    // );
 
-                    if (social_name != null &&
-                        social_email != null &&
-                        social_avatar != null) {
-                      var userCredential = await Dio().post(
-                        "https://globee-trading.com/app2026/sql.php",
-                        data: FormData.fromMap({
-                          "action": "get_social_account",
-                          "name": social_name,
-                          "email": social_email,
-                          "avatar_url": social_avatar,
-                        }),
-                      );
-                      print(userCredential);
-                      await FlutterSecureStorage().write(
-                        key: "user_uid",
-                        value: userCredential.data['data']['id'],
-                      );
-                      await FlutterSecureStorage().write(
-                        key: "user_oid",
-                        value: userCredential.data['data']['oid'],
-                      );
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (context) => SplashScreen()),
-                      );
-                    } else {
-                      try {
-                        unawaited(
-                          GoogleSignIn.instance.initialize(
-                            serverClientId:
-                                "736610217893-4biei54dv0a4gh85776sfbech2sasnh7.apps.googleusercontent.com",
-                          ),
-                        );
-                        await GoogleSignIn.instance.authenticate().then((
-                          val,
-                        ) async {
-                          String? userId = OneSignal.User.pushSubscription.id;
-                          var response = await Dio().post(
-                            "https://globee-trading.com/app2026/sql.php",
-                            data: FormData.fromMap({
-                              "action": "create_social_account",
-                              "name": val.displayName,
-                              "email": val.email,
-                              "avatar_url": val.photoUrl,
-                              "player_id": userId,
-                              "login_type": "Google",
-                            }),
-                          );
-                          await FlutterSecureStorage().write(
-                            key: "user_uid",
-                            value: response.data['data']['id'],
-                          );
-                          await FlutterSecureStorage().write(
-                            key: "user_oid",
-                            value: response.data['data']['oid'],
-                          );
-                          FlutterSecureStorage().write(
-                            key: 'social_name',
-                            value: val.displayName,
-                          );
-                          FlutterSecureStorage().write(
-                            key: 'social_email',
-                            value: val.email,
-                          );
-                          FlutterSecureStorage().write(
-                            key: 'social_avatar',
-                            value: val.photoUrl,
-                          );
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(
-                              builder: (context) => SplashScreen(),
-                            ),
-                          );
-                        });
-                      } catch (e) {
-                        print("Login failed: $e");
-                        // هنا ممكن تعرض رسالة للمستخدم بدل ما التطبيق يقفل
-                      }
-                    }
+                    // if (social_name != null &&
+                    //     social_email != null &&
+                    //     social_avatar != null) {
+                    //   var userCredential = await Dio().post(
+                    //     "https://globee-trading.com/app2026/sql.php",
+                    //     data: FormData.fromMap({
+                    //       "action": "get_social_account",
+                    //       "name": social_name,
+                    //       "email": social_email,
+                    //       "avatar_url": social_avatar,
+                    //     }),
+                    //   );
+                    //   print(userCredential);
+                    //   await FlutterSecureStorage().write(
+                    //     key: "user_uid",
+                    //     value: userCredential.data['data']['id'],
+                    //   );
+                    //   await FlutterSecureStorage().write(
+                    //     key: "user_oid",
+                    //     value: userCredential.data['data']['oid'],
+                    //   );
+                    //   Navigator.of(context).pushReplacement(
+                    //     MaterialPageRoute(builder: (context) => SplashScreen()),
+                    //   );
+                    // } else {
+                    //   try {
+                    //     unawaited(
+                    //       GoogleSignIn.instance.initialize(
+                    //         serverClientId:
+                    //             "736610217893-4biei54dv0a4gh85776sfbech2sasnh7.apps.googleusercontent.com",
+                    //       ),
+                    //     );
+                    //     await GoogleSignIn.instance.authenticate().then((
+                    //       val,
+                    //     ) async {
+                    //       String? userId = OneSignal.User.pushSubscription.id;
+                    //       var response = await Dio().post(
+                    //         "https://globee-trading.com/app2026/sql.php",
+                    //         data: FormData.fromMap({
+                    //           "action": "create_social_account",
+                    //           "name": val.displayName,
+                    //           "email": val.email,
+                    //           "avatar_url": val.photoUrl,
+                    //           "player_id": userId,
+                    //           "login_type": "Google",
+                    //         }),
+                    //       );
+                    //       await FlutterSecureStorage().write(
+                    //         key: "user_uid",
+                    //         value: response.data['data']['id'],
+                    //       );
+                    //       await FlutterSecureStorage().write(
+                    //         key: "user_oid",
+                    //         value: response.data['data']['oid'],
+                    //       );
+                    //       FlutterSecureStorage().write(
+                    //         key: 'social_name',
+                    //         value: val.displayName,
+                    //       );
+                    //       FlutterSecureStorage().write(
+                    //         key: 'social_email',
+                    //         value: val.email,
+                    //       );
+                    //       FlutterSecureStorage().write(
+                    //         key: 'social_avatar',
+                    //         value: val.photoUrl,
+                    //       );
+                    //       Navigator.of(context).pushReplacement(
+                    //         MaterialPageRoute(
+                    //           builder: (context) => SplashScreen(),
+                    //         ),
+                    //       );
+                    //     });
+                    //   } catch (e) {
+                    //     print("Login failed: $e");
+                    //     // هنا ممكن تعرض رسالة للمستخدم بدل ما التطبيق يقفل
+                    //   }
+                    // }
                   },
                 ),
 

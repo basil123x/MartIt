@@ -2,9 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:Globee/features/chat/chat_screen.dart';
-import 'package:Globee/firebase_options.dart';
 import 'package:Globee/shared/providers/app_provider.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -12,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:restart_app/restart_app.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shorebird_code_push/shorebird_code_push.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:terminate_restart/terminate_restart.dart';
 import 'core/constants/app_theme.dart';
 import 'core/constants/app_strings.dart';
@@ -22,12 +21,15 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await Supabase.initialize(
+    url: "https://bsexqpkctdgkixnngnjf.supabase.co",
+    anonKey: "sb_publishable_WeC1L7kI8whCe_XlMLtdEg_g5kbpGMn",
+  );
+
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
   OneSignal.initialize("ddec3249-5f16-4870-9c32-682a704559b6");
   await OneSignal.Notifications.requestPermission(true);
 
