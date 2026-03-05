@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_colors.dart';
@@ -110,11 +112,24 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                   onTap: () async {
-                    final supabase = Supabase.instance.client;
-                    await supabase.auth.signInWithOAuth(
-                      OAuthProvider.google,
-                      authScreenLaunchMode: LaunchMode.platformDefault,
+                    final GoogleSignIn signIn = GoogleSignIn.instance;
+                    unawaited(
+                      signIn
+                          .initialize(
+                            clientId:
+                                "893290602960-kad2206tdso6vgm40tdohf4lo0aaffg1.apps.googleusercontent.com",
+                            serverClientId:
+                                "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",
+                          )
+                          .then((_) {
+                            /// This example always uses the stream-based approach to determining
+                            /// which UI state to show, rather than using the future returned here,
+                            /// if any, to conditionally skip directly to the signed-in state.
+                            signIn.attemptLightweightAuthentication();
+                          }),
                     );
+
+                    await GoogleSignIn.instance.authenticate();
                     // String? social_name = await FlutterSecureStorage().read(
                     //   key: 'social_name',
                     // );
