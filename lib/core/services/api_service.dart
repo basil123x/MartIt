@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:Globee/core/models/item_model.dart';
+import 'package:MartIt/core/models/item_model.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -43,7 +43,6 @@ class ApiService {
         'page': page.toString(),
         'limit': '10',
         'itemSrchId': initialItemId ?? "",
-        'store_id': '2', // ✅ فلترة بـ Global Farm فقط
       };
 
       // ✅ لو في user_id، نضيفه للـ body

@@ -1,10 +1,10 @@
 import 'dart:io';
 
-import 'package:Globee/core/services/onesignal_service.dart';
-import 'package:Globee/core/services/onesignal_service_web.dart';
-import 'package:Globee/features/add_product/add_product_screen.dart';
-import 'package:Globee/features/auth/login.dart';
-import 'package:Globee/shared/providers/app_provider.dart';
+import 'package:MartIt/core/services/onesignal_service.dart';
+import 'package:MartIt/core/services/onesignal_service_web.dart';
+import 'package:MartIt/features/add_product/add_product_screen.dart';
+import 'package:MartIt/features/auth/login.dart';
+import 'package:MartIt/shared/providers/app_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

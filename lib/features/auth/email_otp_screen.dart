@@ -1,5 +1,5 @@
-import 'package:Globee/features/auth/login.dart';
-import 'package:Globee/features/splash/splash_screen.dart';
+import 'package:MartIt/features/auth/login.dart';
+import 'package:MartIt/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

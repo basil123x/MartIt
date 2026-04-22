@@ -1,6 +1,6 @@
 import 'dart:io';
-import 'package:Globee/core/constants/app_colors.dart';
-import 'package:Globee/features/splash/splash_screen.dart';
+import 'package:MartIt/core/constants/app_colors.dart';
+import 'package:MartIt/features/splash/splash_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';

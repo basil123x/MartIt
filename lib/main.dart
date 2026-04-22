@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:Globee/features/chat/chat_screen.dart';
-import 'package:Globee/shared/providers/app_provider.dart';
+import 'package:MartIt/features/chat/chat_screen.dart';
+import 'package:MartIt/shared/providers/app_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -68,17 +68,17 @@ void main() async {
     event.notification.display();
   });
 
-  runApp(const GlobeeApp());
+  runApp(const MartItApp());
 }
 
-class GlobeeApp extends StatefulWidget {
-  const GlobeeApp({super.key});
+class MartItApp extends StatefulWidget {
+  const MartItApp({super.key});
 
   @override
-  State<GlobeeApp> createState() => _GlobeeAppState();
+  State<MartItApp> createState() => _MartItAppState();
 }
 
-class _GlobeeAppState extends State<GlobeeApp> {
+class _MartItAppState extends State<MartItApp> {
   final updater = ShorebirdUpdater();
   Timer? _timer;
   static const _lastPatchKey = "last_applied_patch";

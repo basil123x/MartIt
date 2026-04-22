@@ -1,6 +1,6 @@
 class AppStrings {
   // App General
-  static const String appName = 'Globee';
+  static const String appName = 'MartIt';
   static const String loading = 'جاري التحميل...';
   static const String error = 'حدث خطأ';
   static const String retry = 'إعادة المحاولة';
