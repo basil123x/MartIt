@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shorebird_code_push/shorebird_code_push.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/constants/app_strings.dart';
@@ -21,9 +22,26 @@ class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
   late AnimationController _logoController;
   late AnimationController _textController;
+  late AnimationController _sloganController;
   late Animation<double> _logoAnimation;
   late Animation<double> _textAnimation;
   late Animation<Offset> _slideAnimation;
+  late Animation<double> _sloganAnimation;
+
+  String _appVersion = '';
+  int? _patchNumber;
+
+  Future<void> _loadVersionInfo() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    final updater = ShorebirdUpdater();
+    final patch = await updater.readCurrentPatch();
+    if (mounted) {
+      setState(() {
+        _appVersion = packageInfo.version;
+        _patchNumber = patch?.number;
+      });
+    }
+  }
 
   Future<void> checkForForceUpdate() async {
     try {
@@ -73,6 +91,7 @@ class _SplashScreenState extends State<SplashScreen>
   void initState() {
     super.initState();
     checkForForceUpdate();
+    _loadVersionInfo();
     _initializeAnimations();
     _navigateToHome();
   }
@@ -87,6 +106,12 @@ class _SplashScreenState extends State<SplashScreen>
     // Text Animation Controller
     _textController = AnimationController(
       duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+
+    // Slogan Animation Controller
+    _sloganController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
       vsync: this,
     );
 
@@ -106,10 +131,18 @@ class _SplashScreenState extends State<SplashScreen>
           CurvedAnimation(parent: _textController, curve: Curves.easeOutCubic),
         );
 
+    // Slogan Fade Animation
+    _sloganAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _sloganController, curve: Curves.easeIn),
+    );
+
     // Start animations
     _logoController.forward();
     Future.delayed(const Duration(milliseconds: 500), () {
       _textController.forward();
+    });
+    Future.delayed(const Duration(milliseconds: 1000), () {
+      if (mounted) _sloganController.forward();
     });
   }
 
@@ -125,6 +158,7 @@ class _SplashScreenState extends State<SplashScreen>
   void dispose() {
     _logoController.dispose();
     _textController.dispose();
+    _sloganController.dispose();
     super.dispose();
   }
 
@@ -218,6 +252,61 @@ class _SplashScreenState extends State<SplashScreen>
                           ),
                         ),
                       ),
+
+                      const SizedBox(height: 14),
+
+                      // Slogan with fade-in animation
+                      FadeTransition(
+                        opacity: _sloganAnimation,
+                        child: Text(
+                          'Swipe, love it, and MartIt',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: AppColors.white.withValues(alpha: 0.70),
+                                fontStyle: FontStyle.italic,
+                                fontWeight: FontWeight.w300,
+                                letterSpacing: 0.4,
+                              ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // Dynamic version + patch
+                      FadeTransition(
+                        opacity: _sloganAnimation,
+                        child: Column(
+                          children: [
+                            Text(
+                              _appVersion.isNotEmpty ? 'v$_appVersion' : '',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color: AppColors.white.withValues(alpha: 0.65),
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                            if (_patchNumber != null) ...[
+
+
+
+                              const SizedBox(height: 4),
+                              Text(
+                                'Patch: #$_patchNumber',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color: AppColors.white.withValues(alpha: 0.50),
+                                  fontWeight: FontWeight.w400,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -258,7 +347,9 @@ class _SplashScreenState extends State<SplashScreen>
                 child: FadeTransition(
                   opacity: _textAnimation,
                   child: Text(
-                    'الإصدار ${AppConstants.appVersion}',
+                    _appVersion.isNotEmpty
+                        ? 'الإصدار $_appVersion'
+                        : 'الإصدار ${AppConstants.appVersion}',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppColors.white.withValues(alpha: 0.6),
                     ),

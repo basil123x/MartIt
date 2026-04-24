@@ -1,9 +1,14 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:MartIt/core/services/google_auth_service.dart';
+import 'package:MartIt/features/home/tiktok_feed_screen.dart';
+import 'package:MartIt/features/splash/splash_screen.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import 'phone_login_screen.dart';
@@ -17,6 +22,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final GoogleAuthService googleAuthService = GoogleAuthService();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -112,112 +119,39 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                   onTap: () async {
-                    final GoogleSignIn signIn = GoogleSignIn.instance;
-                    unawaited(
-                      signIn
-                          .initialize(
-                            clientId:
-                                "893290602960-kad2206tdso6vgm40tdohf4lo0aaffg1.apps.googleusercontent.com",
-                            serverClientId:
-                                "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",
-                          )
-                          .then((_) {
-                            /// This example always uses the stream-based approach to determining
-                            /// which UI state to show, rather than using the future returned here,
-                            /// if any, to conditionally skip directly to the signed-in state.
-                            signIn.attemptLightweightAuthentication();
-                          }),
-                    );
-
-                    await GoogleSignIn.instance.authenticate();
-                    // String? social_name = await FlutterSecureStorage().read(
-                    //   key: 'social_name',
-                    // );
-                    // String? social_email = await FlutterSecureStorage().read(
-                    //   key: 'social_email',
-                    // );
-                    // String? social_avatar = await FlutterSecureStorage().read(
-                    //   key: 'social_avatar',
-                    // );
-
-                    // if (social_name != null &&
-                    //     social_email != null &&
-                    //     social_avatar != null) {
-                    //   var userCredential = await Dio().post(
-                    //     "https://globee-trading.com/app2026/sql.php",
-                    //     data: FormData.fromMap({
-                    //       "action": "get_social_account",
-                    //       "name": social_name,
-                    //       "email": social_email,
-                    //       "avatar_url": social_avatar,
-                    //     }),
-                    //   );
-                    //   print(userCredential);
-                    //   await FlutterSecureStorage().write(
-                    //     key: "user_uid",
-                    //     value: userCredential.data['data']['id'],
-                    //   );
-                    //   await FlutterSecureStorage().write(
-                    //     key: "user_oid",
-                    //     value: userCredential.data['data']['oid'],
-                    //   );
-                    //   Navigator.of(context).pushReplacement(
-                    //     MaterialPageRoute(builder: (context) => SplashScreen()),
-                    //   );
-                    // } else {
-                    //   try {
-                    //     unawaited(
-                    //       GoogleSignIn.instance.initialize(
-                    //         serverClientId:
-                    //             "736610217893-4biei54dv0a4gh85776sfbech2sasnh7.apps.googleusercontent.com",
-                    //       ),
-                    //     );
-                    //     await GoogleSignIn.instance.authenticate().then((
-                    //       val,
-                    //     ) async {
-                    //       String? userId = OneSignal.User.pushSubscription.id;
-                    //       var response = await Dio().post(
-                    //         "https://globee-trading.com/app2026/sql.php",
-                    //         data: FormData.fromMap({
-                    //           "action": "create_social_account",
-                    //           "name": val.displayName,
-                    //           "email": val.email,
-                    //           "avatar_url": val.photoUrl,
-                    //           "player_id": userId,
-                    //           "login_type": "Google",
-                    //         }),
-                    //       );
-                    //       await FlutterSecureStorage().write(
-                    //         key: "user_uid",
-                    //         value: response.data['data']['id'],
-                    //       );
-                    //       await FlutterSecureStorage().write(
-                    //         key: "user_oid",
-                    //         value: response.data['data']['oid'],
-                    //       );
-                    //       FlutterSecureStorage().write(
-                    //         key: 'social_name',
-                    //         value: val.displayName,
-                    //       );
-                    //       FlutterSecureStorage().write(
-                    //         key: 'social_email',
-                    //         value: val.email,
-                    //       );
-                    //       FlutterSecureStorage().write(
-                    //         key: 'social_avatar',
-                    //         value: val.photoUrl,
-                    //       );
-                    //       Navigator.of(context).pushReplacement(
-                    //         MaterialPageRoute(
-                    //           builder: (context) => SplashScreen(),
-                    //         ),
-                    //       );
-                    //     });
-                    //   } catch (e) {
-                    //     print("Login failed: $e");
-                    //     // هنا ممكن تعرض رسالة للمستخدم بدل ما التطبيق يقفل
-                    //   }
-                    // }
+                    
+                    final result = await googleAuthService.signInWithGoogle();
+                      if (result != null && result['success'] == true) {
+                        await FlutterSecureStorage().write(
+                          key: "user_uid",
+                          value: result['user']['uid'].toString(),
+                        );
+                        await FlutterSecureStorage().write(
+                          key: "user_oid",
+                          value: result['user']['oid'].toString(),
+                        );
+                        FlutterSecureStorage().write(
+                          key: 'social_name',
+                          value: result['user']['name'].toString(),
+                        );
+                        FlutterSecureStorage().write(
+                          key: 'social_email',
+                          value: result['user']['email'].toString(),
+                        );
+                        FlutterSecureStorage().write(
+                          key: 'social_avatar',
+                          value: result['user']['avatar'].toString(),
+                        );
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (context) => SplashScreen(),
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('فشل تسجيل الدخول')),
+                        );
+                      }
                   },
                 ),
 

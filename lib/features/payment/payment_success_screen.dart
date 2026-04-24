@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:MartIt/features/home/tiktok_feed_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -397,10 +398,7 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
                             child: OutlinedButton.icon(
                               onPressed: () {
                                 _clearCartAndUpdateOID();
-                                Navigator.popUntil(
-                                  context,
-                                  (route) => route.isFirst,
-                                );
+                                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => TikTokFeedScreen()));
                               },
                               // 31665646
                               style: OutlinedButton.styleFrom(

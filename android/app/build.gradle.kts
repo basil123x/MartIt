@@ -98,3 +98,4 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
     // NO Play Core libraries - they're deprecated and incompatible with SDK 34+
 }
+

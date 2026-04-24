@@ -165,3 +165,11 @@ flutter run
 ---
 
 **ملاحظة**: هذا المشروع في مرحلة التطوير الأولى. المميزات والواجهات قابلة للتغيير.
+
+<!-- Android -->
+<!-- 35600706278-3954gt7h529125sn0j0qi284cimt3soq.apps.googleusercontent.com -->
+<!-- IOS -->
+<!-- 35600706278-5lqdgabaj0tdpe34819ooad6uf8i4cbu.apps.googleusercontent.com -->
+<!-- Web -->
+<!-- 35600706278-g91lt4njajab7v64mgi2s5brn8vr22kb.apps.googleusercontent.com -->
+<!-- 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 -->
