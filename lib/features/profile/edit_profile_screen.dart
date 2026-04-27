@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/api_service.dart';
+import '../../core/services/bunny_upload_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final String currentName;
@@ -33,7 +34,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _otpController = TextEditingController();
 
   File? _selectedImage;
+  String? _uploadedImageUrl;
   bool _isLoading = false;
+  bool _isUploadingImage = false;
   bool _showOtpField = false;
   bool _phoneChanged = false;
   String _generatedOtp = '';
@@ -70,11 +73,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F3460)],
-          ),
+          color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
         ),
         child: Column(
@@ -86,7 +85,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               width: 50,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.3),
+                color: const Color(0xFF1A1A2E).withOpacity(0.2),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -96,7 +95,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             const Text(
               'اختر مصدر الصورة',
               style: TextStyle(
-                color: Colors.white,
+                color: Color(0xFF1A1A2E),
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
@@ -143,27 +142,34 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.1),
+          color: const Color(0xFFFFF4E6),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+          border: Border.all(color: const Color(0xFFFF8C00), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           children: [
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.2),
+                color: const Color(0xFFFF8C00).withOpacity(0.15),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Icon(icon, color: AppColors.primary, size: 32),
+              child: Icon(icon, color: const Color(0xFFFF8C00), size: 32),
             ),
             const SizedBox(height: 12),
             Text(
               title,
               style: const TextStyle(
-                color: Colors.white,
+                color: Color(0xFF1A1A2E),
                 fontSize: 16,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ],
@@ -185,12 +191,58 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (image != null) {
         setState(() {
           _selectedImage = File(image.path);
+          _isUploadingImage = true;
         });
+
+        // Upload to Bunny.net
+        await _uploadImageToBunny(File(image.path));
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('فشل في اختيار الصورة: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _uploadImageToBunny(File imageFile) async {
+    try {
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final remotePath = 'users/${widget.currentUid}/avatar.jpg';
+      
+      final urls = await BunnyUploadService.uploadMediaFiles(
+        filePaths: [imageFile.path],
+        itemId: 'users/${widget.currentUid}',
+        onProgress: (current, total, progress) {
+          print('Uploading profile image: ${(progress * 100).toStringAsFixed(1)}%');
+        },
+      );
+
+      if (urls.isNotEmpty) {
+        setState(() {
+          _uploadedImageUrl = 'https://globee.b-cdn.net/users/${widget.currentUid}/avatar.jpg?t=$timestamp';
+          _isUploadingImage = false;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم رفع الصورة بنجاح'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        throw Exception('فشل في رفع الصورة');
+      }
+    } catch (e) {
+      setState(() {
+        _isUploadingImage = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('فشل في رفع الصورة: $e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -225,6 +277,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // Check if image is still uploading
+    if (_isUploadingImage) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يرجى الانتظار حتى يتم رفع الصورة'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     // Validate OTP if phone changed
     if (_phoneChanged) {
       if (!_showOtpField) {
@@ -258,29 +321,37 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         throw Exception('المستخدم غير مسجل');
       }
 
-      // Update profile in database
+      // Update profile in database (image already uploaded to Bunny.net)
       final result = await ApiService.updateUserProfile(
         uid: currentUid,
         name: _nameController.text,
         phone: _phoneController.text,
-        avatar: _selectedImage,
+        avatar: null, // Image already uploaded separately
       );
 
       if (result['success'] == true) {
         // Update local storage
-        await AuthService.updateUserName(_nameController.text);
-        if (_selectedImage != null) {
-          await AuthService.updateProfileImage(_selectedImage!.path);
+        await AuthService.updateUserName(_nameController.text.trim());
+        if (_uploadedImageUrl != null) {
+          await AuthService.updateProfileImage(_uploadedImageUrl!);
         }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم تحديث الملف الشخصي بنجاح'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('تم حفظ التغييرات بنجاح'),
+              backgroundColor: Colors.green,
+            ),
+          );
 
-        Navigator.pop(context, true);
+          // Return updated data to profile_screen
+          Navigator.pop(context, {
+            'success': true,
+            'name': _nameController.text.trim(),
+            'phone': _phoneController.text.trim(),
+            'avatar': _uploadedImageUrl ?? widget.currentAvatar,
+          });
+        }
       } else {
         throw Exception(result['error'] ?? 'فشل في التحديث');
       }
@@ -325,7 +396,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             children: [
               // Profile Picture Section
               GestureDetector(
-                onTap: _pickImage,
+                onTap: _isUploadingImage ? null : _pickImage,
                 child: Container(
                   width: 120,
                   height: 120,
@@ -347,24 +418,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         backgroundImage: _selectedImage != null
                             ? FileImage(_selectedImage!)
                             : NetworkImage(
-                                widget.currentType == 'Phone'
-                                    ? "https://globee.b-cdn.net/users/${widget.currentUid}/avatar.jpg?k=${DateTime.now().millisecondsSinceEpoch}"
-                                    : widget.currentAvatar,
+                                // widget.currentType == 'Phone' ?
+                                     "https://globee.b-cdn.net/users/${widget.currentUid}/1.jpg?k=${DateTime.now().millisecondsSinceEpoch}"
+                                    // : widget.currentAvatar,
                               ),
                         backgroundColor: Colors.grey[300],
                       ),
+                      // Loading overlay while uploading
+                      if (_isUploadingImage)
+                        Positioned.fill(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.black.withOpacity(0.5),
+                            ),
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 3,
+                              ),
+                            ),
+                          ),
+                        ),
                       Positioned(
                         bottom: 0,
                         right: 0,
                         child: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: AppColors.primary,
+                            color: _isUploadingImage ? Colors.grey : AppColors.primary,
                             shape: BoxShape.circle,
                             border: Border.all(color: Colors.white, width: 2),
                           ),
-                          child: const Icon(
-                            Iconsax.camera,
+                          child: Icon(
+                            _isUploadingImage ? Iconsax.refresh : Iconsax.camera,
                             color: AppColors.white,
                             size: 16,
                           ),

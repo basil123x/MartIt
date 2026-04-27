@@ -83,7 +83,8 @@ class ChatConversation {
 
   factory ChatConversation.fromJson(Map<String, dynamic> json) {
     return ChatConversation(
-      id: json['id']?.toString() ?? '',
+      // ✅ استخدام participant_id كـ id إذا لم يكن id موجوداً
+      id: json['id']?.toString() ?? json['participant_id']?.toString() ?? '',
       conversationId: json['conversation_id']?.toString() ?? '',
       participantId: json['participant_id']?.toString() ?? '',
       participantName: json['participant_name']?.toString() ?? '',

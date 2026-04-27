@@ -1,3 +1,4 @@
+import 'package:MartIt/features/orders/invoice_webview.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -31,25 +32,33 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
 
     try {
       final uid = await AuthService.getCurrentUID();
+      print('🔍 DEBUG MyOrders - UID from AuthService: $uid');
+      
       if (uid == null) {
+        print('❌ DEBUG MyOrders - UID is null, user not logged in');
         throw Exception('User not logged in');
       }
 
+      print('📡 DEBUG MyOrders - Calling API with custId: $uid');
       final result = await ApiService.getMyOrders(custId: uid);
+      print('📦 DEBUG MyOrders - API Response: $result');
 
       if (result['success'] == true) {
+        final orders = result['data'] ?? [];
+        print('✅ DEBUG MyOrders - Orders count: ${orders.length}');
         setState(() {
-          _orders = result['data'] ?? [];
+          _orders = orders;
           _isLoading = false;
         });
       } else {
+        print('❌ DEBUG MyOrders - API returned success=false: ${result['error']}');
         setState(() {
           _hasError = true;
           _isLoading = false;
         });
       }
     } catch (e) {
-      print('Error loading orders: $e');
+      print('❌ DEBUG MyOrders - Exception: $e');
       setState(() {
         _hasError = true;
         _isLoading = false;
@@ -57,22 +66,18 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     }
   }
 
-  Future<void> _openInvoice(String userid) async {
-    final Uri url = Uri.parse(
-      'https://www.Globee-Trading.com/app2026/invoice.php?user_id=$userid&k=${DateTime.now().millisecondsSinceEpoch}',
-    );
+  Future<void> _openInvoice(String orderId) async {
+    final url =
+        'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&k=${DateTime.now().millisecondsSinceEpoch}';
 
-    if (!await launchUrl(
-      url,
-      mode: LaunchMode.inAppWebView, // يفتح داخل الأب
-      webViewConfiguration: const WebViewConfiguration(enableJavaScript: true),
-    )) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('فشل فتح الفاتورة')));
-      }
-    }
+    if (!context.mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InvoiceWebView(url: url),
+      ),
+    );
   }
 
   @override
@@ -323,7 +328,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () => _openInvoice(order['uid'].toString()),
+                onPressed: () => _openInvoice(order['oid'].toString()),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,

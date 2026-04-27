@@ -227,7 +227,7 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
       }
 
       final response = await Dio().post(
-        'https://www.Globee-Trading.com/app2026/sql.php',
+        'https://www.Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "create_email_account",
           "name": _nameController.text.trim(),

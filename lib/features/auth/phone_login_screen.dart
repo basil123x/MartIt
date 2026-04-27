@@ -16,13 +16,13 @@ class PhoneLoginScreen extends StatefulWidget {
 class CountryCode {
   final String name;
   final String dialCode;
-  final String flag;
+  final String countryCode; // ISO 3166-1 alpha-2 code (e.g., 'QA', 'SA')
   final int maxLength;
 
   CountryCode({
     required this.name,
     required this.dialCode,
-    required this.flag,
+    required this.countryCode,
     required this.maxLength,
   });
 }
@@ -33,38 +33,28 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
   bool _isLoading = false;
 
   final List<CountryCode> _countries = [
-    CountryCode(name: 'قطر', dialCode: '+974', flag: '🇶🇦', maxLength: 8),
-    CountryCode(name: 'السعودية', dialCode: '+966', flag: '🇸🇦', maxLength: 9),
-    CountryCode(name: 'الإمارات', dialCode: '+971', flag: '🇦🇪', maxLength: 9),
-    CountryCode(name: 'الكويت', dialCode: '+965', flag: '🇰🇼', maxLength: 8),
-    CountryCode(name: 'البحرين', dialCode: '+973', flag: '🇧🇭', maxLength: 8),
-    CountryCode(name: 'عمان', dialCode: '+968', flag: '🇴🇲', maxLength: 8),
-    CountryCode(name: 'مصر', dialCode: '+20', flag: '🇪🇬', maxLength: 10),
-    CountryCode(name: 'الأردن', dialCode: '+962', flag: '🇯🇴', maxLength: 9),
-    CountryCode(name: 'لبنان', dialCode: '+961', flag: '🇱🇧', maxLength: 8),
-    CountryCode(name: 'سوريا', dialCode: '+963', flag: '🇸🇾', maxLength: 9),
-    CountryCode(name: 'العراق', dialCode: '+964', flag: '🇮🇶', maxLength: 10),
-    CountryCode(name: 'فلسطين', dialCode: '+970', flag: '🇵🇸', maxLength: 9),
-    CountryCode(name: 'اليمن', dialCode: '+967', flag: '🇾🇪', maxLength: 9),
-    CountryCode(name: 'المغرب', dialCode: '+212', flag: '🇲🇦', maxLength: 9),
-    CountryCode(name: 'الجزائر', dialCode: '+213', flag: '🇩🇿', maxLength: 9),
-    CountryCode(name: 'تونس', dialCode: '+216', flag: '🇹🇳', maxLength: 8),
-    CountryCode(name: 'ليبيا', dialCode: '+218', flag: '🇱🇾', maxLength: 10),
-    CountryCode(name: 'السودان', dialCode: '+249', flag: '🇸🇩', maxLength: 9),
-    CountryCode(
-      name: 'موريتانيا',
-      dialCode: '+222',
-      flag: '🇲🇷',
-      maxLength: 8,
-    ),
-    CountryCode(name: 'الصومال', dialCode: '+252', flag: '🇸🇴', maxLength: 9),
-    CountryCode(name: 'جيبوتي', dialCode: '+253', flag: '🇩🇯', maxLength: 8),
-    CountryCode(
-      name: 'جزر القمر',
-      dialCode: '+269',
-      flag: '🇰🇲',
-      maxLength: 7,
-    ),
+    CountryCode(name: 'قطر', dialCode: '+974', countryCode: 'QA', maxLength: 8),
+    CountryCode(name: 'السعودية', dialCode: '+966', countryCode: 'SA', maxLength: 9),
+    CountryCode(name: 'الإمارات', dialCode: '+971', countryCode: 'AE', maxLength: 9),
+    CountryCode(name: 'الكويت', dialCode: '+965', countryCode: 'KW', maxLength: 8),
+    CountryCode(name: 'البحرين', dialCode: '+973', countryCode: 'BH', maxLength: 8),
+    CountryCode(name: 'عمان', dialCode: '+968', countryCode: 'OM', maxLength: 8),
+    CountryCode(name: 'مصر', dialCode: '+20', countryCode: 'EG', maxLength: 10),
+    CountryCode(name: 'الأردن', dialCode: '+962', countryCode: 'JO', maxLength: 9),
+    CountryCode(name: 'لبنان', dialCode: '+961', countryCode: 'LB', maxLength: 8),
+    CountryCode(name: 'سوريا', dialCode: '+963', countryCode: 'SY', maxLength: 9),
+    CountryCode(name: 'العراق', dialCode: '+964', countryCode: 'IQ', maxLength: 10),
+    CountryCode(name: 'فلسطين', dialCode: '+970', countryCode: 'PS', maxLength: 9),
+    CountryCode(name: 'اليمن', dialCode: '+967', countryCode: 'YE', maxLength: 9),
+    CountryCode(name: 'المغرب', dialCode: '+212', countryCode: 'MA', maxLength: 9),
+    CountryCode(name: 'الجزائر', dialCode: '+213', countryCode: 'DZ', maxLength: 9),
+    CountryCode(name: 'تونس', dialCode: '+216', countryCode: 'TN', maxLength: 8),
+    CountryCode(name: 'ليبيا', dialCode: '+218', countryCode: 'LY', maxLength: 10),
+    CountryCode(name: 'السودان', dialCode: '+249', countryCode: 'SD', maxLength: 9),
+    CountryCode(name: 'موريتانيا', dialCode: '+222', countryCode: 'MR', maxLength: 8),
+    CountryCode(name: 'الصومال', dialCode: '+252', countryCode: 'SO', maxLength: 9),
+    CountryCode(name: 'جيبوتي', dialCode: '+253', countryCode: 'DJ', maxLength: 8),
+    CountryCode(name: 'جزر القمر', dialCode: '+269', countryCode: 'KM', maxLength: 7),
   ];
 
   late CountryCode _selectedCountry;
@@ -296,9 +286,16 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
                             ),
                             child: Row(
                               children: [
-                                Text(
-                                  country.flag,
-                                  style: TextStyle(fontSize: 32),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Image.network(
+                                    'https://flagcdn.com/w40/${country.countryCode.toLowerCase()}.png',
+                                    width: 36,
+                                    height: 24,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) =>
+                                        Text(country.dialCode, style: TextStyle(fontSize: 12)),
+                                  ),
                                 ),
                                 const SizedBox(width: 16),
                                 Expanded(
@@ -515,9 +512,16 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
                                           child: Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              Text(
-                                                _selectedCountry.flag,
-                                                style: TextStyle(fontSize: 24),
+                                              ClipRRect(
+                                                borderRadius: BorderRadius.circular(3),
+                                                child: Image.network(
+                                                  'https://flagcdn.com/w40/${_selectedCountry.countryCode.toLowerCase()}.png',
+                                                  width: 30,
+                                                  height: 20,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (context, error, stackTrace) =>
+                                                      Text(_selectedCountry.dialCode, style: TextStyle(fontSize: 11)),
+                                                ),
                                               ),
                                               const SizedBox(width: 8),
                                               Text(

@@ -5,7 +5,7 @@ class OneSignalService {
   // ✅ حط الـ REST API Key من OneSignal Dashboard
   // Settings → Keys & IDs → REST API Key
   static const String _restApiKey =
-      "os_v2_app_3xwdesk7czehbhbsnavharkzw3d6qvwzgqku2bvyr2hiwtqtacbepuss3uudbwunvmf6t3lzmh7rwmq6efajilohnlwkk4pijn4i2mq";
+      "os_v2_app_3xwdesk7czehbhbsnavharkzwzksqegp7koelde3jo6ubjqvtltgelwepni5foym6bj64gjxvetfz6qxkl67s6rrzjcdxtn6heaad2a";
   static const String _appId = "ddec3249-5f16-4870-9c32-682a704559b6";
   static const String _apiUrl = "https://onesignal.com/api/v1/notifications";
 
@@ -21,7 +21,7 @@ class OneSignalService {
         Uri.parse(_apiUrl),
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
-          'Authorization': 'Basic $_restApiKey',
+          'Authorization': 'Key $_restApiKey',
         },
         body: jsonEncode({
           'app_id': _appId,

@@ -217,6 +217,7 @@ class _OTPScreenState extends State<OTPScreen> {
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
+          title: Text("OTP is ${widget.generatedOTP}"),
           leading: IconButton(
             icon: const Icon(Iconsax.arrow_left, color: AppColors.textPrimary),
             onPressed: () => Navigator.of(context).pop(),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
@@ -17,21 +18,52 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   UserProfileModel? _profile;
-  UserProfileItemsModel? _profileItems;
-  List _profileLength = [];
-  List _filteredItems = []; // القائمة المفلترة للعرض
+  List<Map<String, dynamic>> _items = [];
   bool _isLoading = true;
-  bool _isLoading1 = true;
+  bool _isLoadingItems = true;
+  bool _isLoadingMore = false;
   bool _hasError = false;
-  bool _hasError1 = false;
-  String _selectedFilter = 'الأحدث';
-  final List<String> _filters = ['الأحدث', 'الرائجة', 'الأقدم'];
+  bool _hasErrorItems = false;
+  bool _hasMore = true;
+  int _currentOffset = 0;
+  final int _pageSize = 20;
+  String _selectedFilter = 'الرائجة';
+  final List<String> _filters = ['الرائجة', 'الأحدث', 'الأقدم'];
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
-    _loadProfileItems();
+    _loadItems();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      if (!_isLoadingMore && _hasMore) {
+        _loadMoreItems();
+      }
+    }
+  }
+
+  String _getSortParam() {
+    switch (_selectedFilter) {
+      case 'الأحدث':
+        return 'newest';
+      case 'الأقدم':
+        return 'oldest';
+      case 'الرائجة':
+      default:
+        return 'views';
+    }
   }
 
   Future<void> _loadProfile() async {
@@ -64,118 +96,95 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _loadProfileItems() async {
+  Future<void> _loadItems() async {
     setState(() {
-      _isLoading1 = true;
-      _hasError1 = false;
+      _isLoadingItems = true;
+      _hasErrorItems = false;
+      _currentOffset = 0;
+      _items = [];
     });
 
     try {
       final response = await ApiService.getUserProfileItems(
         int.parse(widget.userId),
+        limit: _pageSize,
+        offset: 0,
+        sort: _getSortParam(),
       );
-      setState(() {
-        _profileLength = response['data'];
-      });
 
       if (response['success'] == true) {
         setState(() {
-          _profileItems = UserProfileItemsModel.fromJson(response['data']);
-          _profileLength = List.from(response['data']); // نسخة من البيانات
-          _filteredItems = List.from(
-            response['data'],
-          ); // عرض كل الأصناف أول مرة
-          _isLoading1 = false;
+          _items = List<Map<String, dynamic>>.from(response['data'] ?? []);
+          _hasMore = response['hasMore'] ?? false;
+          _currentOffset = _pageSize;
+          _isLoadingItems = false;
         });
-        // تطبيق الفلتر الافتراضي بعد setState
-        _applyFilter();
       } else {
         setState(() {
-          _hasError1 = true;
-          _isLoading1 = false;
+          _hasErrorItems = true;
+          _isLoadingItems = false;
         });
       }
     } catch (e) {
       setState(() {
-        _hasError1 = true;
-        _isLoading1 = false;
+        _hasErrorItems = true;
+        _isLoadingItems = false;
       });
     }
   }
 
-  // دالة فلترة وترتيب البيانات
-  void _applyFilter() {
-    List tempList = List.from(_profileLength);
-
-    switch (_selectedFilter) {
-      case 'الأحدث':
-        // ترتيب حسب created_at أو id (الأحدث أولاً)
-        tempList.sort((a, b) {
-          // لو فيه created_at استخدمه، لو لأ استخدم id
-          if (a['created_at'] != null && b['created_at'] != null) {
-            try {
-              return DateTime.parse(
-                b['created_at'].toString(),
-              ).compareTo(DateTime.parse(a['created_at'].toString()));
-            } catch (e) {
-              // لو فيه مشكلة في parsing التاريخ
-              return 0;
-            }
-          } else if (a['id'] != null && b['id'] != null) {
-            int idA = int.tryParse(a['id'].toString()) ?? 0;
-            int idB = int.tryParse(b['id'].toString()) ?? 0;
-            return idB.compareTo(idA);
-          }
-          return 0;
-        });
-        break;
-
-      case 'الرائجة':
-        // ترتيب حسب views (الأكثر أولاً)
-        tempList.sort((a, b) {
-          int viewsA = int.tryParse(a['views']?.toString() ?? '0') ?? 0;
-          int viewsB = int.tryParse(b['views']?.toString() ?? '0') ?? 0;
-          return viewsB.compareTo(viewsA);
-        });
-        break;
-
-      case 'الأقدم':
-        // ترتيب حسب created_at أو id (الأقدم أولاً)
-        tempList.sort((a, b) {
-          // لو فيه created_at استخدمه، لو لأ استخدم id
-          if (a['created_at'] != null && b['created_at'] != null) {
-            try {
-              return DateTime.parse(
-                a['created_at'].toString(),
-              ).compareTo(DateTime.parse(b['created_at'].toString()));
-            } catch (e) {
-              // لو فيه مشكلة في parsing التاريخ
-              return 0;
-            }
-          } else if (a['id'] != null && b['id'] != null) {
-            int idA = int.tryParse(a['id'].toString()) ?? 0;
-            int idB = int.tryParse(b['id'].toString()) ?? 0;
-            return idA.compareTo(idB);
-          }
-          return 0;
-        });
-        break;
-    }
+  Future<void> _loadMoreItems() async {
+    if (_isLoadingMore || !_hasMore) return;
 
     setState(() {
-      _filteredItems = tempList;
+      _isLoadingMore = true;
     });
+
+    try {
+      final response = await ApiService.getUserProfileItems(
+        int.parse(widget.userId),
+        limit: _pageSize,
+        offset: _currentOffset,
+        sort: _getSortParam(),
+      );
+
+      if (response['success'] == true) {
+        final newItems = List<Map<String, dynamic>>.from(response['data'] ?? []);
+        setState(() {
+          _items.addAll(newItems);
+          _hasMore = response['hasMore'] ?? false;
+          _currentOffset += _pageSize;
+          _isLoadingMore = false;
+        });
+      } else {
+        setState(() {
+          _isLoadingMore = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isLoadingMore = false;
+      });
+    }
+  }
+
+  void _onFilterChanged(String filter) {
+    if (_selectedFilter == filter) return;
+    setState(() {
+      _selectedFilter = filter;
+    });
+    _loadItems();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: _isLoading && _isLoading1
+      body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(color: AppColors.primary),
             )
-          : _hasError && _hasError1
+          : _hasError
           ? _buildErrorState()
           : _buildProfileContent(),
     );
@@ -194,7 +203,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 16),
           ElevatedButton(
-            onPressed: _loadProfile,
+            onPressed: () {
+              _loadProfile();
+              _loadItems();
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
@@ -210,6 +222,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_profile == null) return const SizedBox();
 
     return CustomScrollView(
+      controller: _scrollController,
       slivers: [
         // App Bar
         SliverAppBar(
@@ -221,7 +234,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             future: AuthService.getCurrentUserId(),
             builder: (context, snapshot) {
               if (snapshot.hasData && snapshot.data == widget.userId) {
-                print(_profile?.phone);
                 return IconButton(
                   onPressed: () async {
                     final result = await Navigator.push(
@@ -236,7 +248,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     );
-                    if (result == true) {
+                    if (result != null && result is Map<String, dynamic>) {
+                      if (result['success'] == true) {
+                        setState(() {
+                          if (_profile != null) {
+                            _profile = UserProfileModel(
+                              id: _profile!.id,
+                              uid: _profile!.uid,
+                              name: result['name'] ?? _profile!.name,
+                              phone: result['phone'] ?? _profile!.phone,
+                              avatar: result['avatar'] ?? _profile!.avatar,
+                              type: _profile!.type,
+                              itemsCount: _profile!.itemsCount,
+                            );
+                          }
+                        });
+                        _loadProfile();
+                      }
+                    } else if (result == true) {
                       _loadProfile();
                     }
                   },
@@ -262,7 +291,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Color(0xFFD4D4F0),
                     Color(0xFFC8D4F5),
                     Color(0xFFB4D4F0),
-                    // AppColors.primary, AppColors.secondary
                   ],
                 ),
               ),
@@ -275,13 +303,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         SliverToBoxAdapter(child: _buildFilterButtons()),
 
         // Profile Items Grid
-        SliverToBoxAdapter(child: _buildItemsGrid()),
+        SliverToBoxAdapter(child: _buildItemsSection()),
       ],
     );
   }
 
   Widget _buildProfileHeader() {
-    print(_profile?.type);
     return Container(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -307,9 +334,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: CircleAvatar(
               radius: 56,
               backgroundImage: NetworkImage(
-                _profile?.type == 'Phone'
-                    ? "https://globee.b-cdn.net/users/${_profile?.uid}/avatar.jpg?k=${DateTime.now().millisecondsSinceEpoch}"
-                    : _profile!.avatar,
+                "https://globee.b-cdn.net/users/${_profile?.uid}/1.jpg?k=${DateTime.now().millisecondsSinceEpoch}",
               ),
               backgroundColor: Colors.white,
             ),
@@ -361,12 +386,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    _selectedFilter = filter;
-                    _applyFilter(); // تطبيق الفلتر عند الضغط
-                  });
-                },
+                onPressed: () => _onFilterChanged(filter),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: isSelected
                       ? AppColors.primary
@@ -392,22 +412,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildItemsGrid() {
+  Widget _buildItemsSection() {
     return Container(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          // عرض النتائج المفلترة
-          if (_filteredItems.isEmpty)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(32.0),
-                child: Text(
-                  'لا توجد منتجات',
-                  style: TextStyle(fontSize: 16, color: Colors.grey),
-                ),
-              ),
-            )
+          // Skeleton Loading
+          if (_isLoadingItems)
+            _buildSkeletonGrid()
+          // Empty State
+          else if (_items.isEmpty && !_hasErrorItems)
+            _buildEmptyState()
+          // Error State
+          else if (_hasErrorItems)
+            _buildItemsErrorState()
+          // Items Grid
           else
             GridView.builder(
               shrinkWrap: true,
@@ -418,40 +437,164 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 mainAxisSpacing: 12,
                 childAspectRatio: 0.8,
               ),
-              itemCount: _filteredItems.length,
+              itemCount: _items.length,
               itemBuilder: (context, index) {
-                return _buildItemCard(index);
+                return ProfileItemCard(item: _items[index]);
               },
             ),
 
-          const SizedBox(height: 20),
+          // Loading More Indicator
+          if (_isLoadingMore)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              ),
+            ),
 
-          // // Load More Button
-          // if (_profile!.itemsCount > 6)
-          //   ElevatedButton(
-          //     onPressed: () {
-          //       // TODO: Load more items
-          //       ScaffoldMessenger.of(context).showSnackBar(
-          //         const SnackBar(content: Text('تحميل المزيد قيد التطوير')),
-          //       );
-          //     },
-          //     style: ElevatedButton.styleFrom(
-          //       backgroundColor: AppColors.secondary,
-          //       foregroundColor: Colors.white,
-          //       minimumSize: const Size(double.infinity, 50),
-          //       shape: RoundedRectangleBorder(
-          //         borderRadius: BorderRadius.circular(25),
-          //       ),
-          //     ),
-          //     child: const Text('تحميل المزيد'),
-          //   ),
+          const SizedBox(height: 20),
         ],
       ),
     );
   }
 
-  Widget _buildItemCard(int index) {
-    return ProfileItemCard(item: _filteredItems[index]);
+  Widget _buildSkeletonGrid() {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 0.8,
+      ),
+      itemCount: 6,
+      itemBuilder: (context, index) {
+        return _buildSkeletonCard();
+      },
+    );
+  }
+
+  Widget _buildSkeletonCard() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[300]!,
+      highlightColor: Colors.grey[100]!,
+      child: Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Image placeholder
+            Expanded(
+              flex: 3,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            // Text placeholders
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      height: 14,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 12,
+                      width: 80,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Iconsax.box_1,
+              size: 80,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'لا توجد منتجات بعد',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'ابدأ بإضافة منتجاتك الآن',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[500],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildItemsErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Iconsax.warning_2,
+              size: 48,
+              color: Colors.red[300],
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'فشل في تحميل المنتجات',
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: _loadItems,
+              child: const Text('إعادة المحاولة'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

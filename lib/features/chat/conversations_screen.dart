@@ -67,12 +67,16 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     });
 
     try {
+      print('🔍 Loading conversations for user: ${widget.userId}');
       final result = await ApiService.getChatConversations(
         userId: widget.userId,
       );
+      print('📦 Conversations API response: $result');
 
       if (result['success'] == true) {
         final List<dynamic> data = result['data'] ?? [];
+        print('✅ Found ${data.length} unique conversations');
+        
         setState(() {
           _conversations = data
               .map((item) => ChatConversation.fromJson(item))
@@ -82,13 +86,14 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         // Check statuses after loading conversations
         _checkAllStatuses();
       } else {
+        print('❌ API returned success=false: ${result['error']}');
         setState(() {
           _hasError = true;
           _isLoading = false;
         });
       }
     } catch (e) {
-      print('Error loading conversations: $e');
+      print('❌ Error loading conversations: $e');
       setState(() {
         _hasError = true;
         _isLoading = false;
