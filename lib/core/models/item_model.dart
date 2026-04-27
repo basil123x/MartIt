@@ -170,10 +170,10 @@ class CommentModel {
   factory CommentModel.fromJson(Map<String, dynamic> json) {
     return CommentModel(
       id: json['id']?.toString() ?? '',
-      userName: json['userName'] ?? '',
-      userAvatar: json['userAvatar'] ?? '',
-      comment: json['comment'] ?? '',
-      createdAt: json['createdAt'] ?? '',
+      userName: json['user_name'] ?? json['userName'] ?? json['name'] ?? '',
+      userAvatar: json['user_avatar'] ?? json['userAvatar'] ?? json['avatar'] ?? '',
+      comment: json['comment'] ?? json['text'] ?? json['content'] ?? '',
+      createdAt: json['created_at'] ?? json['createdAt'] ?? json['created_atx'] ?? '',
     );
   }
 }

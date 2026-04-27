@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:MartIt/core/services/google_auth_service.dart';
-import 'package:MartIt/features/chat/chat_screen.dart';
-import 'package:MartIt/shared/providers/app_provider.dart';
+import 'package:GlobalFarm/core/services/google_auth_service.dart';
+import 'package:GlobalFarm/features/chat/chat_screen.dart';
+import 'package:GlobalFarm/shared/providers/app_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -25,7 +25,13 @@ void main() async {
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-  OneSignal.initialize("ddec3249-5f16-4870-9c32-682a704559b6");
+  String appId = "";
+  if (Platform.isAndroid) {
+    appId = "ddec3249-5f16-4870-9c32-682a704559b6";
+  } else {
+    appId = "5f910d9c-d0cd-4171-b2b2-94f68636d7de";
+  }
+  OneSignal.initialize(appId);
   await OneSignal.Notifications.requestPermission(true);
 
   OneSignal.Notifications.addClickListener((event) {
@@ -63,17 +69,17 @@ void main() async {
     event.notification.display();
   });
 
-  runApp(const MartItApp());
+  runApp(const GlobalFarmApp());
 }
 
-class MartItApp extends StatefulWidget {
-  const MartItApp({super.key});
+class GlobalFarmApp extends StatefulWidget {
+  const GlobalFarmApp({super.key});
 
   @override
-  State<MartItApp> createState() => _MartItAppState();
+  State<GlobalFarmApp> createState() => _GlobalFarmAppState();
 }
 
-class _MartItAppState extends State<MartItApp> {
+class _GlobalFarmAppState extends State<GlobalFarmApp> {
   final updater = ShorebirdUpdater();
   Timer? _timer;
   static const _lastPatchKey = "last_applied_patch";

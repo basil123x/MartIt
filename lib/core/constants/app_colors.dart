@@ -1,25 +1,30 @@
-// app_colors.dart — MartIt Brand Colors
+// app_colors.dart — GlobalFarm Brand Colors
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // ── Primary (Deep Purple من الخلفية)
-  static const Color primary      = Color(0xFF2D2870);
-  static const Color primaryDark   = Color(0xFF1E1A52);
-  static const Color primaryLight  = Color(0xFF4A40A8);
+  // ── Primary (الأخضر الزيتوني من الدائرة)
+  static const Color primary      = Color(0xFF5C6B2E);
+  static const Color primaryDark  = Color(0xFF3E4A1E);
+  static const Color primaryLight = Color(0xFF7A9040);
 
-  // ── Secondary (Orange Gradient من الـ M)
-  static const Color secondary      = Color(0xFFF97316);
-  static const Color secondaryDark  = Color(0xFFFF8C00);
-  static const Color secondaryLight = Color(0xFFFFB347);
+  // ── Secondary (البني الداكن من حرف G)
+  static const Color secondary      = Color(0xFF4A3728);
+  static const Color secondaryDark  = Color(0xFF2E2018);
+  static const Color secondaryLight = Color(0xFF6B5040);
 
-  // ── Gradient (نفس تدرج الـ M في الشعار)
+  // ── Accent (الأزرق الرمادي من حرف F)
+  static const Color accent      = Color(0xFF2E5B7A);
+  static const Color accentDark  = Color(0xFF1C3D55);
+  static const Color accentLight = Color(0xFF4A7A9B);
+
+  // ── Gradients
   static const LinearGradient brandGradient = LinearGradient(
-    colors: [Color(0xFFFFD580), Color(0xFFF97316)],
+    colors: [Color(0xFF7A9040), Color(0xFF5C6B2E)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
   static const LinearGradient bgGradient = LinearGradient(
-    colors: [Color(0xFF2D2870), Color(0xFF1E1A52)],
+    colors: [Color(0xFF5C6B2E), Color(0xFF3E4A1E)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
@@ -32,23 +37,23 @@ class AppColors {
   static const Color darkGrey  = Color(0xFF424242);
 
   // ── Background
-  static const Color background     = Color(0xFFFAFAFA);
+  static const Color background     = Color(0xFFF8F6F2);
   static const Color surface        = Color(0xFFFFFFFF);
   static const Color cardBackground = Color(0xFFFFFFFF);
 
   // ── Text
-  static const Color textPrimary   = Color(0xFF212121);
-  static const Color textSecondary = Color(0xFF757575);
+  static const Color textPrimary   = Color(0xFF2E2018);
+  static const Color textSecondary = Color(0xFF6B5040);
   static const Color textHint      = Color(0xFFBDBDBD);
 
   // ── Status
-  static const Color success = Color(0xFF4CAF50);
+  static const Color success = Color(0xFF5C6B2E);
   static const Color error   = Color(0xFFF44336);
-  static const Color warning = Color(0xFFFF9800);
-  static const Color info    = Color(0xFF2196F3);
+  static const Color warning = Color(0xFF4A3728);
+  static const Color info    = Color(0xFF2E5B7A);
 
   // ── Shopping
-  static const Color priceColor    = Color(0xFF4CAF50);
-  static const Color discountColor = Color(0xFFF97316);
-  static const Color cartColor     = Color(0xFFFFB347);
+  static const Color priceColor    = Color(0xFF5C6B2E);
+  static const Color discountColor = Color(0xFF4A3728);
+  static const Color cartColor     = Color(0xFF2E5B7A);
 }

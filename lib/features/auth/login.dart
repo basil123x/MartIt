@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:MartIt/core/services/google_auth_service.dart';
-import 'package:MartIt/features/home/tiktok_feed_screen.dart';
-import 'package:MartIt/features/splash/splash_screen.dart';
+import 'package:GlobalFarm/core/services/google_auth_service.dart';
+import 'package:GlobalFarm/features/home/tiktok_feed_screen.dart';
+import 'package:GlobalFarm/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -37,7 +37,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 // Logo
                 Container(
                   width: 100,
-                  height: 100,
                   decoration: BoxDecoration(
                     color: AppColors.white,
                     borderRadius: BorderRadius.circular(25),
@@ -83,27 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 30),
 
-                // Phone Login Button
-                _buildLoginOptionButton(
-                  context: context,
-                  icon: Iconsax.mobile,
-                  isimg: false,
-                  title: 'التسجيل برقم الهاتف',
-                  gradient: LinearGradient(
-                    colors: [
-                      AppColors.primary,
-                      AppColors.primary.withValues(alpha: 0.8),
-                    ],
-                  ),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const PhoneLoginScreen(),
-                      ),
-                    );
-                  },
-                ),
+                
 
                 const SizedBox(height: 16),
 
@@ -157,6 +136,27 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 16),
 
+                // Email Login Button
+                _buildLoginOptionButton(
+                  context: context,
+                  icon: Iconsax.sms,
+                  isimg: false,
+                  title: 'التسجيل بالبريد الإلكتروني',
+                  gradient: LinearGradient(
+                    colors: [const Color(0xFF6366F1), const Color(0xFF8B5CF6)],
+                  ),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const EmailLoginScreen(),
+                      ),
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
                 Opacity(
                   opacity: 0.4,
                   child: Visibility(
@@ -201,21 +201,23 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 30),
 
-                // Email Login Button
+                // Phone Login Button
                 _buildLoginOptionButton(
                   context: context,
-                  icon: Iconsax.sms,
+                  icon: Iconsax.mobile,
                   isimg: false,
-                  title: 'التسجيل بالبريد الإلكتروني',
-
+                  title: 'التسجيل برقم الهاتف',
                   gradient: LinearGradient(
-                    colors: [const Color(0xFF6366F1), const Color(0xFF8B5CF6)],
+                    colors: [
+                      AppColors.primary,
+                      AppColors.primary.withValues(alpha: 0.8),
+                    ],
                   ),
-                  onTap: () {
+                  onTap: () async {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const EmailLoginScreen(),
+                        builder: (context) => const PhoneLoginScreen(),
                       ),
                     );
                   },

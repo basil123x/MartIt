@@ -1,5 +1,5 @@
-import 'package:MartIt/core/services/onesignal_service.dart';
-import 'package:MartIt/features/auth/login.dart';
+import 'package:GlobalFarm/core/services/onesignal_service.dart';
+import 'package:GlobalFarm/features/auth/login.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:iconsax/iconsax.dart';
@@ -45,22 +45,27 @@ class _CommentsModalState extends State<CommentsModal> {
 
     try {
       final response = await ApiService.getComments(int.parse(widget.itemId));
+      print('📝 Comments API Response: $response');
 
       if (response['success'] == true) {
-        final List<dynamic> commentsData = response['data'] ?? [];
+        final List<dynamic> commentsData = response['data'] ?? response['comments'] ?? [];
+        print('📝 Comments Data: $commentsData');
         setState(() {
           _comments = commentsData
               .map((comment) => CommentModel.fromJson(comment))
               .toList();
           _isLoading = false;
         });
+        print('📝 Parsed Comments Count: ${_comments.length}');
       } else {
+        print('📝 Comments API returned success=false');
         setState(() {
           _comments = [];
           _isLoading = false;
         });
       }
     } catch (e) {
+      print('📝 Comments Load Error: $e');
       setState(() {
         _comments = [];
         _isLoading = false;
@@ -114,11 +119,13 @@ class _CommentsModalState extends State<CommentsModal> {
 
         // Scroll to bottom
         Future.delayed(const Duration(milliseconds: 100), () {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
+          if (mounted && _scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
         });
       } else {
         ScaffoldMessenger.of(

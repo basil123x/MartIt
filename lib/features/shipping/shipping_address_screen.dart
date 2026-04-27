@@ -5,7 +5,7 @@ import '../../core/models/cart_model.dart';
 import '../../core/models/shipping_address_model.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
-import '../payment/payment_success_screen.dart';
+import '../payment/payment_methods_screen.dart';
 
 class ShippingAddressScreen extends StatefulWidget {
   final String userId;
@@ -230,7 +230,7 @@ class _ShippingAddressScreenState extends State<ShippingAddressScreen> {
                             const Text(
                               'العناوين المحفوظة:',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: Colors.black,
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -646,11 +646,11 @@ class _ShippingAddressScreenState extends State<ShippingAddressScreen> {
           width: double.infinity,
           child: ElevatedButton(
             onPressed: () {
-              // Navigate to payment success (skipping payment for now)
+              // Navigate to payment methods screen
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => PaymentSuccessScreen(
+                  builder: (context) => PaymentMethodsScreen(
                     userId: widget.userId,
                     cartItems: widget.cartItems,
                     totalAmount: widget.totalAmount,

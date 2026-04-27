@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:MartIt/core/models/item_model.dart';
+import 'package:GlobalFarm/core/models/item_model.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -33,6 +33,7 @@ class ApiService {
     String? userId,
     String? initialItemId,
     String? category,
+    String? country,
   }) async {
     try {
       final url = Uri.parse('$baseUrl/sql.php');
@@ -43,6 +44,8 @@ class ApiService {
         'page': page.toString(),
         'limit': '10',
         'itemSrchId': initialItemId ?? "",
+        'country': country,
+        'store_id': '2'
       };
 
       // ✅ لو في user_id، نضيفه للـ body
@@ -86,7 +89,7 @@ class ApiService {
   static Future<Map<String, dynamic>> searchItems(String query) async {
     try {
       final response = await Dio().get(
-        '$baseUrl/search.php?q=$query',
+        '$baseUrl/search.php?q=$query&store_id=2',
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
 
@@ -118,13 +121,16 @@ class ApiService {
     }
   }
 
-  static Future getUserProfileItems(int userId) async {
+  static Future getUserProfileItems(int userId, {int limit = 20, int offset = 0, String sort = 'views'}) async {
     try {
       final response = await Dio().post(
         '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "fetch_items_one_account",
           "uid": userId,
+          "limit": limit,
+          "offset": offset,
+          "sort": sort,
         }),
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
@@ -140,10 +146,10 @@ class ApiService {
   }
 
   // Get comments for item
-  static Future<Map<String, dynamic>> getComments(int itemId) async {
+  static Future getComments(int itemId) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/comments.php?item_id=$itemId'),
+        Uri.parse('$baseUrl/comments.php?item_id=$itemId&k=${DateTime.now().millisecondsSinceEpoch}'),
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -373,6 +379,7 @@ class ApiService {
     int offset = 0,
     String? initialItemId,
     String? category,
+    String? country,
   }) async {
     try {
       final Map<String, dynamic> requestData = {
@@ -381,7 +388,8 @@ class ApiService {
         "limit": limit.toString(),
         "offset": offset.toString(),
         'itemSrchId': initialItemId ?? "",
-        'store_id': '2', // ✅ فلترة بـ Global Farm فقط
+        'country': country,
+        'store_id': '2'
       };
 
       // ✅ لو في category، نضيفه للـ request
@@ -432,7 +440,7 @@ class ApiService {
     try {
       final response = await Dio().post(
         '$baseUrl/sql.php',
-        data: FormData.fromMap({"action": "get_from_cart", "user_id": userId}),
+        data: FormData.fromMap({"action": "get_from_cart", "user_id": userId, 'store_id': '2'}),
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
 
@@ -872,11 +880,16 @@ class ApiService {
     required String custId,
   }) async {
     try {
+      print('🔍 API getMyOrders - Sending request with cust_id: $custId');
+      
       final response = await Dio().post(
         '$baseUrl/sql.php',
         data: FormData.fromMap({"action": "get_my_orders", "cust_id": custId}),
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
+
+      print('📦 API getMyOrders - Response status: ${response.statusCode}');
+      print('📦 API getMyOrders - Response data: ${response.data}');
 
       if (response.statusCode == 200) {
         return response.data;
@@ -884,6 +897,7 @@ class ApiService {
         throw Exception('Failed to get my orders: ${response.statusCode}');
       }
     } catch (e) {
+      print('❌ API getMyOrders - Error: $e');
       throw Exception('Get my orders error: $e');
     }
   }
@@ -939,13 +953,17 @@ class ApiService {
     }
   }
 
-  // Get categories/groups
+  // Get categories/groups by store_id
   static Future<List<String>> getCategories({String? storeId}) async {
     try {
-      final data = {
+      final data = <String, dynamic>{
         "action": "get_group",
-        "store_id": "2", // ✅ جلب تصنيفات Global Farm فقط
       };
+      
+      // إضافة store_id إذا كان محدداً
+      if (storeId != null && storeId.isNotEmpty) {
+        data["store_id"] = storeId;
+      }
 
       final response = await Dio().post(
         '$baseUrl/sql.php',
@@ -971,3 +989,8 @@ class ApiService {
     }
   }
 }
+
+
+// AKIARVJRTCELECEKHATH
+
+// rbxI5l6k7GSVwQyxL8rsBYgqe69GtjJhc+TDbEXe

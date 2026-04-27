@@ -1,5 +1,5 @@
-import 'package:MartIt/features/auth/login.dart';
-import 'package:MartIt/features/splash/splash_screen.dart';
+import 'package:GlobalFarm/features/auth/login.dart';
+import 'package:GlobalFarm/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -78,7 +78,7 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
     if (_enteredOTP == _generatedOTP) {
       try {
         final response = await Dio().post(
-          'https://www.Globee-Trading.com/app2026/sql.php',
+          'https://www.Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
           data: FormData.fromMap({
             "action": "login_with_email",
             "email": widget.email,
@@ -86,11 +86,13 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
           }),
         );
 
+        print(response);
+
         if (response.data['success'] == true) {
           String? userId = OneSignal.User.pushSubscription.id;
 
           final updateResponse = await Dio().post(
-            'https://www.Globee-Trading.com/app2026/sql.php',
+            'https://www.Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
             data: FormData.fromMap({
               "action": "update_fcm_token",
               "email": widget.email,
@@ -125,15 +127,26 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
             _isLoading = false;
           });
 
-          if (mounted) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (context) => EmailSignupScreen(
-                  email: widget.email,
-                  password: widget.password,
+          if (response.data['message'] == 'هذا الحساب مسجل بجوجل، يرجى تسجيل الدخول عبر جوجل') {
+            _showError(response.data['message']);
+            if (mounted) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (context) => LoginScreen(),
                 ),
-              ),
-            );
+              );
+            }
+          } else {
+            if (mounted) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (context) => EmailSignupScreen(
+                    email: widget.email,
+                    password: widget.password,
+                  ),
+                ),
+              );
+            }
           }
         }
       } catch (e) {
@@ -167,6 +180,7 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
 
   void _resendOTP() {
     _generatedOTP = AuthService.generateOTP();
+    sendOTPEmail();
     _clearOTP();
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -178,36 +192,14 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
   }
 
   sendOTPEmail() async {
-    var request = await Dio().post(
-      "https://api.brevo.com/v3/smtp/email",
-      options: Options(
-        headers: {
-          "accept": "application/json",
-          "api-key":
-              "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",
-          "content-type": "application/json",
-        },
-      ),
-      data: {
-        "sender": {
-          "email": "info@globee-trading.com",
-          "name": "Globee Trading LLC",
-        },
-        "subject": "بريد رمز التحقق",
-        "templateId": 2,
-        "params": {"OTP": _generatedOTP},
-        "messageVersions": [
-          {
-            "to": [
-              {"email": widget.email, "name": "Customer"},
-            ],
-            "params": {"OTP": _generatedOTP},
-            "subject": "بريد رمز التحقق",
-          },
-        ],
-      },
+    var result = await Dio().post(
+      "http://globee-trading.com/app2026/send_email.php?k=${DateTime.now().millisecondsSinceEpoch}",
+      data: FormData.fromMap({
+        "email": widget.email,
+        "otp": _generatedOTP,
+        "store_id": "2"
+      }),
     );
-    print(request);
   }
 
   // 666402

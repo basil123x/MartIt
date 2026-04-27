@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
+    id("com.google.gms.google-services")
 }
 import java.util.Properties
 import java.io.FileInputStream
@@ -17,9 +18,9 @@ val keystoreProperties = Properties().apply {
 }
 
 android {
-    namespace = "com.mazo.market"
+    namespace = "com.global.farm"
     compileSdk = 36
-    ndkVersion = "27.0.12077973"
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -32,12 +33,12 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.mazo.market"
+        applicationId = "com.global.farm"
         minSdk = 24
         targetSdk = 36
         multiDexEnabled = true
-        versionCode = 18
-        versionName = "1.0.9"
+        versionCode = 19
+        versionName = "1.1.0"
         
         // Enable 16KB page size support
         ndk {

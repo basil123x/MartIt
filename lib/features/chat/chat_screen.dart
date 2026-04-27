@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:MartIt/core/services/onesignal_service.dart';
+import 'package:GlobalFarm/core/services/onesignal_service.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:geolocator/geolocator.dart';
@@ -36,6 +36,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   List<ChatMessage> _messages = [];
   bool _isLoading = true;
+  bool _isFirstLoad = true; // ✅ للتفريق بين التحميل الأول والـ polling
   bool _isSending = false;
   String? _currentUserId;
   String? _currentUserName;
@@ -44,6 +45,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool _isOnline = false;
   Timer? _statusUpdateTimer;
   Timer? _statusCheckTimer;
+  Timer? _messagePollingTimer; // ✅ Timer للـ polling
 
   @override
   void initState() {
@@ -60,6 +62,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _scrollController.dispose();
     _statusUpdateTimer?.cancel();
     _statusCheckTimer?.cancel();
+    _messagePollingTimer?.cancel(); // ✅ إلغاء الـ polling timer
     super.dispose();
   }
 
@@ -94,12 +97,28 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _currentUserName = await AuthService.getCurrentName();
     _currentUserAvatar = await AuthService.getCurrentProfileImage();
     _currentConversationId = widget.conversationId;
+    
+    // ✅ إذا لم يكن هناك صورة محفوظة، نستخدم رابط CDN
+    if ((_currentUserAvatar == null || _currentUserAvatar!.isEmpty) && _currentUserId != null) {
+      _currentUserAvatar = 'https://globee.b-cdn.net/users/$_currentUserId/avatar.jpg';
+    }
+    
     if (_currentUserId != null) {
       // Update own status immediately
       await ApiService.updateOnlineStatus(userId: _currentUserId!);
       await _loadMessages();
       await _checkUserStatus();
+      
+      // ✅ بدء polling للرسائل كل 3 ثواني
+      _startMessagePolling();
     }
+  }
+  
+  // ✅ Polling للرسائل الجديدة
+  void _startMessagePolling() {
+    _messagePollingTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      _loadMessages(isPolling: true);
+    });
   }
 
   Future<void> _checkUserStatus() async {
@@ -117,10 +136,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _loadMessages() async {
-    setState(() {
-      _isLoading = true;
-    });
+  Future<void> _loadMessages({bool isPolling = false}) async {
+    // ✅ لا نظهر loading spinner أثناء الـ polling
+    if (!isPolling) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
 
     try {
       final result = await ApiService.getChatMessages(
@@ -130,21 +152,35 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       if (result['success'] == true) {
         final List<dynamic> data = result['data'] ?? [];
+        final newMessages = data.map((item) => ChatMessage.fromJson(item)).toList();
+        
+        // ✅ تحقق إذا وصلت رسائل جديدة
+        final hadNewMessages = newMessages.length > _messages.length;
+        
         setState(() {
-          _messages = data.map((item) => ChatMessage.fromJson(item)).toList();
+          _messages = newMessages;
           _isLoading = false;
+          _isFirstLoad = false;
         });
-        _scrollToBottom();
+        
+        // ✅ scroll للأسفل فقط إذا وصلت رسائل جديدة أو كان التحميل الأول
+        if (hadNewMessages || !isPolling) {
+          _scrollToBottom();
+        }
       } else {
         setState(() {
           _isLoading = false;
+          _isFirstLoad = false;
         });
       }
     } catch (e) {
       print('Error loading messages: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      if (!isPolling) {
+        setState(() {
+          _isLoading = false;
+          _isFirstLoad = false;
+        });
+      }
     }
   }
 
@@ -344,7 +380,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           children: [
             // Messages List
             Expanded(
-              child: _isLoading
+              // ✅ نظهر loading فقط في التحميل الأول
+              child: _isLoading && _isFirstLoad
                   ? const Center(
                       child: CircularProgressIndicator(
                         color: AppColors.primary,
@@ -588,29 +625,67 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
           if (isMyMessage) ...[
             const SizedBox(width: 8),
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: AppColors.secondary,
-              backgroundImage:
-                  _currentUserAvatar != null && _currentUserAvatar!.isNotEmpty
-                  ? NetworkImage(_currentUserAvatar!)
-                  : null,
-              child: _currentUserAvatar == null || _currentUserAvatar!.isEmpty
-                  ? Text(
-                      _currentUserName != null && _currentUserName!.isNotEmpty
-                          ? _currentUserName![0]
-                          : 'أ',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    )
-                  : null,
-            ),
+            // ✅ صورة المرسل (أنا) مع معالجة الأخطاء
+            _buildSenderAvatar(),
           ],
         ],
       ),
+    );
+  }
+
+  // ✅ Widget لصورة المرسل (أنا) مع معالجة الأخطاء
+  Widget _buildSenderAvatar() {
+    final avatarUrl = _currentUserAvatar;
+    final hasValidUrl = avatarUrl != null && avatarUrl.isNotEmpty;
+    
+    return CircleAvatar(
+      radius: 16,
+      backgroundColor: AppColors.primary,
+      child: hasValidUrl
+          ? ClipOval(
+              child: Image.network(
+                avatarUrl,
+                width: 32,
+                height: 32,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  // ✅ إذا فشل تحميل الصورة، نظهر الحرف الأول
+                  return Text(
+                    _currentUserName != null && _currentUserName!.isNotEmpty
+                        ? _currentUserName![0]
+                        : 'أ',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  );
+                },
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return const SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            )
+          : Text(
+              _currentUserName != null && _currentUserName!.isNotEmpty
+                  ? _currentUserName![0]
+                  : 'أ',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
     );
   }
 

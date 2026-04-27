@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:MartIt/features/update/update_screen.dart';
+import 'package:GlobalFarm/features/update/update_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -58,7 +58,7 @@ class _SplashScreenState extends State<SplashScreen>
       }
 
       final response = await dio.get(
-        'https://www.Globee-Trading.com/app2026/get_update_info.php?platform=$platform&k=${DateTime.now().millisecondsSinceEpoch}',
+        'https://www.Globee-Trading.com/app2026/get_update_info.php?platform=$platform&store_id=2&k=${DateTime.now().millisecondsSinceEpoch}',
       );
 
       if (response.statusCode == 200) {
@@ -259,7 +259,7 @@ class _SplashScreenState extends State<SplashScreen>
                       FadeTransition(
                         opacity: _sloganAnimation,
                         child: Text(
-                          'Swipe, love it, and MartIt',
+                          'The Future of Food Starts Here',
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
                                 color: AppColors.white.withValues(alpha: 0.70),

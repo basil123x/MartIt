@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:MartIt/features/splash/splash_screen.dart';
+import 'package:GlobalFarm/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -227,7 +227,7 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
       }
 
       final response = await Dio().post(
-        'https://www.Globee-Trading.com/app2026/sql.php',
+        'https://www.Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "create_email_account",
           "name": _nameController.text.trim(),

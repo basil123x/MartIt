@@ -4,11 +4,10 @@ import 'package:onesignal_flutter/onesignal_flutter.dart';
 
 class GoogleAuthService {
   final Dio _dio = Dio();
-
   Future<void> initialize() async {
     await GoogleSignIn.instance.initialize(
-      serverClientId: '35600706278-g91lt4njajab7v64mgi2s5brn8vr22kb.apps.googleusercontent.com',
-      clientId: "35600706278-3954gt7h529125sn0j0qi284cimt3soq.apps.googleusercontent.com"
+      serverClientId: '1020622166472-d29e8itqb8tkvvtrmbeff2gag9evkh0r.apps.googleusercontent.com',
+      clientId: "1020622166472-tg9h352q8f7ktht9miamv7jc398qs2eb.apps.googleusercontent.com"
     );
   }
 
@@ -23,7 +22,7 @@ class GoogleAuthService {
 
     final response = await _dio.post(
       'https://www.globee-trading.com/auth/google.php',
-      data: {'id_token': idToken, 'player_id': userId},
+      data: {'id_token': idToken, 'player_id': userId, 'store_id': '2'},
       options: Options(
         validateStatus: (status) => true, // متوقفش على أي status code
       ),

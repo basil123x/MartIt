@@ -1,5 +1,5 @@
 import 'dart:math';
-import 'package:MartIt/features/home/tiktok_feed_screen.dart';
+import 'package:GlobalFarm/features/home/tiktok_feed_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';

@@ -1,5 +1,5 @@
-import 'package:MartIt/features/auth/login.dart';
-import 'package:MartIt/features/splash/splash_screen.dart';
+import 'package:GlobalFarm/features/auth/login.dart';
+import 'package:GlobalFarm/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -217,6 +217,7 @@ class _OTPScreenState extends State<OTPScreen> {
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
+          title: Text("OTP is ${widget.generatedOTP}"),
           leading: IconButton(
             icon: const Icon(Iconsax.arrow_left, color: AppColors.textPrimary),
             onPressed: () => Navigator.of(context).pop(),

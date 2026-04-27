@@ -57,14 +57,15 @@ try {
     
     // SQL query to get comments for specific item with user details
     $sql = "SELECT
+        Comments.id,
         Users.uid,
         Users.Fullname,
         Comments.`comment`,
         Comments.created_at
     FROM
-        Users
-    LEFT JOIN Comments
-        ON Users.uid = Comments.user_id
+        Comments
+    LEFT JOIN Users
+        ON Users.id = Comments.user_id
     WHERE Comments.item_id = $itemId
     ORDER BY Comments.created_at DESC";
 
@@ -75,9 +76,9 @@ try {
         
         while($row = $result->fetch_assoc()) {
             $comment = array(
-                'id' => $row['uid'],
+                'id' => $row['id'],
                 'userName' => $row['Fullname'] ?: 'مستخدم',
-                'userAvatar' => "https://globee.b-cdn.net/users/" . $row['uid'] . "/avatar.jpg",
+                'userAvatar' => "https://globee.b-cdn.net/users/" . ($row['uid'] ?: 'default') . "/avatar.jpg",
                 'comment' => $row['comment'],
                 'createdAt' => $row['created_at']
             );
