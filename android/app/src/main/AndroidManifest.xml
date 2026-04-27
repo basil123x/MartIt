@@ -25,7 +25,7 @@
     </queries>
     
     <application
-        android:label="GlobalFarm"
+        android:label="GES"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="true"

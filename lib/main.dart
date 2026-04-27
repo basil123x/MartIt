@@ -69,17 +69,17 @@ void main() async {
     event.notification.display();
   });
 
-  runApp(const GlobalFarmApp());
+  runApp(const GESApp());
 }
 
-class GlobalFarmApp extends StatefulWidget {
-  const GlobalFarmApp({super.key});
+class GESApp extends StatefulWidget {
+  const GESApp({super.key});
 
   @override
-  State<GlobalFarmApp> createState() => _GlobalFarmAppState();
+  State<GESApp> createState() => _GESAppState();
 }
 
-class _GlobalFarmAppState extends State<GlobalFarmApp> {
+class _GESAppState extends State<GESApp> {
   final updater = ShorebirdUpdater();
   Timer? _timer;
   static const _lastPatchKey = "last_applied_patch";

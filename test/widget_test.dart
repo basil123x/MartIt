@@ -12,7 +12,7 @@ import 'package:GlobalFarm/main.dart';
 void main() {
   testWidgets('App starts with splash screen', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const GlobalFarmApp());
+    await tester.pumpWidget(const GESApp());
 
     // Verify that splash screen is displayed
     expect(find.text('Globee'), findsOneWidget);
