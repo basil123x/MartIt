@@ -6,8 +6,8 @@ class GoogleAuthService {
   final Dio _dio = Dio();
   Future<void> initialize() async {
     await GoogleSignIn.instance.initialize(
-      serverClientId: '1020622166472-d29e8itqb8tkvvtrmbeff2gag9evkh0r.apps.googleusercontent.com',
-      clientId: "1020622166472-tg9h352q8f7ktht9miamv7jc398qs2eb.apps.googleusercontent.com"
+      serverClientId: '707992130855-cgmrkrhuk4lqmlmhdih90ar83te6rqlj.apps.googleusercontent.com',
+      clientId: "707992130855-0vhjanj38jr6hpfnm0nncge94fna80sf.apps.googleusercontent.com"
     );
   }
 
@@ -22,7 +22,7 @@ class GoogleAuthService {
 
     final response = await _dio.post(
       'https://www.globee-trading.com/auth/google.php',
-      data: {'id_token': idToken, 'player_id': userId, 'store_id': '2'},
+      data: {'id_token': idToken, 'player_id': userId, 'store_id': '3'},
       options: Options(
         validateStatus: (status) => true, // متوقفش على أي status code
       ),

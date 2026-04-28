@@ -6,6 +6,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/bunny_upload_service.dart';
+import '../auth/login.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final String currentName;
@@ -366,6 +367,112 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  void _showDeleteAccountDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: const Row(
+          children: [
+            Icon(Iconsax.warning_2, color: Colors.red, size: 28),
+            SizedBox(width: 12),
+            Text(
+              'حذف الحساب',
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'هل أنت متأكد من حذف حسابك نهائياً؟\n\nلن تتمكن من استعادة حسابك بعد الحذف.',
+          style: TextStyle(fontSize: 16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'إلغاء',
+              style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _deleteAccount();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text(
+              'حذف الحساب',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteAccount() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final currentUid = await AuthService.getCurrentUID();
+      if (currentUid == null) {
+        throw Exception('المستخدم غير مسجل');
+      }
+
+      final result = await ApiService.deleteAccount(uid: currentUid);
+
+      if (result['success'] == true) {
+        // Logout user
+        await AuthService.logout();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('تم حذف الحساب بنجاح'),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          // Navigate to login screen and remove all previous routes
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+            (route) => false,
+          );
+        }
+      } else {
+        throw Exception(result['error'] ?? 'فشل في حذف الحساب');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     print(widget.currentPhone);
@@ -554,6 +661,31 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Delete Account Button
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: _isLoading ? null : _showDeleteAccountDialog,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: const BorderSide(color: Colors.red, width: 1.5),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(25),
+                    ),
+                  ),
+                  child: const Text(
+                    'حذف الحساب نهائياً',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
             ],

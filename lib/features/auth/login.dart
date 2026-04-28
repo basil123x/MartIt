@@ -86,11 +86,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 16),
 
+                // Phone Login Button
                 _buildLoginOptionButton(
                   context: context,
-                  imageTxt: "assets/images/social/google.png",
-                  isimg: true,
-                  title: 'سجل بواسطة جوجل',
+                  icon: Iconsax.mobile,
+                  isimg: false,
+                  title: 'التسجيل برقم الهاتف',
                   gradient: LinearGradient(
                     colors: [
                       AppColors.primary,
@@ -98,41 +99,16 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                   onTap: () async {
-                    
-                    final result = await googleAuthService.signInWithGoogle();
-                      if (result != null && result['success'] == true) {
-                        await FlutterSecureStorage().write(
-                          key: "user_uid",
-                          value: result['user']['uid'].toString(),
-                        );
-                        await FlutterSecureStorage().write(
-                          key: "user_oid",
-                          value: result['user']['oid'].toString(),
-                        );
-                        FlutterSecureStorage().write(
-                          key: 'social_name',
-                          value: result['user']['name'].toString(),
-                        );
-                        FlutterSecureStorage().write(
-                          key: 'social_email',
-                          value: result['user']['email'].toString(),
-                        );
-                        FlutterSecureStorage().write(
-                          key: 'social_avatar',
-                          value: result['user']['avatar'].toString(),
-                        );
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(
-                            builder: (context) => SplashScreen(),
-                          ),
-                        );
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('فشل تسجيل الدخول')),
-                        );
-                      }
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const PhoneLoginScreen(),
+                      ),
+                    );
                   },
                 ),
+
+                
 
                 const SizedBox(height: 16),
 
@@ -201,12 +177,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 30),
 
-                // Phone Login Button
                 _buildLoginOptionButton(
                   context: context,
-                  icon: Iconsax.mobile,
-                  isimg: false,
-                  title: 'التسجيل برقم الهاتف',
+                  imageTxt: "assets/images/social/google.png",
+                  isimg: true,
+                  title: 'سجل بواسطة جوجل',
                   gradient: LinearGradient(
                     colors: [
                       AppColors.primary,
@@ -214,12 +189,39 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                   onTap: () async {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const PhoneLoginScreen(),
-                      ),
-                    );
+                    
+                    final result = await googleAuthService.signInWithGoogle();
+                      if (result != null && result['success'] == true) {
+                        await FlutterSecureStorage().write(
+                          key: "user_uid",
+                          value: result['user']['uid'].toString(),
+                        );
+                        await FlutterSecureStorage().write(
+                          key: "user_oid",
+                          value: result['user']['oid'].toString(),
+                        );
+                        FlutterSecureStorage().write(
+                          key: 'social_name',
+                          value: result['user']['name'].toString(),
+                        );
+                        FlutterSecureStorage().write(
+                          key: 'social_email',
+                          value: result['user']['email'].toString(),
+                        );
+                        FlutterSecureStorage().write(
+                          key: 'social_avatar',
+                          value: result['user']['avatar'].toString(),
+                        );
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (context) => SplashScreen(),
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('فشل تسجيل الدخول')),
+                        );
+                      }
                   },
                 ),
 

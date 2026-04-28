@@ -112,6 +112,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
   Future<void> _checkLoginStatus() async {
     final _currentUserIdx = await AuthService.getCurrentUserId();
+    
 
     final isLoggedIn = await AuthService.isLoggedIn();
     var result = await Dio().get(
@@ -121,7 +122,10 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
     setState(() {
       _isLoggedIn = isLoggedIn;
       _currentUserId = _currentUserIdx;
-      _currentUserRole = result.data['data']['role'];
+      if (_currentUserId != null) {
+        _currentUserRole = result.data['data']['role'];
+      }
+      
     });
     
     
@@ -188,6 +192,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           : null;
 
       String country =  await getUserCountry();
+      print(country);
 
       if (_isLoggedIn && currentUserId != null) {
         // ✅ لو مسجل دخول، نستخدم fetchItemsWithLikes
@@ -251,7 +256,6 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    
     return WillPopScope(
       onWillPop: () async {
         // تعرض Dialog لتأكيد الخروج
@@ -2437,7 +2441,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
   📝 الوصف: ${item.description}
 
-  تسوق الأن على تطبيق GlobalFarm
+  تسوق الأن على تطبيق GES
 
   ''';
       final user = await FlutterSecureStorage().read(key: 'user_name');

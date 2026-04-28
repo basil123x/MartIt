@@ -1,4 +1,5 @@
 import 'package:GES/core/services/onesignal_service.dart';
+import 'package:GES/features/orders/invoice_webview.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -61,17 +62,16 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
 
   Future<void> _openInvoice(String orderId) async {
     final url =
-        'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&k=${DateTime.now().millisecondsSinceEpoch}';
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('فشل في فتح الفاتورة'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
+        'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&store_id=3&k=${DateTime.now().millisecondsSinceEpoch}';
+
+    if (!context.mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InvoiceWebView(url: url),
+      ),
+    );
   }
 
   Future<void> _showStatusBottomSheet(dynamic order) async {

@@ -37,11 +37,11 @@ class _OTPScreenState extends State<OTPScreen> {
 
   Future sendOTP() async {
     await Dio().post(
-      "https://graph.facebook.com/v22.0/1020621547810315/messages",
+      "https://graph.facebook.com/v22.0/843263612211696/messages",
       options: Options(
         headers: {
           "Authorization":
-              "Bearer EAAdhZCjMZCRZBABQZBhtWgeoQcYCOzXj32zhFSLi7aELSVCWDp32TaP8pd0NNbiZChZB95UwEvQw89izAsQuQEXugIMyiqZAQT8ZAxuq0CZAk8T323L6xJdxcLyG5MybKsaO4wtR9iCZBYMAHQdUg3ZAo9ApDHCld4Y6wri7JG39JBsagQa0aqqQAHWM8BfnEJsMgZDZD",
+              "Bearer EAARdmJyGWR8BQtVgZAzMr6QqyfhUQ4VtERvSN35pZAnGCv0e2Pv8cKyPh0shTafB7mU3LTtAZC6ZAWkq7btIWCrSisIrFdyMeVguc5A7XbFBIB5ZA7i7LtoZCyzZCPaiTVJmkzDZCYamt9W2ZBxwtE9DZBYIONsyG97wrTASVLhrqyZCk4gacvL7nfBT0mHlnOpU5NYjQZDZD",
           "Content-Type": "application/json",
         },
       ),
@@ -217,7 +217,6 @@ class _OTPScreenState extends State<OTPScreen> {
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
-          title: Text("OTP is ${widget.generatedOTP}"),
           leading: IconButton(
             icon: const Icon(Iconsax.arrow_left, color: AppColors.textPrimary),
             onPressed: () => Navigator.of(context).pop(),

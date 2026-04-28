@@ -256,9 +256,9 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                 String transPaymentMode = "";
                  // TODO: قبل الـ production - انقل الـ secret key للسيرفر
                 var result = await Dio().post("https://api.sadadqatar.com/api-v5/userbusinesses/getsdktoken", data: {
-                  "sadadId": "1672510",
-                  "secretKey": "SoXaZoomMjjo9i1i",
-                  "domain": "globalfarmnursery.com",
+                  "sadadId": "9818636",
+                  "secretKey": "CfGxIE+7LZlWLVJg",
+                  "domain": "www.ges.qa",
                   "isTest": true
                 });
                 
@@ -269,14 +269,14 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                             productDetail: [],
                             customerName: name,
                             amount: widget.totalAmount,
-                            email: "info@gfnursery.com",
+                            email: "info@ges.qa",
                             mobile: mobile,
                             token: result.data['accessToken'],
                             packageMode: PackageMode.debug,
                             isWalletEnabled: true,
                             paymentTypes: [PaymentType.creditCard, PaymentType.debitCard, PaymentType.sadadPay],
-                            image: Image.asset("assets/images/Logo.png"),
-                            titleText: "GlobalFarm",
+                            image: Image.asset("assets/images/Logo-Sadad.png"),
+                            titleText: "Golden Eagle Stores",
                             paymentButtonColor: AppColors.accent,
                             paymentButtonTextColor: Colors.white,
                             themeColor: AppColors.primary,
@@ -300,6 +300,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                     "status": transStatus,
                     "amount": transAmount,
                     "pay_mode": transPaymentMode,
+                    "store_id": "3"
                   }));
                   Navigator.push(
                     context,

@@ -41,9 +41,9 @@ class _InvoiceWebViewState extends State<InvoiceWebView> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('الفاتورة'),
-        backgroundColor: const Color(0xFF5A7A2E),
+        backgroundColor: const Color(0xFF1A6BB5),
         foregroundColor: Colors.white,
-        bottom: PreferredSize(preferredSize: Size(double.maxFinite, 2), child: Divider(color: Color(0xFF2C4A1E),)),
+        bottom: PreferredSize(preferredSize: Size(double.maxFinite, 2), child: Divider(color: Color(0xFF0D4A8A),)),
         actions: [
           // زر ريفريش
           IconButton(

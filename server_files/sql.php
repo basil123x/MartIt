@@ -1634,6 +1634,31 @@ try {
             break;
 
         // =====================================
+        // حذف الحساب (Delete Account - Soft Delete)
+        // =====================================
+        case 'delete_account':
+            $uid = isset($_POST['uid']) ? $conn->real_escape_string($_POST['uid']) : '';
+            
+            if (empty($uid)) {
+                $response = ['success' => false, 'error' => 'معرف المستخدم مطلوب'];
+                break;
+            }
+            
+            // Soft delete: Update status to 4 (deleted)
+            $sql = "UPDATE Users SET status = 4 WHERE uid = '$uid'";
+            
+            if ($conn->query($sql) === TRUE) {
+                if ($conn->affected_rows > 0) {
+                    $response = ['success' => true, 'message' => 'تم حذف الحساب بنجاح'];
+                } else {
+                    $response = ['success' => false, 'error' => 'المستخدم غير موجود'];
+                }
+            } else {
+                $response = ['success' => false, 'error' => 'فشل في حذف الحساب: ' . $conn->error];
+            }
+            break;
+
+        // =====================================
         // تفريغ السلة وتحديث OID
         // =====================================
         case 'clear_cart_update_oid':
@@ -2473,9 +2498,10 @@ try {
             $status = isset($_POST['status']) ? $conn->real_escape_string($_POST['status']) : '';
             $amount = isset($_POST['amount']) ? $conn->real_escape_string($_POST['amount']) : '';
             $pay_mode = isset($_POST['pay_mode']) ? $conn->real_escape_string($_POST['pay_mode']) : '';
+            $store_id = isset($_POST['store_id']) ? $conn->real_escape_string($_POST['store_id']) : '';
             
             try {
-                $sql = "INSERT INTO Transactions VALUES(NULL, '$oid', '$name', '$mobile','$trans_id', '$status', '$amount', '$pay_mode')";
+                $sql = "INSERT INTO Transactions VALUES(NULL, '$oid', '$name', '$mobile','$trans_id', '$status', '$amount', '$pay_mode', '$store_id')";
                 
                 if ($conn->query($sql)) {
                     $response = [

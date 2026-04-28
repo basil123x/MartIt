@@ -45,7 +45,7 @@ class ApiService {
         'limit': '10',
         'itemSrchId': initialItemId ?? "",
         'country': country,
-        'store_id': '2'
+        'store_id': '3'
       };
 
       // ✅ لو في user_id، نضيفه للـ body
@@ -89,7 +89,7 @@ class ApiService {
   static Future<Map<String, dynamic>> searchItems(String query) async {
     try {
       final response = await Dio().get(
-        '$baseUrl/search.php?q=$query&store_id=2',
+        '$baseUrl/search.php?q=$query&store_id=3',
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
 
@@ -389,7 +389,7 @@ class ApiService {
         "offset": offset.toString(),
         'itemSrchId': initialItemId ?? "",
         'country': country,
-        'store_id': '2'
+        'store_id': '3'
       };
 
       // ✅ لو في category، نضيفه للـ request
@@ -440,7 +440,7 @@ class ApiService {
     try {
       final response = await Dio().post(
         '$baseUrl/sql.php',
-        data: FormData.fromMap({"action": "get_from_cart", "user_id": userId, 'store_id': '2'}),
+        data: FormData.fromMap({"action": "get_from_cart", "user_id": userId, 'store_id': '3'}),
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
 
@@ -628,6 +628,30 @@ class ApiService {
       );
     } catch (e) {
       throw Exception('Avatar upload error: $e');
+    }
+  }
+
+  // Delete account (soft delete - sets status to 4)
+  static Future<Map<String, dynamic>> deleteAccount({
+    required String uid,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php',
+        data: FormData.fromMap({
+          "action": "delete_account",
+          "uid": uid,
+        }),
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception('Failed to delete account: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Delete account error: $e');
     }
   }
 

@@ -259,7 +259,7 @@ class _SplashScreenState extends State<SplashScreen>
                       FadeTransition(
                         opacity: _sloganAnimation,
                         child: Text(
-                          'The Future of Food Starts Here',
+                          'Creating Beautiful Memories, Together — Anywhere.',
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
                                 color: AppColors.white.withValues(alpha: 0.70),

@@ -118,16 +118,6 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
 
   Widget _buildOrderItem(CartItemModel cartItem) {
     final itemTotal = double.parse(cartItem.item.price) * cartItem.cartQuantity;
-    var storeImg = "";
-    switch (cartItem.item.store_id) {
-      case "2":
-        storeImg = "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/items/${cartItem.item.idx}.png";
-        break;
-      case "3":
-        storeImg = "https://ges.qa/gesqatar/sys2025/attx/itmx/${cartItem.item.idx}.png";
-        break;
-      default:
-    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -163,7 +153,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
               borderRadius: BorderRadius.circular(11),
               child: cartItem.item.idx.isNotEmpty
                   ? Image.network(
-                      storeImg,
+                      "https://ges.qa/gesqatar/sys2025/attx/itmx/${cartItem.item.idx}.png",
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
