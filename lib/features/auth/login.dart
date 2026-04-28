@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:GlobalFarm/core/services/google_auth_service.dart';
-import 'package:GlobalFarm/features/home/tiktok_feed_screen.dart';
-import 'package:GlobalFarm/features/splash/splash_screen.dart';
+import 'package:GES/core/services/google_auth_service.dart';
+import 'package:GES/features/home/tiktok_feed_screen.dart';
+import 'package:GES/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';

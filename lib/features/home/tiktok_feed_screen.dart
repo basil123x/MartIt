@@ -1,10 +1,10 @@
 import 'dart:io';
 
-import 'package:GlobalFarm/core/services/onesignal_service.dart';
-import 'package:GlobalFarm/core/services/onesignal_service_web.dart';
-import 'package:GlobalFarm/features/add_product/add_product_screen.dart';
-import 'package:GlobalFarm/features/auth/login.dart';
-import 'package:GlobalFarm/shared/providers/app_provider.dart';
+import 'package:GES/core/services/onesignal_service.dart';
+import 'package:GES/core/services/onesignal_service_web.dart';
+import 'package:GES/features/add_product/add_product_screen.dart';
+import 'package:GES/features/auth/login.dart';
+import 'package:GES/shared/providers/app_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

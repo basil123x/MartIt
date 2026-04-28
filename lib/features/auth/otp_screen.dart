@@ -1,5 +1,5 @@
-import 'package:GlobalFarm/features/auth/login.dart';
-import 'package:GlobalFarm/features/splash/splash_screen.dart';
+import 'package:GES/features/auth/login.dart';
+import 'package:GES/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

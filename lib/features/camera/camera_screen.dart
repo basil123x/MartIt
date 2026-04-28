@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'dart:async';
-import 'package:GlobalFarm/shared/providers/app_provider.dart';
+import 'package:GES/shared/providers/app_provider.dart';
 import 'package:camerawesome/pigeon.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';

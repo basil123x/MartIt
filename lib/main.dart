@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:GlobalFarm/core/services/google_auth_service.dart';
-import 'package:GlobalFarm/features/chat/chat_screen.dart';
-import 'package:GlobalFarm/shared/providers/app_provider.dart';
+import 'package:GES/core/services/google_auth_service.dart';
+import 'package:GES/features/chat/chat_screen.dart';
+import 'package:GES/shared/providers/app_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -27,9 +27,9 @@ void main() async {
   ]);
   String appId = "";
   if (Platform.isAndroid) {
-    appId = "ddec3249-5f16-4870-9c32-682a704559b6";
+    appId = "04ab934e-0c2a-42c8-93d8-d603ae937277";
   } else {
-    appId = "5f910d9c-d0cd-4171-b2b2-94f68636d7de";
+    appId = "04ab934e-0c2a-42c8-93d8-d603ae937277";
   }
   OneSignal.initialize(appId);
   await OneSignal.Notifications.requestPermission(true);

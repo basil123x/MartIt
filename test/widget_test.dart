@@ -7,7 +7,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:GlobalFarm/main.dart';
+import 'package:GES/main.dart';
 
 void main() {
   testWidgets('App starts with splash screen', (WidgetTester tester) async {

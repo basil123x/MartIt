@@ -1,5 +1,5 @@
-name: GlobalFarm
-description: "Global Farm - The Agriculture Short Videos Shopping"
+name: GES
+description: "Golden Eagle Stores - Enabling the family to create beautiful memories, whether at home or on trips."
 publish_to: 'none'
 version: 1.0.0+3
 environment:

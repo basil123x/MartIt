@@ -1,6 +1,6 @@
 import 'dart:io';
-import 'package:GlobalFarm/core/services/onesignal_service.dart';
-import 'package:GlobalFarm/core/services/onesignal_service_web.dart';
+import 'package:GES/core/services/onesignal_service.dart';
+import 'package:GES/core/services/onesignal_service_web.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';

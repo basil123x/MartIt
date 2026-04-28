@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:GlobalFarm/core/models/item_model.dart';
+import 'package:GES/core/models/item_model.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
