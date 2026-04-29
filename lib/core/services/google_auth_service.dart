@@ -25,7 +25,7 @@ class GoogleAuthService {
     if (idToken == null) return null;
 
     final response = await _dio.post(
-      'https://www.globee-trading.com/auth/google.php',
+      'https://www.globee-trading.com/auth/google.php?k=${DateTime.now().millisecondsSinceEpoch}',
       data: {'id_token': idToken, 'player_id': userId},
       options: Options(
         validateStatus: (status) => true, // متوقفش على أي status code

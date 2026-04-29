@@ -89,7 +89,7 @@ class ApiService {
     try {
       final response = await Dio().get(
         '$baseUrl/search.php?q=$query',
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -107,7 +107,7 @@ class ApiService {
     try {
       final response = await Dio().get(
         '$baseUrl/profile.php?user_id=$userId',
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -131,7 +131,7 @@ class ApiService {
           "offset": offset,
           "sort": sort,
         }),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -195,7 +195,7 @@ class ApiService {
       final response = await Dio().post(
         '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({"action": "get_stats", "item_id": itemId}),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -223,7 +223,7 @@ class ApiService {
           "user_id": userId,
           "reason": reason,
         }),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -249,7 +249,7 @@ class ApiService {
           "item_id": itemId,
           "user_id": userId,
         }),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -357,7 +357,7 @@ class ApiService {
           "item_id": itemId,
           "user_id": userId,
         }),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -399,7 +399,7 @@ class ApiService {
       final response = await Dio().post(
         '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap(requestData),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -438,7 +438,7 @@ class ApiService {
       final response = await Dio().post(
         '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({"action": "get_from_cart", "user_id": userId}),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -464,7 +464,7 @@ class ApiService {
           "cart_id": cartId,
           "quantity": quantity.toString(),
         }),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -508,7 +508,7 @@ class ApiService {
           "uid": uid,
           "oid": oid,
         }),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -534,7 +534,7 @@ class ApiService {
           "action": "get_shipping_addresses",
           "uid": uid,
         }),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -560,7 +560,7 @@ class ApiService {
           "action": "get_user_sellers",
           "user_id": userId,
         }),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -595,7 +595,7 @@ class ApiService {
           "name": name,
           "phone": phone,
         }),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -641,7 +641,7 @@ class ApiService {
           "user_id": userId,
           "new_oid": newOid,
         }),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -676,7 +676,7 @@ class ApiService {
       final response = await Dio().post(
         '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap(data),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -725,7 +725,7 @@ class ApiService {
       final response = await Dio().post(
         '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap(data),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -753,7 +753,7 @@ class ApiService {
           "sender_name": senderName,
           "message": message,
         }),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -777,7 +777,7 @@ class ApiService {
           "action": "update_online_status",
           "user_id": userId,
         }),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -801,7 +801,7 @@ class ApiService {
           "action": "get_user_status",
           "user_id": userId,
         }),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -825,7 +825,7 @@ class ApiService {
           "action": "get_chat_conversations",
           "user_id": userId,
         }),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -859,7 +859,7 @@ class ApiService {
           "items": items,
           "total_amount": totalAmount,
         }),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -882,7 +882,7 @@ class ApiService {
       final response = await Dio().post(
         '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({"action": "get_my_orders", "cust_id": custId}),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       print('📦 API getMyOrders - Response status: ${response.statusCode}');
@@ -907,7 +907,7 @@ class ApiService {
       final response = await Dio().post(
         '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({"action": "get_customer_orders", "uid": uid}),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -935,7 +935,7 @@ class ApiService {
           "order_id": orderId,
           "status": status,
         }),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
@@ -965,7 +965,7 @@ class ApiService {
       final response = await Dio().post(
         '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap(data),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        
       );
 
       if (response.statusCode == 200) {
