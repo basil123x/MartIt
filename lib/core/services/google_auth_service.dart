@@ -8,9 +8,13 @@ class GoogleAuthService {
   Future<void> initialize() async {
     await GoogleSignIn.instance.initialize(
       serverClientId: '35600706278-g91lt4njajab7v64mgi2s5brn8vr22kb.apps.googleusercontent.com',
-      clientId: "35600706278-3954gt7h529125sn0j0qi284cimt3soq.apps.googleusercontent.com"
+      clientId: "35600706278-dmkqlb96t29dmcq4dbnntn288eidpmcc.apps.googleusercontent.com"
     );
   }
+  // Android Release Key
+  // 35600706278-dmkqlb96t29dmcq4dbnntn288eidpmcc.apps.googleusercontent.com
+  // Android Debugging
+  // 35600706278-3954gt7h529125sn0j0qi284cimt3soq.apps.googleusercontent.com
 
   Future<Map<String, dynamic>?> signInWithGoogle() async {
     String? userId = OneSignal.User.pushSubscription.id;

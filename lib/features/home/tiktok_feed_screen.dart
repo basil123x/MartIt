@@ -17,6 +17,7 @@ import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:sim_country_code_plus/sim_country_code_plus.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/services/auth_service.dart';
@@ -180,9 +181,10 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           ? await AuthService.getCurrentUserId()
           : null;
 
-      String country =  await getUserCountry();
-
+      String? simCountry = await SimCountryCodePlus.simCountryCode;
+      print(simCountry);
       if (_isLoggedIn && currentUserId != null) {
+        
         // ✅ لو مسجل دخول، نستخدم fetchItemsWithLikes
         items = await ApiService.fetchItemsWithLikes(
           userId: currentUserId,
@@ -190,7 +192,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           offset: isRefresh ? 0 : _items.length,
           initialItemId: initiItem == "" ? initiItem : widget.initialItemId,
           category: category,
-          country: country,
+          country: simCountry
         );
       } else {
         // ✅ لو مش مسجل، نستخدم fetchItems عادي (بدون user_id)
@@ -199,7 +201,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           userId: uid,
           initialItemId: initiItem == "" ? initiItem : widget.initialItemId,
           category: category,
-          country: country,
+          country: simCountry
         );
       }
 
@@ -276,36 +278,6 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
             ? const Center(
                 child: CircularProgressIndicator(color: AppColors.primary),
               )
-            : _items.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Iconsax.box, size: 64, color: Colors.white),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'لا توجد منتجات',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => _loadItems(
-                        isRefresh: true,
-                        category: _selectedCategory,
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                      ),
-                      child: const Text('إعادة المحاولة'),
-                    ),
-                  ],
-                ),
-              )
             : Stack(
                 children: [
                   // Video Feed
@@ -352,7 +324,6 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
                   // Top Bar
                   _buildTopBar(),
-
                   // Categories Bar
                   _buildCategoriesBar(),
 
@@ -361,6 +332,38 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
                   // Bottom Info
                   _buildBottomInfo(),
+                  if (_items.isEmpty)
+                  Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Iconsax.box, size: 64, color: Colors.white),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'لا توجد منتجات',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () => _loadItems(
+                            isRefresh: true,
+                            category: _selectedCategory,
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('إعادة المحاولة'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  
                 ],
               ),
       ),

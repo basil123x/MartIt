@@ -19,6 +19,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:sim_country_code_plus/sim_country_code_plus.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/widgets/video_player_widget.dart';
@@ -158,10 +159,10 @@ class _AddProductScreenState extends State<AddProductScreen>
   }
 
   Future insertOneRecord() async {
-    String country = await getUserCountry();
+    String? simCountry = await SimCountryCodePlus.simCountryCode;
     var request = await Dio().post(
       'https://Globee-Trading.com/app2026/sql.php',
-      data: FormData.fromMap({'action': 'insertNewOne', 'country': country, 'store_id': '1'}),
+      data: FormData.fromMap({'action': 'insertNewOne', 'country': simCountry, 'store_id': '1'}),
     );
     setState(() {
       _currentItemId = request.data['item_id'].toString();
