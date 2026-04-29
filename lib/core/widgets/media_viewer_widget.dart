@@ -103,7 +103,7 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
       case "2":
         compName = "GlobalFarm";
         imgUrl = itmIdx != ''
-            ? "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/items/$itmIdx.png"
+            ? "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/items/$itmIdx.jpg"
             : "https://globee.b-cdn.net/$compName/$itmId/$ext";
         break;
       case "3":

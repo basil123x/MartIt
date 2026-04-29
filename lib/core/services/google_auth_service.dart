@@ -8,7 +8,6 @@ class GoogleAuthService {
   Future<void> initialize() async {
     await GoogleSignIn.instance.initialize(
       serverClientId: '35600706278-g91lt4njajab7v64mgi2s5brn8vr22kb.apps.googleusercontent.com',
-      clientId: "35600706278-dmkqlb96t29dmcq4dbnntn288eidpmcc.apps.googleusercontent.com"
     );
   }
   // Android Release Key

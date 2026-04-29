@@ -148,7 +148,7 @@ class ApiService {
   static Future<Map<String, dynamic>> getComments(int itemId) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/comments.php?item_id=$itemId'),
+        Uri.parse('$baseUrl/comments.php?item_id=$itemId&k=${DateTime.now().millisecondsSinceEpoch}'),
         headers: {'Content-Type': 'application/json'},
       );
 

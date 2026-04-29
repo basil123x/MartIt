@@ -196,14 +196,15 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _buildSearchResultItem(dynamic item) {
     String thumbnail = "";
+    print(item);
     switch (item['store_id']) {
       case '1':
         thumbnail =
-            "https://globee.b-cdn.net/Globee/${item['id']}/${item['fmedia']}";
+            "https://globee.b-cdn.net/${item['id']}/${item['fmedia']}";
         break;
       case '2':
         thumbnail =
-            "https://www.gfnursery.net/s2024/assets/items/${item['idx']}.png";
+            "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/items/${item['idx']}.jpg";
         break;
       case '3':
         thumbnail =
