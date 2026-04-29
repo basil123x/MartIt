@@ -36,7 +36,7 @@ class ApiService {
     String? country,
   }) async {
     try {
-      final url = Uri.parse('$baseUrl/sql.php');
+      final url = Uri.parse('$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}');
 
       // ✅ نبعت user_id لو موجود
       final body = {
@@ -169,9 +169,8 @@ class ApiService {
     required String comment,
   }) async {
     try {
-      print(DateTime.now().toString());
       final response = await http.post(
-        Uri.parse('$baseUrl/comments.php?item_id=$itemId'),
+        Uri.parse('$baseUrl/comments.php?item_id=$itemId&k=${DateTime.now().millisecondsSinceEpoch}'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'comment': comment,
@@ -194,7 +193,7 @@ class ApiService {
   static Future<Map<String, dynamic>> getItemStats(String itemId) async {
     try {
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({"action": "get_stats", "item_id": itemId}),
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
@@ -217,7 +216,7 @@ class ApiService {
   }) async {
     try {
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "add_report",
           "item_id": itemId,
@@ -244,7 +243,7 @@ class ApiService {
   }) async {
     try {
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "toggle_like",
           "item_id": itemId,
@@ -275,7 +274,7 @@ class ApiService {
       String? oid = await FlutterSecureStorage().read(key: "user_oid");
       final response = await Dio()
           .post(
-            '$baseUrl/sql.php',
+            '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
             data: FormData.fromMap({
               "action": "add_to_cart",
               "item_id": itemId,
@@ -315,7 +314,7 @@ class ApiService {
     try {
       final response = await Dio()
           .post(
-            '$baseUrl/sql.php',
+            '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
             data: FormData.fromMap({
               "action": "remove_from_cart",
               "item_id": itemId,
@@ -352,7 +351,7 @@ class ApiService {
   }) async {
     try {
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "get_cart_quantity",
           "item_id": itemId,
@@ -398,7 +397,7 @@ class ApiService {
       print('📦 fetchItemsWithLikes Request: $requestData');
 
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap(requestData),
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
@@ -437,7 +436,7 @@ class ApiService {
   }) async {
     try {
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({"action": "get_from_cart", "user_id": userId}),
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
@@ -459,7 +458,7 @@ class ApiService {
   }) async {
     try {
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "update_cart_quantity",
           "cart_id": cartId,
@@ -495,7 +494,7 @@ class ApiService {
   }) async {
     try {
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "add_shipping_address",
           "fullname": fullname,
@@ -530,7 +529,7 @@ class ApiService {
   }) async {
     try {
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "get_shipping_addresses",
           "uid": uid,
@@ -556,7 +555,7 @@ class ApiService {
   }) async {
     try {
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "get_user_sellers",
           "user_id": userId,
@@ -589,7 +588,7 @@ class ApiService {
 
       // Update user info in database
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "update_user_profile",
           "uid": uid,
@@ -636,7 +635,7 @@ class ApiService {
   }) async {
     try {
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "clear_cart_update_oid",
           "user_id": userId,
@@ -675,7 +674,7 @@ class ApiService {
       }
 
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap(data),
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
@@ -724,7 +723,7 @@ class ApiService {
       }
 
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap(data),
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
@@ -747,7 +746,7 @@ class ApiService {
   }) async {
     try {
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "send_chat_notification",
           "receiver_id": receiverId,
@@ -773,7 +772,7 @@ class ApiService {
   }) async {
     try {
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "update_online_status",
           "user_id": userId,
@@ -797,7 +796,7 @@ class ApiService {
   }) async {
     try {
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "get_user_status",
           "user_id": userId,
@@ -821,7 +820,7 @@ class ApiService {
   }) async {
     try {
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "get_chat_conversations",
           "user_id": userId,
@@ -850,7 +849,7 @@ class ApiService {
   }) async {
     try {
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "create_order",
           "uid": uid,
@@ -881,7 +880,7 @@ class ApiService {
       print('🔍 API getMyOrders - Sending request with cust_id: $custId');
       
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({"action": "get_my_orders", "cust_id": custId}),
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
@@ -906,7 +905,7 @@ class ApiService {
   }) async {
     try {
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({"action": "get_customer_orders", "uid": uid}),
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
@@ -930,7 +929,7 @@ class ApiService {
   }) async {
     try {
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "update_order_status",
           "order_id": orderId,
@@ -964,7 +963,7 @@ class ApiService {
       }
 
       final response = await Dio().post(
-        '$baseUrl/sql.php',
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap(data),
         options: Options(headers: {'Content-Type': 'application/json'}),
       );

@@ -78,7 +78,7 @@ class AuthService {
     final oid = 1000 + Random().nextInt(9000);
     String? userId = OneSignal.User.pushSubscription.id;
     await Dio().post(
-      '$baseUrl/sql.php',
+      '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
       data: FormData.fromMap({
         "action": "create_account",
         "uid": uid,
@@ -117,7 +117,7 @@ class AuthService {
 
   static Future getUserStatus(uid) async {
     var request = await Dio().post(
-      '$baseUrl/sql.php',
+      '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
       data: FormData.fromMap({"action": "user_status", "uid": uid}),
     );
     if (request.statusCode == 200) {
@@ -128,7 +128,7 @@ class AuthService {
   static Future loginWithPhone(String phone) async {
     String? userId = OneSignal.User.pushSubscription.id;
     final response = await Dio().post(
-      '$baseUrl/sql.php',
+      '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
       data: FormData.fromMap({"action": "get_user_details", "phone": phone}),
     );
 
@@ -140,7 +140,7 @@ class AuthService {
           value: response.data['data']['oid'],
         );
         await Dio().post(
-          '$baseUrl/sql.php',
+          '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
           data: FormData.fromMap({
             "action": "get_user_details",
             "id": response.data['data']['id'],

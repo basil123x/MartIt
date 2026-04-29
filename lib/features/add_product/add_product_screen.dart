@@ -161,7 +161,7 @@ class _AddProductScreenState extends State<AddProductScreen>
   Future insertOneRecord() async {
     String? simCountry = await SimCountryCodePlus.simCountryCode;
     var request = await Dio().post(
-      'https://Globee-Trading.com/app2026/sql.php',
+      'https://Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
       data: FormData.fromMap({'action': 'insertNewOne', 'country': simCountry, 'store_id': '1'}),
     );
     setState(() {
@@ -172,7 +172,7 @@ class _AddProductScreenState extends State<AddProductScreen>
   Future<void> _fetchCategories() async {
     try {
       final response = await Dio().post(
-        'https://Globee-Trading.com/app2026/sql.php',
+        'https://Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({'action': 'get_categories'}),
       );
       

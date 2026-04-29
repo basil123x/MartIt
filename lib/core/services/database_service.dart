@@ -8,7 +8,7 @@ class DatabaseService {
   static Future<Map<String, dynamic>> createItem(String userId) async {
     try {
       final response = await _dio.post(
-        '$_baseUrl/sql.php',
+        '$_baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({'action': 'create_item', 'user_id': userId}),
       );
 
@@ -36,7 +36,7 @@ class DatabaseService {
   }) async {
     try {
       final response = await _dio.post(
-        '$_baseUrl/sql.php',
+        '$_baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           'action': 'insert',
           'item_id': itemId,
@@ -68,7 +68,7 @@ class DatabaseService {
     String? userToken,
   }) async {
     try {
-      final url = '$_baseUrl/sql.php';
+      final url = '$_baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}';
 
       final response = await Dio().post(
         url,
@@ -101,7 +101,7 @@ class DatabaseService {
   static Future<Map<String, dynamic>> getItems({int page = 0}) async {
     try {
       final response = await _dio.post(
-        '$_baseUrl/sql.php',
+        '$_baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           'action': 'get_items',
           'page': page.toString(),

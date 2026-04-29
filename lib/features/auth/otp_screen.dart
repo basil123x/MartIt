@@ -142,14 +142,14 @@ class _OTPScreenState extends State<OTPScreen> {
     } else {
       String? userId = OneSignal.User.pushSubscription.id;
       final responseuid = await Dio().post(
-        'https://www.Globee-Trading.com/app2026/sql.php',
+        'https://www.Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "get_user_details",
           "phone": widget.phoneNumber,
         }),
       );
       final response = await Dio().post(
-        'https://www.Globee-Trading.com/app2026/sql.php',
+        'https://www.Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "get_user_details",
           "phone": widget.phoneNumber,
