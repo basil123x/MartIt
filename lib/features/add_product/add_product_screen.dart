@@ -158,10 +158,9 @@ class _AddProductScreenState extends State<AddProductScreen>
   }
 
   Future insertOneRecord() async {
-    String country = await getUserCountry();
     var request = await Dio().post(
       'https://Globee-Trading.com/app2026/sql.php',
-      data: FormData.fromMap({'action': 'insertNewOne', 'country': country, 'store_id': '1'}),
+      data: FormData.fromMap({'action': 'insertNewOne', 'country': 'QA', 'store_id': '2'}),
     );
     setState(() {
       _currentItemId = request.data['item_id'].toString();
@@ -1386,7 +1385,7 @@ class _AddProductScreenState extends State<AddProductScreen>
       // Step 1: Upload media files to Bunny.net
       print("📤 Uploading ${mediaFiles.length} media files...");
 
-      final uploadedUrls = await BunnyUploadService.uploadMediaFiles(
+      final uploadedUrls = await S3UploadService.uploadMediaFiles(
         filePaths: mediaFiles,
         itemId: itemId,
         onProgress: (current, total, progress) async {

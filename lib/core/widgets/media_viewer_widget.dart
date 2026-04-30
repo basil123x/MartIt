@@ -94,29 +94,14 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
     String itmIdx,
     String storeid,
   ) {
-    String ext = url.toString().split('/').last;
     String urlx = url;
-    String imgUrl = "";
-    String compName = "";
-    print("IIIIIIII $itmIdx");
-    switch (storeid) {
-      case "2":
-        compName = "GlobalFarm";
-        imgUrl = itmIdx != ''
-            ? "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/items/$itmIdx.png"
-            : "https://globee.b-cdn.net/$compName/$itmId/$ext";
-        break;
-      case "3":
-        compName = "GES";
-        imgUrl = itmIdx != ''
-            ? "https://ges.qa/gesqatar/sys2025/attx/itmx/$itmIdx.png"
-            : "https://globee.b-cdn.net/$compName/$itmId/$ext";
-        break;
-      default:
-        imgUrl = "https://globee.b-cdn.net/$itmId/$ext";
-        break;
+    String thumbnail = "";
+    if (itmIdx != '') {
+      thumbnail = "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/items/$itmIdx.jpg";
+    } else {
+      thumbnail = "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/$itmId/1.jpg";
     }
-    String finalFullUrl = urlx.replaceAll(url, imgUrl);
+    String finalFullUrl = urlx.replaceAll(url, thumbnail);
     if (_isVideoUrl(finalFullUrl.toString().split(']')[0])) {
       return VideoPlayerWidget(
         networkUrl: finalFullUrl.toString().split(']')[0],

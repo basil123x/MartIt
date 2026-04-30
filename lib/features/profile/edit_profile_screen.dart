@@ -212,7 +212,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final remotePath = 'users/${widget.currentUid}/avatar.jpg';
       
-      final urls = await BunnyUploadService.uploadMediaFiles(
+      final uploadedUrls = await S3UploadService.uploadMediaFiles(
         filePaths: [imageFile.path],
         itemId: 'users/${widget.currentUid}',
         onProgress: (current, total, progress) {
@@ -220,7 +220,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         },
       );
 
-      if (urls.isNotEmpty) {
+      if (uploadedUrls.isNotEmpty) {
         setState(() {
           _uploadedImageUrl = 'https://globee.b-cdn.net/users/${widget.currentUid}/avatar.jpg?t=$timestamp';
           _isUploadingImage = false;

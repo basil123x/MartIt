@@ -324,6 +324,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                       cartItems: widget.cartItems,
                       totalAmount: widget.totalAmount,
                       shippingAddress: widget.shippingAddress,
+                      transStatus: "3"
                     ),
                   ),
                 );

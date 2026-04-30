@@ -262,15 +262,11 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
   }
 
   Widget _buildCartItem(CartItemModel cartItem) {
-    var storeImg = "";
-    switch (cartItem.item.store_id) {
-      case "2":
-        storeImg = "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/items/${cartItem.item.idx}.png";
-        break;
-      case "3":
-        storeImg = "https://ges.qa/gesqatar/sys2025/attx/itmx/${cartItem.item.idx}.png";
-        break;
-      default:
+    String thumbnail = "";
+    if (cartItem.item.idx != '') {
+      thumbnail = "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/items/${cartItem.item.idx}.jpg";
+    } else {
+      thumbnail = "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/${cartItem.item.id}/1.jpg";
     }
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -307,7 +303,7 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                 borderRadius: BorderRadius.circular(13),
                 child: cartItem.item.idx.isNotEmpty
                     ? Image.network(
-                        storeImg,
+                        thumbnail,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           return Container(

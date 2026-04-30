@@ -612,6 +612,7 @@ class _ProfileItemCardState extends State<ProfileItemCard> {
 
   @override
   Widget build(BuildContext context) {
+    print(widget.item);
     return Card(
       color: Color(0xFFB4D4F0).withAlpha(40),
       elevation: 0,
@@ -630,7 +631,10 @@ class _ProfileItemCardState extends State<ProfileItemCard> {
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(12),
                   ),
-                  child: PageView.builder(
+                  child: widget.item['idx'] != '' ? Image.network(
+                        "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/items/${widget.item['idx']}.jpg",
+                        fit: BoxFit.cover,
+                      ) : PageView.builder(
                     onPageChanged: (value) {
                       setState(() {
                         _currentIndex = value;
@@ -638,8 +642,9 @@ class _ProfileItemCardState extends State<ProfileItemCard> {
                     },
                     itemCount: widget.item['media'].length,
                     itemBuilder: (context, i) {
+                      var thumbnail = widget.item['media'][i].toString().replaceAll("https://globee.b-cdn.net", "https://globalfarmnursery.s3.ap-south-1.amazonaws.com");
                       return Image.network(
-                        "${widget.item['media'][i]}",
+                        thumbnail,
                         fit: BoxFit.cover,
                       );
                     },

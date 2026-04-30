@@ -187,7 +187,6 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           ? await AuthService.getCurrentUserId()
           : null;
 
-      String country =  await getUserCountry();
 
       if (_isLoggedIn && currentUserId != null) {
         // ✅ لو مسجل دخول، نستخدم fetchItemsWithLikes
@@ -197,7 +196,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           offset: isRefresh ? 0 : _items.length,
           initialItemId: initiItem == "" ? initiItem : widget.initialItemId,
           category: category,
-          country: country,
+          country: "QA",
         );
       } else {
         // ✅ لو مش مسجل، نستخدم fetchItems عادي (بدون user_id)
@@ -206,7 +205,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           userId: uid,
           initialItemId: initiItem == "" ? initiItem : widget.initialItemId,
           category: category,
-          country: country,
+          country: "QA",
         );
       }
 
@@ -2507,13 +2506,11 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
       print('Error loading cart quantity: $e');
     }
 
-    String imgStore = "";
-
-    switch (item.storeid) {
-      case '3':
-        imgStore = 'https://ges.qa/gesqatar/sys2025/attx/itmx/${item.idx}.png';
-        break;
-      default:
+    String thumbnail = "";
+    if (item.idx != '') {
+      thumbnail = "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/items/${item.idx}.jpg";
+    } else {
+      thumbnail = "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/${item.id}/1.jpg";
     }
 
     showModalBottomSheet(
@@ -2600,38 +2597,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(13),
-                            child: item.idx.isNotEmpty
+                            child: thumbnail != ''
                                 ? Image.network(
-                                    imgStore,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
-                                        color: Colors.grey[300],
-                                        child: const Icon(
-                                          Iconsax.image,
-                                          color: Colors.grey,
-                                          size: 40,
-                                        ),
-                                      );
-                                    },
-                                    loadingBuilder:
-                                        (context, child, loadingProgress) {
-                                          if (loadingProgress == null)
-                                            return child;
-                                          return Container(
-                                            color: Colors.grey[300],
-                                            child: const Center(
-                                              child: CircularProgressIndicator(
-                                                color: AppColors.primary,
-                                                strokeWidth: 2,
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                  )
-                                : item.media.isNotEmpty
-                                ? Image.network(
-                                    imgStore,
+                                    thumbnail,
                                     fit: BoxFit.cover,
                                     errorBuilder: (context, error, stackTrace) {
                                       return Container(
