@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'package:MartIt/core/services/google_auth_service.dart';
 import 'package:MartIt/features/chat/chat_screen.dart';
+import 'package:MartIt/firebase_options.dart';
 import 'package:MartIt/shared/providers/app_provider.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -20,12 +22,20 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await GoogleAuthService().initialize();
+  await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+  );
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-  OneSignal.initialize("ddec3249-5f16-4870-9c32-682a704559b6");
+  String appToken = "";
+  if (Platform.isIOS) {
+    appToken = "5f910d9c-d0cd-4171-b2b2-94f68636d7de";
+  } else {
+    appToken = "ddec3249-5f16-4870-9c32-682a704559b6";
+  }
+  OneSignal.initialize(appToken);
   await OneSignal.Notifications.requestPermission(true);
 
   OneSignal.Notifications.addClickListener((event) {

@@ -999,7 +999,7 @@ class _AddProductScreenState extends State<AddProductScreen>
     final isFocused = _fieldFocused['quantity'] ?? false;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         color: _LuxuryColors.inputBg,
@@ -1026,7 +1026,7 @@ class _AddProductScreenState extends State<AddProductScreen>
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                     decoration: const InputDecoration(fillColor: Colors.transparent,border: InputBorder.none, contentPadding: EdgeInsets.zero, isDense: true, focusedBorder: OutlineInputBorder(borderSide: BorderSide.none)),
-
+          
                   ),
                 ),
               ),

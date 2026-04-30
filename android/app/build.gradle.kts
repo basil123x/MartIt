@@ -37,8 +37,8 @@ android {
         minSdk = 24
         targetSdk = 36
         multiDexEnabled = true
-        versionCode = 21
-        versionName = "1.1.2"
+        versionCode = 25
+        versionName = "1.1.7"
         
         // Enable 16KB page size support
         ndk {
