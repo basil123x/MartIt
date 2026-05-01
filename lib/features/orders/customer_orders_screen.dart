@@ -61,7 +61,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
 
   Future<void> _openInvoice(String orderId) async {
     final url =
-        'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&k=${DateTime.now().millisecondsSinceEpoch}';
+        'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&store_id=2&k=${DateTime.now().millisecondsSinceEpoch}';
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     } else {

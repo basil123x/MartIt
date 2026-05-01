@@ -112,20 +112,34 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
   Future<void> _checkLoginStatus() async {
     final _currentUserIdx = await AuthService.getCurrentUserId();
-
     final isLoggedIn = await AuthService.isLoggedIn();
-    var result = await Dio().get(
-      'http://globee-trading.com/app2026/profile.php?user_id=$_currentUserIdx&k=${DateTime.now().millisecondsSinceEpoch}',
-      options: Options(headers: {'Content-Type': 'application/json'}),
-    );
+    
+    String? userRole;
+    
+    // ✅ لو مش مسجل دخول، متعملش الـ API call أصلاً
+    if (isLoggedIn && _currentUserIdx != null) {
+      try {
+        var result = await Dio().get(
+          'http://globee-trading.com/app2026/profile.php?user_id=$_currentUserIdx&k=${DateTime.now().millisecondsSinceEpoch}',
+          options: Options(headers: {'Content-Type': 'application/json'}),
+        );
+        
+        // ✅ تحقق إن data و data['data'] مش null قبل ما تجيب الـ role
+        if (result.data != null && result.data['data'] != null) {
+          userRole = result.data['data']['role'];
+        }
+      } catch (e) {
+        print('Error fetching user profile: $e');
+        // ✅ لو فيه error في الـ API، الصفحة تكمل بدون role
+      }
+    }
+
     setState(() {
       _isLoggedIn = isLoggedIn;
       _currentUserId = _currentUserIdx;
-      _currentUserRole = result.data['data']['role'];
+      _currentUserRole = userRole; // ✅ هيبقى null لو مش مسجل أو فيه error
     });
-    
-    
-    // ✅ تحميل المنتجات أولاً، ثم التصنيفات ستُحمّل تلقائياً
+
     _loadItems(uid: _currentUserId, isRefresh: true);
   }
 
@@ -282,36 +296,6 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
             ? const Center(
                 child: CircularProgressIndicator(color: AppColors.primary),
               )
-            : _items.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Iconsax.box, size: 64, color: Colors.white),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'لا توجد منتجات',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => _loadItems(
-                        isRefresh: true,
-                        category: _selectedCategory,
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                      ),
-                      child: const Text('إعادة المحاولة'),
-                    ),
-                  ],
-                ),
-              )
             : Stack(
                 children: [
                   // Video Feed
@@ -367,6 +351,37 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
                   // Bottom Info
                   _buildBottomInfo(),
+
+                  if (_items.isEmpty)
+                  Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Iconsax.box, size: 64, color: Colors.white),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'لا توجد منتجات',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () => _loadItems(
+                            isRefresh: true,
+                            category: _selectedCategory,
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('إعادة المحاولة'),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
       ),
@@ -602,11 +617,12 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                 setState(() {
                   _selectedCategory = category;
                 });
+                print(_selectedCategory);
                 // تحديث قائمة المنتجات حسب الفئة
                 _loadItems(
                   isRefresh: true,
                   uid: _currentUserId,
-                  category: category,
+                  category: _selectedCategory,
                 );
               },
             );

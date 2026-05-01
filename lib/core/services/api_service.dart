@@ -43,7 +43,7 @@ class ApiService {
         'action': 'fetch',
         'page': page.toString(),
         'limit': '10',
-        'itemSrchId': initialItemId ?? "",
+        // 'itemSrchId': initialItemId ?? "",
         'country': country,
         'store_id': '2'
       };
@@ -387,14 +387,18 @@ class ApiService {
         "user_id": userId,
         "limit": limit.toString(),
         "offset": offset.toString(),
-        'itemSrchId': initialItemId ?? "",
         'country': country,
         'store_id': '2'
       };
 
       // ✅ لو في category، نضيفه للـ request
       if (category != null && category.isNotEmpty) {
+        initialItemId = null;
         requestData['category'] = category;
+      }
+
+      if (initialItemId != null && initialItemId.isNotEmpty) {
+        requestData['itemSrchId'] = initialItemId;
       }
 
       print('📦 fetchItemsWithLikes Request: $requestData');

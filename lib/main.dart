@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'package:GlobalFarm/core/services/google_auth_service.dart';
 import 'package:GlobalFarm/features/chat/chat_screen.dart';
+import 'package:GlobalFarm/firebase_options.dart';
 import 'package:GlobalFarm/shared/providers/app_provider.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -20,7 +22,9 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await GoogleAuthService().initialize();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,

@@ -321,7 +321,6 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                                 '${widget.shippingAddress.city}, ${widget.shippingAddress.country}, شارع ${widget.shippingAddress.streetNumber}, مبنى ${widget.shippingAddress.buildingNumber}, منطقة ${widget.shippingAddress.zoneNumber}',
                               ),
 
-                              const SizedBox(height: 20),
 
                               // Info Box
                                 Visibility(
