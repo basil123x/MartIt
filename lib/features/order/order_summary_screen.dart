@@ -118,6 +118,12 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
 
   Widget _buildOrderItem(CartItemModel cartItem) {
     final itemTotal = double.parse(cartItem.item.price) * cartItem.cartQuantity;
+    String thumbnail = "";
+      if (cartItem.item.idx != '') {
+        thumbnail = "https://ges.qa/gesqatar/sys2026/attx/itmx/${cartItem.item.idx}.png";
+      } else {
+        thumbnail = "https://ges.qa/gesqatar/sys2026/attx/itmapp/${cartItem.item.id}/1.jpg";
+      }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -151,9 +157,8 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(11),
-              child: cartItem.item.idx.isNotEmpty
-                  ? Image.network(
-                      "https://ges.qa/gesqatar/sys2025/attx/itmx/${cartItem.item.idx}.png",
+              child: Image.network(
+                      thumbnail,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
@@ -165,14 +170,6 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                           ),
                         );
                       },
-                    )
-                  : Container(
-                      color: Colors.grey[800],
-                      child: const Icon(
-                        Iconsax.image,
-                        color: Colors.grey,
-                        size: 24,
-                      ),
                     ),
             ),
           ),

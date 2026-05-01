@@ -213,7 +213,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final remotePath = 'users/${widget.currentUid}/avatar.jpg';
       
-      final urls = await BunnyUploadService.uploadMediaFiles(
+      final urls = await GesUploadService.uploadMediaFiles(
         filePaths: [imageFile.path],
         itemId: 'users/${widget.currentUid}',
         onProgress: (current, total, progress) {

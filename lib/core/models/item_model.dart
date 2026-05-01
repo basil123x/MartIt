@@ -186,6 +186,7 @@ class UserProfileModel {
   final String uid;
   final String avatar;
   final int itemsCount;
+  final String role;
 
   UserProfileModel({
     required this.id,
@@ -195,6 +196,7 @@ class UserProfileModel {
     required this.uid,
     required this.avatar,
     required this.itemsCount,
+    required this.role,
   });
 
   factory UserProfileModel.fromJson(Map<String, dynamic> json) {
@@ -206,6 +208,7 @@ class UserProfileModel {
       uid: json['uid'] ?? '',
       avatar: json['avatar'] ?? '',
       itemsCount: int.tryParse(json['itemsCount']?.toString() ?? '0') ?? 0,
+      role: json['role'] ?? '',
     );
   }
 }

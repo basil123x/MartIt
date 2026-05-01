@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -112,24 +113,33 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
   Future<void> _checkLoginStatus() async {
     final _currentUserIdx = await AuthService.getCurrentUserId();
-    
-
     final isLoggedIn = await AuthService.isLoggedIn();
-    var result = await Dio().get(
-      'http://globee-trading.com/app2026/profile.php?user_id=$_currentUserIdx&k=${DateTime.now().millisecondsSinceEpoch}',
-      options: Options(headers: {'Content-Type': 'application/json'}),
-    );
+    
+    String? userRole;
+    
+    if (isLoggedIn && _currentUserIdx != null) {
+      try {
+        var result = await Dio().get(
+          'http://globee-trading.com/app2026/profile.php?user_id=$_currentUserIdx&k=${DateTime.now().millisecondsSinceEpoch}',
+          options: Options(headers: {'Content-Type': 'application/json'}),
+        );
+        
+        // ✅ تحقق إن data و data['data'] مش null قبل ما تجيب الـ role
+        if (result.data != null && result.data['data'] != null) {
+          userRole = result.data['data']['role'];
+        }
+      } catch (e) {
+        print('Error fetching user profile: $e');
+        // ✅ لو فيه error في الـ API، الصفحة تكمل بدون role
+      }
+    }
+
     setState(() {
       _isLoggedIn = isLoggedIn;
       _currentUserId = _currentUserIdx;
-      if (_currentUserId != null) {
-        _currentUserRole = result.data['data']['role'];
-      }
-      
+      _currentUserRole = userRole; // ✅ هيبقى null لو مش مسجل أو فيه error
     });
-    
-    
-    // ✅ تحميل المنتجات أولاً، ثم التصنيفات ستُحمّل تلقائياً
+
     _loadItems(uid: _currentUserId, isRefresh: true);
   }
 
@@ -191,8 +201,6 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           ? await AuthService.getCurrentUserId()
           : null;
 
-      String country =  await getUserCountry();
-      print(country);
 
       if (_isLoggedIn && currentUserId != null) {
         // ✅ لو مسجل دخول، نستخدم fetchItemsWithLikes
@@ -202,7 +210,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           offset: isRefresh ? 0 : _items.length,
           initialItemId: initiItem == "" ? initiItem : widget.initialItemId,
           category: category,
-          country: country,
+          country: "QA",
         );
       } else {
         // ✅ لو مش مسجل، نستخدم fetchItems عادي (بدون user_id)
@@ -211,7 +219,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           userId: uid,
           initialItemId: initiItem == "" ? initiItem : widget.initialItemId,
           category: category,
-          country: country,
+          country: "QA",
         );
       }
 
@@ -256,6 +264,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
   @override
   Widget build(BuildContext context) {
+    
     return WillPopScope(
       onWillPop: () async {
         // تعرض Dialog لتأكيد الخروج
@@ -1355,7 +1364,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
   }
 
   void _handleLogout() async {
-    Navigator.pop(context); // Close bottom sheet
+    Navigator.pop(context);
+    await GoogleSignIn.instance.disconnect();
+    await GoogleSignIn.instance.signOut();
     await AuthService.logout();
     setState(() {
       _isLoggedIn = false;
@@ -2441,7 +2452,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
   📝 الوصف: ${item.description}
 
-  تسوق الأن على تطبيق GES
+  تسوق الأن على تطبيق GlobalFarm
 
   ''';
       final user = await FlutterSecureStorage().read(key: 'user_name');
@@ -2511,13 +2522,11 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
       print('Error loading cart quantity: $e');
     }
 
-    String imgStore = "";
-
-    switch (item.storeid) {
-      case '3':
-        imgStore = 'https://ges.qa/gesqatar/sys2025/attx/itmx/${item.idx}.png';
-        break;
-      default:
+    String thumbnail = "";
+    if (item.idx != '') {
+      thumbnail = "https://ges.qa/gesqatar/sys2026/attx/itmx/${item.idx}.png";
+    } else {
+      thumbnail = "https://ges.qa/gesqatar/sys2026/attx/itmapp/${item.id}/1.jpg";
     }
 
     showModalBottomSheet(
@@ -2604,38 +2613,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(13),
-                            child: item.idx.isNotEmpty
+                            child: thumbnail != ''
                                 ? Image.network(
-                                    imgStore,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
-                                        color: Colors.grey[300],
-                                        child: const Icon(
-                                          Iconsax.image,
-                                          color: Colors.grey,
-                                          size: 40,
-                                        ),
-                                      );
-                                    },
-                                    loadingBuilder:
-                                        (context, child, loadingProgress) {
-                                          if (loadingProgress == null)
-                                            return child;
-                                          return Container(
-                                            color: Colors.grey[300],
-                                            child: const Center(
-                                              child: CircularProgressIndicator(
-                                                color: AppColors.primary,
-                                                strokeWidth: 2,
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                  )
-                                : item.media.isNotEmpty
-                                ? Image.network(
-                                    imgStore,
+                                    thumbnail,
                                     fit: BoxFit.cover,
                                     errorBuilder: (context, error, stackTrace) {
                                       return Container(

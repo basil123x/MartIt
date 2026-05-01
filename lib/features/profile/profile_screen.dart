@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:shimmer/shimmer.dart';
@@ -260,6 +261,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               avatar: result['avatar'] ?? _profile!.avatar,
                               type: _profile!.type,
                               itemsCount: _profile!.itemsCount,
+                              role: _profile!.role
                             );
                           }
                         });
@@ -300,9 +302,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
 
         // Filter Buttons
+        if (_profile?.role != '')
         SliverToBoxAdapter(child: _buildFilterButtons()),
-
-        // Profile Items Grid
+        if (_profile?.role != '')
         SliverToBoxAdapter(child: _buildItemsSection()),
       ],
     );
@@ -598,6 +600,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
+// Cache عشان منكررش الـ call لو الـ widget اتبنى تاني
+final Map<String, Future<List<String>>> _mediaCache = {};
+
 class ProfileItemCard extends StatefulWidget {
   final Map<String, dynamic> item;
 
@@ -608,75 +613,161 @@ class ProfileItemCard extends StatefulWidget {
 }
 
 class _ProfileItemCardState extends State<ProfileItemCard> {
-  int _currentIndex = 0; // كل card ليها index خاص بيها
+  int _currentIndex = 0;
+  late Future<List<String>> _mediaFuture;
+
+  static Future<List<String>> _fetchMedia(String itemId, String foldId) async {
+    try {
+      final response = await Dio().get(
+        'https://ges.qa/gesqatar/sys2026/attx/get_items_media.php',
+        queryParameters: {
+          'item_id': itemId,
+          'folderId': foldId,
+          'secret': "GES_UPLOAD_SECRET_2026",
+        },
+      );
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        final media = response.data['media'] as List;
+        return media.map((e) => e['url'] as String).toList();
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final itemIdx = widget.item['idx'].toString();
+    final itemId = widget.item['id'].toString();
+    _mediaFuture = _mediaCache.putIfAbsent(itemIdx != '' ? itemIdx : itemId, () => _fetchMedia(itemIdx != '' ? itemIdx : itemId, itemIdx != '' ? 'itmy' : 'itmapp'));
+  }
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: Color(0xFFB4D4F0).withAlpha(40),
+      color: const Color(0xFFB4D4F0).withAlpha(40),
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: AppColors.primary, width: 2),
+        side: const BorderSide(color: AppColors.primary, width: 2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
             flex: 3,
-            child: Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(12),
-                  ),
-                  child: PageView.builder(
-                    onPageChanged: (value) {
-                      setState(() {
-                        _currentIndex = value;
-                      });
-                    },
-                    itemCount: widget.item['media'].length,
-                    itemBuilder: (context, i) {
-                      return Image.network(
-                        "${widget.item['media'][i]}",
-                        fit: BoxFit.cover,
-                      );
-                    },
-                  ),
-                ),
-                // Dots Indicator
-                if (widget.item['media'].length > 1)
-                  Positioned(
-                    bottom: 10,
-                    left: 0,
-                    right: 0,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(widget.item['media'].length, (
-                        index,
-                      ) {
-                        return Container(
-                          width: 6,
-                          height: 6,
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          decoration: BoxDecoration(
-                            color: _currentIndex == index
-                                ? AppColors.primary
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(50),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.3),
-                                blurRadius: 2,
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
+            child: FutureBuilder<List<String>>(
+              future: _mediaFuture,
+              builder: (context, snapshot) {
+                // ── Loading ──
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const ClipRRect(
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(12),
                     ),
-                  ),
-              ],
+                    child: Center(
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
+                final mediaList = snapshot.data ?? [];
+                print(mediaList);
+
+                // ── No media ──
+                if (mediaList.isEmpty) {
+                  return ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(12),
+                    ),
+                    child: Container(
+                      color: Colors.grey.shade200,
+                      child: const Icon(
+                        Icons.image_not_supported_outlined,
+                        color: Colors.grey,
+                        size: 40,
+                      ),
+                    ),
+                  );
+                }
+
+                // ── Slider ──
+                return Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(12),
+                      ),
+                      child: PageView.builder(
+                        onPageChanged: (value) =>
+                            setState(() => _currentIndex = value),
+                        itemCount: mediaList.length,
+                        itemBuilder: (context, i) {
+                          return Image.network(
+                            mediaList[i],
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return const Center(
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) =>
+                                const Icon(Icons.broken_image,
+                                    color: Colors.grey),
+                          );
+                        },
+                      ),
+                    ),
+                    // Dots
+                    if (mediaList.length > 1)
+                      Positioned(
+                        bottom: 10,
+                        left: 0,
+                        right: 0,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(mediaList.length, (index) {
+                            return Container(
+                              width: 6,
+                              height: 6,
+                              margin:
+                                  const EdgeInsets.symmetric(horizontal: 3),
+                              decoration: BoxDecoration(
+                                color: _currentIndex == index
+                                    ? AppColors.primary
+                                    : Colors.white,
+                                borderRadius: BorderRadius.circular(50),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.3),
+                                    blurRadius: 2,
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
           ),
           Expanded(

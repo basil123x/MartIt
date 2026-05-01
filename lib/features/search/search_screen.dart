@@ -196,21 +196,13 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _buildSearchResultItem(dynamic item) {
     String thumbnail = "";
-    switch (item['store_id']) {
-      case '1':
-        thumbnail =
-            "https://globee.b-cdn.net/Globee/${item['id']}/${item['fmedia']}";
-        break;
-      case '2':
-        thumbnail =
-            "https://www.gfnursery.net/s2024/assets/items/${item['idx']}.png";
-        break;
-      case '3':
-        thumbnail =
-            "https://ges.qa/gesqatar/sys2025/attx/itmx/${item['idx']}.png";
-        break;
-      default:
+    if (item['idx'] != null) {
+      thumbnail = "https://ges.qa/gesqatar/sys2026/attx/itmx/${item['idx']}.png";
+    } else {
+      thumbnail = "https://ges.qa/gesqatar/sys2026/attx/itmapp/${item['id']}/1.jpg";
     }
+
+    
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       color: Color(0xFFB4D4F0).withAlpha(40),

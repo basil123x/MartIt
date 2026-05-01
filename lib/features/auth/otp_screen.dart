@@ -208,6 +208,7 @@ class _OTPScreenState extends State<OTPScreen> {
 
   @override
   Widget build(BuildContext context) {
+    print(widget.generatedOTP);
     return GestureDetector(
       onTap: () {
         FocusScope.of(context).unfocus();

@@ -58,7 +58,7 @@ class _SplashScreenState extends State<SplashScreen>
       }
 
       final response = await dio.get(
-        'https://www.Globee-Trading.com/app2026/get_update_info.php?platform=$platform&store_id=2&k=${DateTime.now().millisecondsSinceEpoch}',
+        'https://www.Globee-Trading.com/app2026/get_update_info.php?platform=$platform&store_id=3&k=${DateTime.now().millisecondsSinceEpoch}',
       );
 
       if (response.statusCode == 200) {

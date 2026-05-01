@@ -1,9 +1,12 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:iconsax/iconsax.dart';
 import '../constants/app_colors.dart';
 import 'video_player_widget.dart';
+
+final Map<String, Future<List<String>>> _mediaCache = {};
 
 class MediaViewerWidget extends StatefulWidget {
   final List<String> mediaUrls;
@@ -33,6 +36,38 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
   final PageController _pageController = PageController();
   int _currentIndex = 0;
 
+  late Future<List<String>> _mediaFuture;
+
+  static Future<List<String>> _fetchMedia(String itemId, String foldId) async {
+    try {
+      final response = await Dio().get(
+        'https://ges.qa/gesqatar/sys2026/attx/get_items_media.php',
+        queryParameters: {
+          'item_id': itemId,
+          'folderId': foldId,
+          'secret': "GES_UPLOAD_SECRET_2026",
+        },
+      );
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        final media = response.data['media'] as List;
+        return media.map((e) => e['url'] as String).toList();
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final itemIdx = widget.itmIdx.toString();
+    final itemId = widget.itmId.toString();
+    print(itemId);
+    print(itemIdx);
+    _mediaFuture = _mediaCache.putIfAbsent(itemIdx != '' ? itemIdx : itemId, () => _fetchMedia(itemIdx != '' ? itemIdx : itemId, itemIdx != '' ? 'itmy' : 'itmapp'));
+  }
+
   @override
   void dispose() {
     _pageController.dispose();
@@ -47,6 +82,8 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
 
   @override
   Widget build(BuildContext context) {
+    
+
     if (widget.mediaUrls.isEmpty) {
       return Container(
         color: Colors.black,
@@ -56,35 +93,70 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
       );
     }
 
-    if (widget.mediaUrls.length == 1) {
-      return _buildSingleMedia(
-        widget.mediaUrls.first,
-        widget.itmId,
-        widget.itmIdx,
-        widget.storeid,
-      );
-    }
+    return FutureBuilder<List<String>>(
+      future: _mediaFuture,
+      builder: (context, snapshot) {
+        // ── Loading ──
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const ClipRRect(
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(12),
+            ),
+            child: Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+          );
+        }
 
-    return Stack(
-      children: [
-        PageView.builder(
-          controller: _pageController,
-          onPageChanged: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
-          itemCount: widget.mediaUrls.length,
-          itemBuilder: (context, index) {
-            return _buildSingleMedia(
-              widget.mediaUrls[index],
-              widget.itmId,
-              widget.itmIdx,
-              widget.storeid,
-            );
-          },
-        ),
-      ],
+        final mediaList = snapshot.data ?? [];
+print(mediaList);
+        // ── No media ──
+        if (mediaList.isEmpty) {
+          return ClipRRect(
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(12),
+            ),
+            child: Container(
+              color: Colors.grey.shade200,
+              child: const Icon(
+                Icons.image_not_supported_outlined,
+                color: Colors.grey,
+                size: 40,
+              ),
+            ),
+          );
+        }
+        
+        return Stack(
+          children: [
+            PageView.builder(
+              controller: _pageController,
+              onPageChanged: (index) {
+                setState(() {
+                  _currentIndex = index;
+                });
+              },
+              itemCount: mediaList.length,
+              itemBuilder: (context, index) {
+                return _buildSingleMedia(
+                  mediaList[index],
+                  widget.itmId,
+                  widget.itmIdx,
+                  widget.storeid,
+                  index
+                );
+              },
+            ),
+          ],
+        );
+      }
     );
   }
 
@@ -93,61 +165,31 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
     String itmId,
     String itmIdx,
     String storeid,
+    int index
   ) {
     String ext = url.toString().split('/').last;
     String urlx = url;
     String imgUrl = "";
     String compName = "";
-    print("IIIIIIII $itmIdx");
-    switch (storeid) {
-      case "2":
-        compName = "GlobalFarm";
-        imgUrl = itmIdx != ''
-            ? "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/items/$itmIdx.png"
-            : "https://globee.b-cdn.net/$compName/$itmId/$ext";
-        break;
-      case "3":
-        compName = "GES";
-        imgUrl = itmIdx != ''
-            ? "https://ges.qa/gesqatar/sys2025/attx/itmx/$itmIdx.png"
-            : "https://globee.b-cdn.net/$compName/$itmId/$ext";
-        break;
-      default:
-        imgUrl = "https://globee.b-cdn.net/$itmId/$ext";
-        break;
-    }
-    String finalFullUrl = urlx.replaceAll(url, imgUrl);
-    if (_isVideoUrl(finalFullUrl.toString().split(']')[0])) {
-      return VideoPlayerWidget(
-        networkUrl: finalFullUrl.toString().split(']')[0],
-        autoPlay: widget.autoPlayVideo,
-        showControls: widget.showControls,
-      );
+    if (itmIdx != '') {
+      imgUrl = "https://ges.qa/gesqatar/sys2026/attx/itmy/$itmIdx/$index.png";
     } else {
+      imgUrl = "https://ges.qa/gesqatar/sys2026/attx/itmapp/$itmId/${index+1}.jpg";
+    }
+    
       return CachedNetworkImage(
-        imageUrl: finalFullUrl.toString().split(']')[0],
+        imageUrl: imgUrl,
         fit: BoxFit.contain,
         placeholder: (context, url) => Container(
           color: Colors.black,
           child: const Center(child: SpinKitPulse(color: AppColors.white)),
         ),
         errorWidget: (context, url, error) => Container(
-          color: Colors.grey[300],
-          child: const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Iconsax.image, size: 64, color: Colors.grey),
-                SizedBox(height: 8),
-                Text(
-                  'فشل في تحميل الصورة',
-                  style: TextStyle(color: Colors.grey, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
+          child: CachedNetworkImage(imageUrl: "https://ges.qa/gesqatar/sys2026/attx/itmy/$itmIdx/$index.jpg", fit: BoxFit.contain,placeholder: (context, url) => Container(
+          color: Colors.black,
+          child: const Center(child: SpinKitPulse(color: AppColors.white)),
+        ),),
         ),
       );
-    }
   }
 }

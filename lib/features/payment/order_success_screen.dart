@@ -136,7 +136,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
   Future<void> _openInvoice(String orderId) async {
     print("My Bill Order Id ---> $orderId");
     final Uri url = Uri.parse(
-      'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&store_id=2&k=${DateTime.now().millisecondsSinceEpoch}',
+      'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&store_id=3&k=${DateTime.now().millisecondsSinceEpoch}',
     );
 
     if (!await launchUrl(
@@ -320,8 +320,6 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                                 'العنوان',
                                 '${widget.shippingAddress.city}, ${widget.shippingAddress.country}, شارع ${widget.shippingAddress.streetNumber}, مبنى ${widget.shippingAddress.buildingNumber}, منطقة ${widget.shippingAddress.zoneNumber}',
                               ),
-
-                              const SizedBox(height: 20),
 
                               // Info Box
                                 Visibility(

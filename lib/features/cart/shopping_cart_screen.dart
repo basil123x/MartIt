@@ -263,6 +263,13 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
 
   Widget _buildCartItem(CartItemModel cartItem) {
 
+     String thumbnail = "";
+      if (cartItem.item.idx != '') {
+        thumbnail = "https://ges.qa/gesqatar/sys2026/attx/itmx/${cartItem.item.idx}.png";
+      } else {
+        thumbnail = "https://ges.qa/gesqatar/sys2026/attx/itmapp/${cartItem.item.id}/1.jpg";
+      }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -296,9 +303,8 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(13),
-                child: cartItem.item.idx.isNotEmpty
-                    ? Image.network(
-                        "https://ges.qa/gesqatar/sys2025/attx/itmx/${cartItem.item.idx}.png",
+                child: Image.network(
+                        thumbnail,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           return Container(
@@ -311,14 +317,6 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                           );
                         },
                       )
-                    : Container(
-                        color: Colors.grey[800],
-                        child: const Icon(
-                          Iconsax.image,
-                          color: Colors.grey,
-                          size: 30,
-                        ),
-                      ),
               ),
             ),
 

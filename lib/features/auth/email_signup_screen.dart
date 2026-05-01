@@ -217,7 +217,7 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
       String? avatarUrl;
       if (_selectedImage != null) {
         final tempUserId = DateTime.now().millisecondsSinceEpoch.toString();
-        final uploadedUrls = await BunnyUploadService.uploadMediaFiles(
+        final uploadedUrls = await GesUploadService.uploadMediaFiles(
           filePaths: [_selectedImage!.path],
           itemId: 'users/$tempUserId',
         );
