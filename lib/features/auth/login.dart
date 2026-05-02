@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
+import 'package:GES/core/services/apple_auth_service.dart';
 import 'package:GES/core/services/google_auth_service.dart';
 import 'package:GES/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
@@ -9,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import 'phone_login_screen.dart';
@@ -200,24 +202,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 16),
 
-                Opacity(
-                  opacity: 0.4,
-                  child: Visibility(
-                    visible: Platform.isIOS ? true : false,
-                    child: _buildLoginOptionButton(
-                      context: context,
-                      imageTxt: "assets/images/social/apple.png",
-                      isimg: true,
-                      title: 'سجل بواسطة أبل',
-                      subtitle: 'قريباً',
-                      gradient: LinearGradient(
-                        colors: [
-                          AppColors.primary,
-                          AppColors.primary.withValues(alpha: 0.8),
-                        ],
-                      ),
-                    ),
-                  ),
+                Visibility(
+                  visible: Platform.isIOS ? true : false,
+                  child: SignInWithAppleButton(
+                    onPressed: () => signInWithApple(context),
+                    style: SignInWithAppleButtonStyle.black,
+                    height: 50,
+                    borderRadius: BorderRadius.circular(12),
+                  )
                 ),
 
                 const SizedBox(height: 30),

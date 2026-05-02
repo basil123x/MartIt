@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:GES/core/services/onesignal_service.dart';
 import 'package:GES/core/services/onesignal_service_web.dart';
+import 'package:GES/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
@@ -12,9 +13,10 @@ import '../../core/services/auth_service.dart';
 import '../home/tiktok_feed_screen.dart';
 
 class CreateAccountScreen extends StatefulWidget {
-  final String phoneNumber;
+  final String? phoneNumber;
+  final String? loginType;
 
-  const CreateAccountScreen({super.key, required this.phoneNumber});
+  const CreateAccountScreen({super.key, this.phoneNumber, this.loginType});
 
   @override
   State<CreateAccountScreen> createState() => _CreateAccountScreenState();
@@ -155,8 +157,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     try {
       // Save user data
       await AuthService.createWithPhone(
-        widget.phoneNumber,
+        widget.phoneNumber ?? "",
         _nameController.text.trim(),
+        widget.loginType ?? "",
         profileImage: _selectedImage?.path,
       );
       final request = await Dio().post(
@@ -177,7 +180,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         );
       }
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const TikTokFeedScreen()),
+        MaterialPageRoute(builder: (context) => const SplashScreen()),
         (route) => false,
       );
     } catch (e) {
@@ -410,30 +413,33 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
 
                           // Phone number display
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: AppColors.lightGrey,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(
-                                  Iconsax.mobile,
-                                  size: 16,
-                                  color: AppColors.textSecondary,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '+974 ${widget.phoneNumber}',
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(
-                                        color: AppColors.textSecondary,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                ),
-                              ],
+                          Visibility(
+                            visible: widget.phoneNumber != null ? true : false,
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: AppColors.lightGrey,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Iconsax.mobile,
+                                    size: 16,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '+974 ${widget.phoneNumber}',
+                                    style: Theme.of(context).textTheme.bodyMedium
+                                        ?.copyWith(
+                                          color: AppColors.textSecondary,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],

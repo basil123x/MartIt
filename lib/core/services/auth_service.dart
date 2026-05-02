@@ -71,28 +71,38 @@ class AuthService {
   // Login with phone number
   static Future<void> createWithPhone(
     String phone,
-    String name, {
+    String name,String? loginType,{
     String? profileImage,
   }) async {
     final uid = 1000 + Random().nextInt(9000);
     final oid = 1000 + Random().nextInt(9000);
     String? userId = OneSignal.User.pushSubscription.id;
-    await Dio().post(
+    final Map<String, dynamic> requestData = {
+      "action": "create_account",
+      "uid": uid,
+      "oid": oid,
+      "name": name,
+      "player_id": userId,
+      "store_id": "3"
+    };
+    
+
+    if (phone.isNotEmpty) {
+      requestData['phone'] = phone;
+      await _storage.write(key: _phoneKey, value: phone);
+    }
+
+    if (loginType != null) {
+      requestData['login_type'] = loginType;
+    }
+
+    var result = await Dio().post(
       '$baseUrl/sql.php',
-      data: FormData.fromMap({
-        "action": "create_account",
-        "uid": uid,
-        "oid": oid,
-        "name": name,
-        "phone": phone,
-        "player_id": userId,
-        "login_type": "Phone",
-      }),
+      data: FormData.fromMap(requestData),
     );
 
     await _storage.write(key: _uidKey, value: uid.toString());
     await _storage.write(key: "user_oid", value: oid.toString());
-    await _storage.write(key: _phoneKey, value: phone);
     await _storage.write(key: _nameKey, value: name);
 
     if (profileImage != null) {
