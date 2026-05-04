@@ -51,7 +51,7 @@ class _LoginScreenState extends State<LoginScreen> {
             "email": user.email,
             "phone": "",
             "player_id": playerId,
-            "store_id": "2",
+            "store_id": "3",
             "login_type": "Google",
           }),
         );
