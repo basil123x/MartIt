@@ -59,49 +59,34 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
 
   Future<void> _createOrders() async {
     try {
-      // Group cart items by seller
-      Map<String, List<CartItemModel>> itemsBySeller = {};
-      for (var cartItem in widget.cartItems) {
-        String sellerId = cartItem.seller.id;
-        if (!itemsBySeller.containsKey(sellerId)) {
-          itemsBySeller[sellerId] = [];
-        }
-        itemsBySeller[sellerId]!.add(cartItem);
-      }
-
       // Get current OID
       final currentOid = await AuthService.getCurrentOID();
 
-      // Create order for each seller
-      for (var entry in itemsBySeller.entries) {
-        String sellerId = entry.key;
-        List<CartItemModel> sellerItems = entry.value;
-
-        // Calculate total for this seller
-        double sellerTotal = 0.0;
-        for (var item in sellerItems) {
-          sellerTotal += (double.parse(item.item.price) * item.cartQuantity);
-        }
-
-        // Prepare items JSON
-        String itemsJson = sellerItems
-            .map(
-              (item) =>
-                  '{"id":"${item.item.id}","name":"${item.item.name}","price":"${item.item.price}","quantity":${item.cartQuantity}}',
-            )
-            .join(',');
-        itemsJson = '[$itemsJson]';
-
-        // Create order
-        await ApiService.createOrder(
-          uid: sellerId,
-          custId: widget.userId,
-          oid: currentOid ?? '',
-          shipId: widget.shippingAddress.id.toString(),
-          items: itemsJson,
-          totalAmount: sellerTotal.toStringAsFixed(2),
-        );
+      // Calculate total for all items
+      double totalAmount = 0.0;
+      for (var item in widget.cartItems) {
+        totalAmount += (double.parse(item.item.price) * item.cartQuantity);
       }
+
+      // Prepare items JSON with seller_id for each item
+      // Backend will split by seller_id and create separate orders
+      String itemsJson = widget.cartItems
+          .map(
+            (item) =>
+                '{"id":"${item.item.id}","name":"${item.item.name}","price":"${item.item.price}","quantity":${item.cartQuantity},"seller_id":"${item.seller.id}"}',
+          )
+          .join(',');
+      itemsJson = '[$itemsJson]';
+
+      // Create order - backend will split by seller_id
+      await ApiService.createOrder(
+        uid: '', // Not needed anymore, backend extracts from items
+        custId: widget.userId,
+        oid: currentOid ?? '',
+        shipId: widget.shippingAddress.id.toString(),
+        items: itemsJson,
+        totalAmount: totalAmount.toStringAsFixed(2),
+      );
 
       print('✅ Orders created successfully');
     } catch (e) {
@@ -134,7 +119,7 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
   Future<void> _openInvoice(String orderId) async {
     print("My Bill Order Id ---> $orderId");
     final Uri url = Uri.parse(
-      'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&k=${DateTime.now().millisecondsSinceEpoch}',
+      'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&view=customer&k=${DateTime.now().millisecondsSinceEpoch}',
     );
 
     if (!await launchUrl(

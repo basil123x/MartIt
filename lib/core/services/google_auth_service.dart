@@ -6,6 +6,7 @@ class GoogleAuthService {
   Future<User?> signInWithGoogle() async {
     try {
       await GoogleSignIn.instance.initialize();
+      
       final GoogleSignInAccount? googleUser = await GoogleSignIn.instance.authenticate();
       if (googleUser == null) return null;
 

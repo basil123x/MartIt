@@ -181,8 +181,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           ? await AuthService.getCurrentUserId()
           : null;
 
-      String? simCountry = await SimCountryCodePlus.simCountryCode;
-      print(simCountry);
+      String? simCountry = await SimCountryCodePlus.simCountryCode ?? "QA";
       if (_isLoggedIn && currentUserId != null) {
         
         // ✅ لو مسجل دخول، نستخدم fetchItemsWithLikes
@@ -490,10 +489,14 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
   }
 
   Widget _buildCategoriesBar() {
+    // ✅ حساب المسافة من أعلى مع مراعاة شريط الحالة
+    final statusBarHeight = MediaQuery.of(context).padding.top;
+    final topPosition = statusBarHeight + 60; // تحت الأيقونات العلوية مع مسافة
+    
     // ✅ إظهار مؤشر تحميل أثناء جلب التصنيفات
     if (_isLoadingCategories) {
       return Positioned(
-        top: 100,
+        top: topPosition,
         left: 0,
         right: 0,
         child: Container(
@@ -514,7 +517,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
     if (_categories.isEmpty) return const SizedBox();
 
     return Positioned(
-      top: 100, // تحت الأيقونات العلوية
+      top: topPosition, // تحت الأيقونات العلوية مع مراعاة شريط الحالة
       left: 0,
       right: 0,
       child: Container(

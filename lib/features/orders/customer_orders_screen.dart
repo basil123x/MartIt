@@ -59,9 +59,11 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
     }
   }
 
-  Future<void> _openInvoice(String orderId) async {
+  Future<void> _openInvoice(String orderId, String visitorUid) async {
+    // Seller view: pass user_id to filter by seller's uid
+    final uid = await AuthService.getCurrentUID();
     final url =
-        'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&k=${DateTime.now().millisecondsSinceEpoch}';
+        'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&user_id=$uid&view=seller&k=${DateTime.now().millisecondsSinceEpoch}';
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     } else {
@@ -642,7 +644,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () => _openInvoice(order['oid'].toString()),
+                onPressed: () => _openInvoice(order['oid'].toString(), order['uid'].toString()),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,

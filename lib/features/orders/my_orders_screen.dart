@@ -66,9 +66,10 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     }
   }
 
-  Future<void> _openInvoice(String orderId) async {
+  Future<void> _openInvoice(String orderId, {bool isCustomerView = false}) async {
+    final viewParam = isCustomerView ? '&view=customer' : '';
     final url =
-        'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&k=${DateTime.now().millisecondsSinceEpoch}';
+        'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId$viewParam&k=${DateTime.now().millisecondsSinceEpoch}';
 
     if (!context.mounted) return;
 
@@ -299,15 +300,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
 
             // Order Details
             _buildDetailRow(
-              Iconsax.user,
-              'البائع',
-              order['seller_name'] ?? 'غير متوفر',
-            ),
-            const SizedBox(height: 12),
-            _buildDetailRow(
-              Iconsax.call,
-              'رقم الهاتف',
-              order['seller_phone'] ?? 'غير متوفر',
+              Iconsax.shop,
+              'عدد البائعين',
+              '${order['seller_count'] ?? 1} بائع',
             ),
             const SizedBox(height: 12),
             _buildDetailRow(
@@ -321,6 +316,15 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
               'المبلغ الإجمالي',
               '${order['total_amount']} ريال',
             ),
+            const SizedBox(height: 8),
+            Text(
+              'اضغط لعرض تفاصيل الأصناف',
+              style: TextStyle(
+                color: const Color(0xFF1A1A2E).withOpacity(0.5),
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
 
             const SizedBox(height: 20),
 
@@ -328,7 +332,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () => _openInvoice(order['oid'].toString()),
+                onPressed: () => _openInvoice(order['oid'].toString(), isCustomerView: true),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
