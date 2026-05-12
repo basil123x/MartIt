@@ -1,6 +1,5 @@
-name: GES
-description: "Golden Eagle Stores - Enabling the family to create beautiful
-  memories, whether at home or on trips."
+name: Albadaa
+description: "Albadaa Veterinary Services App - A comprehensive mobile application designed to provide veterinary services, including appointment scheduling, pet health tracking, and access to veterinary resources."
 publish_to: 'none'
 version: 1.0.0+3
 environment:

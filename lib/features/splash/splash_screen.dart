@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:GES/features/update/update_screen.dart';
+import 'package:Albadaa/features/update/update_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';

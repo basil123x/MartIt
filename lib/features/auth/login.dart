@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
-import 'package:GES/core/services/apple_auth_service.dart';
-import 'package:GES/core/services/google_auth_service.dart';
-import 'package:GES/features/splash/splash_screen.dart';
+import 'package:Albadaa/core/services/apple_auth_service.dart';
+import 'package:Albadaa/core/services/google_auth_service.dart';
+import 'package:Albadaa/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';

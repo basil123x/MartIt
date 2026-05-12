@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:GES/core/services/google_auth_service.dart';
-import 'package:GES/features/chat/chat_screen.dart';
-import 'package:GES/firebase_options.dart';
-import 'package:GES/shared/providers/app_provider.dart';
+import 'package:Albadaa/core/services/google_auth_service.dart';
+import 'package:Albadaa/features/chat/chat_screen.dart';
+import 'package:Albadaa/firebase_options.dart';
+import 'package:Albadaa/shared/providers/app_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

@@ -1,5 +1,5 @@
-import 'package:GES/core/services/api_service.dart';
-import 'package:GES/core/services/auth_service.dart';
+import 'package:Albadaa/core/services/api_service.dart';
+import 'package:Albadaa/core/services/auth_service.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';

@@ -1,5 +1,5 @@
 import 'dart:math';
-import 'package:GES/features/home/tiktok_feed_screen.dart';
+import 'package:Albadaa/features/home/tiktok_feed_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
