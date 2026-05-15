@@ -1,6 +1,6 @@
 class AppStrings {
   // App General
-  static const String appName = 'Golden Eagle Stores';
+  static const String appName = 'Albadaa Veterinary';
   static const String loading = 'جاري التحميل...';
   static const String error = 'حدث خطأ';
   static const String retry = 'إعادة المحاولة';

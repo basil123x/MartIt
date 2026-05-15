@@ -83,7 +83,7 @@ class AuthService {
       "oid": oid,
       "name": name,
       "player_id": userId,
-      "store_id": "3"
+      "store_id": "4"
     };
     
 

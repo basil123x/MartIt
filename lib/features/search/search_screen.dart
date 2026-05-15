@@ -196,10 +196,11 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _buildSearchResultItem(dynamic item) {
     String thumbnail = "";
+    print(item['idx']);
     if (item['idx'] != null) {
-      thumbnail = "https://ges.qa/gesqatar/sys2026/attx/itmx/${item['idx']}.png";
+      thumbnail = "https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmx/${item['idx']}.png";
     } else {
-      thumbnail = "https://ges.qa/gesqatar/sys2026/attx/itmapp/${item['id']}/1.jpg";
+      thumbnail = "https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmapp/${item['id']}/1.png";
     }
 
     

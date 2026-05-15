@@ -75,23 +75,21 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              const SizedBox(height: 20),
               
               // Sadad Payment Option
-              _buildPaymentOptionCard(
-                index: 0,
-                icon: Iconsax.card,
-                title: 'الدفع الإلكتروني',
-                subtitle: 'الدفع عبر سداد',
-                isEnabled: true,
-                onTap: () {
-                  setState(() {
-                    _selectedPaymentMethod = 0;
-                  });
-                },
-              ),
+              // _buildPaymentOptionCard(
+              //   index: 0,
+              //   icon: Iconsax.card,
+              //   title: 'الدفع الإلكتروني',
+              //   subtitle: 'الدفع عبر سداد',
+              //   isEnabled: true,
+              //   onTap: () {
+              //     setState(() {
+              //       _selectedPaymentMethod = 0;
+              //     });
+              //   },
+              // ),
               
-              const SizedBox(height: 16),
               
               // Cash on Delivery Option
               _buildPaymentOptionCard(
@@ -300,7 +298,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                     "status": transStatus,
                     "amount": transAmount,
                     "pay_mode": transPaymentMode,
-                    "store_id": "3"
+                    "store_id": "4"
                   }));
                   Navigator.push(
                     context,

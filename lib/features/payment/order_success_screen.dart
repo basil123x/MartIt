@@ -134,9 +134,8 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
   }
 
   Future<void> _openInvoice(String orderId) async {
-    print("My Bill Order Id ---> $orderId");
     final Uri url = Uri.parse(
-      'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&store_id=3&k=${DateTime.now().millisecondsSinceEpoch}',
+      'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&view=customer&store_id=4&k=${DateTime.now().millisecondsSinceEpoch}',
     );
 
     if (!await launchUrl(

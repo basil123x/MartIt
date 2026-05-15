@@ -133,8 +133,9 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
 
   Future<void> _openInvoice(String orderId) async {
     print("My Bill Order Id ---> $orderId");
+    
     final Uri url = Uri.parse(
-      'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&k=${DateTime.now().millisecondsSinceEpoch}',
+      'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&store_id=4&k=${DateTime.now().millisecondsSinceEpoch}',
     );
 
     if (!await launchUrl(
@@ -440,7 +441,8 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
                                 for (var carto in widget.cartItems) {
                                   orderId = carto.orderId;
                                 }
-                                _openInvoice(orderId);
+                                print("https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&store_id=4&k=${DateTime.now().millisecondsSinceEpoch}");
+                                // _openInvoice(orderId);
                               },
                               style: OutlinedButton.styleFrom(
                                 // foregroundColor: Colors.white,

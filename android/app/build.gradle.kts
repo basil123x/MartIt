@@ -18,7 +18,7 @@ val keystoreProperties = Properties().apply {
 }
 
 android {
-    namespace = "com.golden.eagles"
+    namespace = "com.badaa.vets"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
 
@@ -33,12 +33,12 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.golden.eagles"
+        applicationId = "com.badaa.vets"
         minSdk = 24
         targetSdk = 36
         multiDexEnabled = true
-        versionCode = 6
-        versionName = "1.0.2"
+        versionCode = 1
+        versionName = "1.0.0"
         
         // Enable 16KB page size support
         ndk {

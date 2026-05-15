@@ -2,16 +2,16 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as path;
 
-class GesUploadService {
+class AlbadaaUploadService {
   // ─── Config ──────────────────────────────────────────────────────────────
   static const String _uploadUrl =
-      'https://ges.qa/gesqatar/sys2026/attx/upload_item_media.php';
+      'https://albadaa-qatar.com/2026/works/stores/invoices/imgup/upload_item_media.php';
 
   static const String _cdnBase =
-      'https://ges.qa/gesqatar/sys2026/attx/itmapp';
+      'https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmapp';
 
   /// نفس الـ SECRET_KEY في ملف الـ PHP
-  static const String _secretKey = 'GES_UPLOAD_SECRET_2026';
+  static const String _secretKey = 'AlBadaa_UPLOAD_SECRET_2026';
 
   static final Dio _dio = Dio(
     BaseOptions(connectTimeout: const Duration(seconds: 30)),
@@ -21,80 +21,53 @@ class GesUploadService {
   /// ارفع قائمة ملفات لـ item معين
   /// بترجع قائمة الـ URLs المرفوعة
   static Future<List<String>> uploadMediaFiles({
-    required List<String> filePaths,
-    required String itemId,
-    Function(int current, int total, double progress)? onProgress,
-  }) async {
+  required List<String> filePaths,
+  required String itemId,
+  Function(int current, int total, double progress)? onProgress,
+}) async {
+  List<String> uploadedUrls = [];
+
+  for (int i = 0; i < filePaths.length; i++) {
+    final formData = FormData();
+    formData.fields.add(MapEntry('secret', _secretKey));
+    formData.fields.add(MapEntry('item_id', itemId));
+    formData.fields.add(MapEntry('file_index', (i + 1).toString()));
+
+    final file = File(filePaths[i]);
+    if (!file.existsSync()) continue;
+
+    final ext = path.extension(filePaths[i]);
+    formData.files.add(MapEntry(
+      'files[]',
+      await MultipartFile.fromFile(
+        filePaths[i],
+        filename: '${i + 1}$ext',
+        contentType: _getDioContentType(filePaths[i]),
+      ),
+    ));
+
     try {
-      final formData = FormData();
-
-      // ضيف الـ auth والـ item_id
-      formData.fields.add(MapEntry('secret', _secretKey));
-      formData.fields.add(MapEntry('item_id', itemId));
-
-      // ضيف كل الملفات
-      for (int i = 0; i < filePaths.length; i++) {
-        final file = File(filePaths[i]);
-        if (!file.existsSync()) continue;
-
-        final ext = path.extension(filePaths[i]);
-        final fileName = '${i + 1}$ext'; // مجرد اسم مؤقت للـ multipart
-
-        formData.files.add(
-          MapEntry(
-            'files[]',
-            await MultipartFile.fromFile(
-              filePaths[i],
-              filename: fileName,
-              contentType: _getDioContentType(filePaths[i]),
-            ),
-          ),
-        );
-      }
-
-      int lastReported = -1;
-
       final response = await _dio.post(
         _uploadUrl,
         data: formData,
         onSendProgress: (sent, total) {
-          if (total <= 0) return;
-          final percent = (sent / total * 100).floor();
-          if (percent != lastReported) {
-            lastReported = percent;
-            // نبلّغ بالـ progress الكلي مش per-file لأننا بنبعت كل حاجة مرة واحدة
-            if (onProgress != null) {
-              onProgress(filePaths.length, filePaths.length, sent / total);
-            }
-          }
+          if (total <= 0 || onProgress == null) return;
+          onProgress(i + 1, filePaths.length, sent / total);
         },
       );
 
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-
-        if (data['success'] == true) {
-          final uploaded = List<String>.from(data['uploaded'] ?? []);
-          print('✅ Uploaded ${uploaded.length} file(s) for item $itemId');
-
-          if ((data['errors'] as List?)?.isNotEmpty == true) {
-            print('⚠️ Partial errors: ${data['errors']}');
-          }
-
-          return uploaded;
-        } else {
-          print('❌ Server error: ${data['error']}');
-          return [];
-        }
-      } else {
-        print('❌ HTTP error: ${response.statusCode}');
-        return [];
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        final uploaded = List<String>.from(response.data['uploaded'] ?? []);
+        uploadedUrls.addAll(uploaded);
+        print('✅ Uploaded file ${i + 1}/${filePaths.length}');
       }
     } catch (e) {
-      print('❌ Upload exception: $e');
-      return [];
+      print('❌ Error uploading file ${i + 1}: $e');
     }
   }
+
+  return uploadedUrls;
+}
 
   /// ارفع صورة واحدة بس
   static Future<String?> uploadSingleFile({

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:Albadaa/core/services/onesignal_service.dart';
 import 'package:Albadaa/core/services/onesignal_service_web.dart';
@@ -202,6 +203,8 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           : null;
 
 
+      print("cccccccccc $currentUserId");
+
       if (_isLoggedIn && currentUserId != null) {
         // ✅ لو مسجل دخول، نستخدم fetchItemsWithLikes
         items = await ApiService.fetchItemsWithLikes(
@@ -372,7 +375,6 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
                   // Top Bar
                   _buildTopBar(),
-
                   // Categories Bar
                   _buildCategoriesBar(),
 
@@ -572,7 +574,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
     if (_categories.isEmpty) return const SizedBox();
 
     return Positioned(
-      top: 100, // تحت الأيقونات العلوية
+      top: 120, // تحت الأيقونات العلوية
       left: 0,
       right: 0,
       child: Container(
@@ -1126,8 +1128,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
       width: double.infinity,
       height: double.infinity,
       color: Colors.black,
-      child: item.media.isNotEmpty
-          ? MediaViewerWidget(
+      child: MediaViewerWidget(
               mediaUrls: item.media,
               itmId: item.id,
               itmIdx: item.idx,
@@ -1135,9 +1136,6 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
               autoPlayVideo: true,
               showControls: false,
               showIndicators: item.media.length > 1,
-            )
-          : const Center(
-              child: Icon(Iconsax.image, color: Colors.white, size: 80),
             ),
     );
   }
@@ -2524,9 +2522,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
     String thumbnail = "";
     if (item.idx != '') {
-      thumbnail = "https://ges.qa/gesqatar/sys2026/attx/itmx/${item.idx}.png";
+      thumbnail = "https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmx/${item.idx}.png";
     } else {
-      thumbnail = "https://ges.qa/gesqatar/sys2026/attx/itmapp/${item.id}/1.jpg";
+      thumbnail = "https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmapp/${item.id}/1.png";
     }
 
     showModalBottomSheet(

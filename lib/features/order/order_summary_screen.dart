@@ -120,9 +120,9 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
     final itemTotal = double.parse(cartItem.item.price) * cartItem.cartQuantity;
     String thumbnail = "";
       if (cartItem.item.idx != '') {
-        thumbnail = "https://ges.qa/gesqatar/sys2026/attx/itmx/${cartItem.item.idx}.png";
+        thumbnail = "https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmx/${cartItem.item.idx}.png";
       } else {
-        thumbnail = "https://ges.qa/gesqatar/sys2026/attx/itmapp/${cartItem.item.id}/1.jpg";
+        thumbnail = "https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmapp/${cartItem.item.id}/1.png";
       }
 
     return Container(

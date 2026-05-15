@@ -31,9 +31,9 @@ void main() async {
   ]);
   String appId = "";
   if (Platform.isAndroid) {
-    appId = "04ab934e-0c2a-42c8-93d8-d603ae937277";
+    appId = "7858aad5-3509-4904-9211-a1b11edf0437";
   } else {
-    appId = "04ab934e-0c2a-42c8-93d8-d603ae937277";
+    appId = "7858aad5-3509-4904-9211-a1b11edf0437";
   }
   OneSignal.initialize(appId);
   await OneSignal.Notifications.requestPermission(true);

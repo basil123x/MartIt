@@ -58,7 +58,7 @@ class _SplashScreenState extends State<SplashScreen>
       }
 
       final response = await dio.get(
-        'https://www.Globee-Trading.com/app2026/get_update_info.php?platform=$platform&store_id=3&k=${DateTime.now().millisecondsSinceEpoch}',
+        'https://www.Globee-Trading.com/app2026/get_update_info.php?platform=$platform&store_id=4&k=${DateTime.now().millisecondsSinceEpoch}',
       );
 
       if (response.statusCode == 200) {
@@ -205,10 +205,10 @@ class _SplashScreenState extends State<SplashScreen>
                                   30,
                                 ), // كان 40
                                 child: Padding(
-                                  padding: const EdgeInsets.all(30),
+                                  padding: const EdgeInsets.all(20),
                                   child: Image.asset(
                                     "assets/images/Logo.png",
-                                    fit: BoxFit.contain,
+                                    fit: BoxFit.cover,
                                   ),
                                 ),
                               ),
@@ -259,7 +259,7 @@ class _SplashScreenState extends State<SplashScreen>
                       FadeTransition(
                         opacity: _sloganAnimation,
                         child: Text(
-                          'Creating Beautiful Memories, Together — Anywhere.',
+                          'رعاية لا تتوقف — Care That Never Stops',
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
                                 color: AppColors.white.withValues(alpha: 0.70),
@@ -289,9 +289,6 @@ class _SplashScreenState extends State<SplashScreen>
                               ),
                             ),
                             if (_patchNumber != null) ...[
-
-
-
                               const SizedBox(height: 4),
                               Text(
                                 'Patch: #$_patchNumber',

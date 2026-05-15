@@ -1,4 +1,4 @@
-package com.golden.eagles
+package com.badaa.vets
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -35,43 +35,43 @@ class _OTPScreenState extends State<OTPScreen> {
   bool _isLoading = false;
   String _enteredOTP = '';
 
-  Future sendOTP() async {
-    await Dio().post(
-      "https://graph.facebook.com/v22.0/843263612211696/messages",
-      options: Options(
-        headers: {
-          "Authorization":
-              "Bearer EAARdmJyGWR8BQtVgZAzMr6QqyfhUQ4VtERvSN35pZAnGCv0e2Pv8cKyPh0shTafB7mU3LTtAZC6ZAWkq7btIWCrSisIrFdyMeVguc5A7XbFBIB5ZA7i7LtoZCyzZCPaiTVJmkzDZCYamt9W2ZBxwtE9DZBYIONsyG97wrTASVLhrqyZCk4gacvL7nfBT0mHlnOpU5NYjQZDZD",
-          "Content-Type": "application/json",
-        },
-      ),
-      data: {
-        "messaging_product": "whatsapp",
-        "to": "${widget.countryCode}${widget.phoneNumber}",
-        "type": "template",
-        "template": {
-          "name": "send_otp",
-          "language": {"code": "ar"},
-          "components": [
-            {
-              "type": "body",
-              "parameters": [
-                {"type": "text", "text": widget.generatedOTP},
-              ],
-            },
-            {
-              "type": "button",
-              "sub_type": "url",
-              "index": 0,
-              "parameters": [
-                {"type": "text", "text": widget.generatedOTP},
-              ],
-            },
-          ],
-        },
-      },
-    );
-  }
+  // Future sendOTP() async {
+  //   await Dio().post(
+  //     "https://graph.facebook.com/v22.0/843263612211696/messages",
+  //     options: Options(
+  //       headers: {
+  //         "Authorization":
+  //             "Bearer EAARdmJyGWR8BQtVgZAzMr6QqyfhUQ4VtERvSN35pZAnGCv0e2Pv8cKyPh0shTafB7mU3LTtAZC6ZAWkq7btIWCrSisIrFdyMeVguc5A7XbFBIB5ZA7i7LtoZCyzZCPaiTVJmkzDZCYamt9W2ZBxwtE9DZBYIONsyG97wrTASVLhrqyZCk4gacvL7nfBT0mHlnOpU5NYjQZDZD",
+  //         "Content-Type": "application/json",
+  //       },
+  //     ),
+  //     data: {
+  //       "messaging_product": "whatsapp",
+  //       "to": "${widget.countryCode}${widget.phoneNumber}",
+  //       "type": "template",
+  //       "template": {
+  //         "name": "send_otp",
+  //         "language": {"code": "ar"},
+  //         "components": [
+  //           {
+  //             "type": "body",
+  //             "parameters": [
+  //               {"type": "text", "text": widget.generatedOTP},
+  //             ],
+  //           },
+  //           {
+  //             "type": "button",
+  //             "sub_type": "url",
+  //             "index": 0,
+  //             "parameters": [
+  //               {"type": "text", "text": widget.generatedOTP},
+  //             ],
+  //           },
+  //         ],
+  //       },
+  //     },
+  //   );
+  // }
 
   @override
   void initState() {
@@ -79,7 +79,7 @@ class _OTPScreenState extends State<OTPScreen> {
     // Auto focus first field
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNodes[0].requestFocus();
-      sendOTP();
+      // sendOTP();
     });
   }
 
@@ -208,7 +208,6 @@ class _OTPScreenState extends State<OTPScreen> {
 
   @override
   Widget build(BuildContext context) {
-    print(widget.generatedOTP);
     return GestureDetector(
       onTap: () {
         FocusScope.of(context).unfocus();
@@ -218,6 +217,7 @@ class _OTPScreenState extends State<OTPScreen> {
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
+          title: Text("Otp is: ${widget.generatedOTP}"),
           leading: IconButton(
             icon: const Icon(Iconsax.arrow_left, color: AppColors.textPrimary),
             onPressed: () => Navigator.of(context).pop(),
@@ -238,7 +238,6 @@ class _OTPScreenState extends State<OTPScreen> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                // Icon
                                 Container(
                                   width: 100,
                                   height: 100,
@@ -254,10 +253,7 @@ class _OTPScreenState extends State<OTPScreen> {
                                     color: AppColors.secondary,
                                   ),
                                 ),
-
                                 const SizedBox(height: 40),
-
-                                // Title
                                 Text(
                                   'تحقق من رقم هاتفك',
                                   style: Theme.of(context)

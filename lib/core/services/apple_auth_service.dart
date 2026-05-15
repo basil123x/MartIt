@@ -63,7 +63,7 @@ Future signInWithApple(BuildContext context) async {
         "name": fullName,
         "email": email,
         "player_id": playerId,
-        "store_id": "3",
+        "store_id": "4",
         "login_type": "Apple",
         "social_id": userIdentifier,
       }),

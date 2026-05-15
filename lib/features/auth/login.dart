@@ -51,7 +51,7 @@ class _LoginScreenState extends State<LoginScreen> {
             "email": user.email,
             "phone": "",
             "player_id": playerId,
-            "store_id": "3",
+            "store_id": "4",
             "login_type": "Google",
           }),
         );
@@ -118,7 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.all(25),
+                    padding: const EdgeInsets.all(17),
                     child: Image.asset(
                       "assets/images/Logo.png",
                       fit: BoxFit.cover,
