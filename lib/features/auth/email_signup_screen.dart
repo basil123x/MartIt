@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:GlobalFarm/core/services/s3_upload_service.dart';
 import 'package:GlobalFarm/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -7,7 +8,7 @@ import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import '../../core/constants/app_colors.dart';
-import '../../core/services/bunny_upload_service.dart';
+import '../../core/services/auth_service.dart';
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
 
@@ -212,29 +213,46 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
     });
 
     try {
+      final String emailTrimmed = _emailController.text.trim();
+      final Map<String, dynamic>? alreadyUser =
+          await AuthService.getUserByEmail(emailTrimmed);
+      if (alreadyUser != null) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+          _showError('البريد مسجل مسبقاً. سجّل الدخول من الشاشة الرئيسية.');
+          Navigator.pop(context);
+        }
+        return;
+      }
+
       String? userId = OneSignal.User.pushSubscription.id;
 
       String? avatarUrl;
       if (_selectedImage != null) {
         final tempUserId = DateTime.now().millisecondsSinceEpoch.toString();
-        final uploadedUrls = await S3UploadService.uploadMediaFiles(
+        final uploadResult = await S3UploadService.uploadMediaFiles(
           filePaths: [_selectedImage!.path],
-          itemId: 'users/$tempUserId',
+          folderName: 'users/$tempUserId',
+          useSequentialIdx: false,
         );
-        if (uploadedUrls.isNotEmpty) {
-          avatarUrl = uploadedUrls[0];
+        if (uploadResult.urls.isNotEmpty) {
+          avatarUrl = uploadResult.urls[0];
         }
       }
 
       final response = await Dio().post(
         'https://www.Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
-          "action": "create_email_account",
-          "name": _nameController.text.trim(),
-          "email": _emailController.text,
-          "password": _passwordController.text,
-          "player_id": userId,
-          "avatar_url": avatarUrl ?? '',
+          'action': 'create_email_account',
+          'name': _nameController.text.trim(),
+          'email': _emailController.text,
+          'password': _passwordController.text,
+          'player_id': userId,
+          'avatar_url': avatarUrl ?? '',
+          'login_type': 'Email',
+          ...AuthService.registrationStoreFields(),
         }),
       );
 
@@ -254,6 +272,10 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
         await FlutterSecureStorage().write(
           key: "user_name",
           value: response.data['data']['name'],
+        );
+
+        await AuthService.ensureUserStoreId(
+          response.data['data']['id'].toString(),
         );
 
         if (mounted) {

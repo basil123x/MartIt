@@ -1,10 +1,7 @@
 import 'dart:io';
-import 'dart:isolate';
 import 'dart:math' as math;
-import 'dart:ui';
 import 'package:GlobalFarm/core/services/onesignal_service.dart';
-import 'package:GlobalFarm/core/services/onesignal_service_web.dart';
-import 'package:GlobalFarm/core/services/upload_notification_service.dart';
+import 'package:GlobalFarm/core/services/s3_upload_service.dart';
 import 'package:GlobalFarm/features/home/tiktok_feed_screen.dart';
 import 'package:GlobalFarm/shared/providers/app_provider.dart';
 import 'package:dio/dio.dart';
@@ -16,15 +13,12 @@ import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
-import '../../core/constants/app_strings.dart';
 import '../../core/widgets/video_player_widget.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/database_service.dart';
-import '../../core/services/bunny_upload_service.dart';
 import '../camera/camera_screen.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -118,7 +112,8 @@ class _AddProductScreenState extends State<AddProductScreen>
   bool _commentsEnabled = true;
   bool _isUploading = false;
   String? _currentItemId;
-  
+  int _clientItemId = 0;
+
   // Categories for autocomplete
   List<String> _categories = [];
   bool _isLoadingCategories = true;
@@ -159,19 +154,22 @@ class _AddProductScreenState extends State<AddProductScreen>
 
   Future insertOneRecord() async {
     var request = await Dio().post(
-      'https://Globee-Trading.com/app2026/sql.php',
+      'https://Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
       data: FormData.fromMap({'action': 'insertNewOne', 'country': 'QA', 'store_id': '2'}),
     );
     setState(() {
       _currentItemId = request.data['item_id'].toString();
+      _clientItemId =
+          int.tryParse(request.data['client_id']?.toString() ?? '') ?? 0;
     });
+    print('insertNewOne — item_id: $_currentItemId, client_id: $_clientItemId');
   }
 
   Future<void> _fetchCategories() async {
     try {
       final response = await Dio().post(
-        'https://Globee-Trading.com/app2026/sql.php',
-        data: FormData.fromMap({'action': 'get_categories'}),
+        'https://Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        data: FormData.fromMap({'action': 'get_categories', 'store_id': '2'}),
       );
       
       if (response.data['status'] == 'success' && response.data['categories'] != null) {
@@ -1013,7 +1011,7 @@ class _AddProductScreenState extends State<AddProductScreen>
                 final current = int.tryParse(_quantityController.text) ?? 1;
                 if (current > 1) { _quantityController.text = (current - 1).toString(); setState(() {}); }
               }),
-              Container(
+              SizedBox(
                 width: 40,
                 height: 40,
                 child: Center(
@@ -1094,7 +1092,7 @@ class _AddProductScreenState extends State<AddProductScreen>
             child: Switch(
               value: value,
               onChanged: onChanged,
-              activeColor: _LuxuryColors.orangePrimary,
+              activeThumbColor: _LuxuryColors.orangePrimary,
               activeTrackColor: _LuxuryColors.orangePrimary.withOpacity(0.4),
               inactiveThumbColor: Colors.white,
               inactiveTrackColor: _LuxuryColors.toggleTrackOff,
@@ -1315,6 +1313,7 @@ class _AddProductScreenState extends State<AddProductScreen>
     // Prepare data for background upload
     Map<String, dynamic> data = {
       'itemId': _currentItemId,
+      'clientItemId': _clientItemId,
       'uid': uid,
       'userName': userName,
       'barcode': _barcodeController.text.trim(),
@@ -1350,32 +1349,14 @@ class _AddProductScreenState extends State<AddProductScreen>
   void _startBackgroundUpload(Map<String, dynamic> data) async {
     try {
       final appProvider = Provider.of<AppProvider>(context, listen: false);
-      final notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-
-      // Initialize notification service
-      await UploadNotificationService.initialize();
-
-      // Show initial notification
-      await UploadNotificationService.showUploadProgress(
-        id: notificationId,
-        title: 'جاري رفع المنتج',
-        body: 'جاري تحضير الملفات...',
-        progress: 0,
-        maxProgress: 100,
-      );
-
-      // Start background upload without isolate
-      _runBackgroundUploadWithNotification(data, notificationId);
+      _runBackgroundUpload(data);
       appProvider.allMedia.clear();
     } catch (e) {
       print('Error starting background upload: $e');
     }
   }
 
-  void _runBackgroundUploadWithNotification(
-    Map<String, dynamic> data,
-    int notificationId,
-  ) async {
+  void _runBackgroundUpload(Map<String, dynamic> data) async {
     try {
       print("🚀 Starting product upload: ${data['name']}");
 
@@ -1385,29 +1366,43 @@ class _AddProductScreenState extends State<AddProductScreen>
       // Step 1: Upload media files to Bunny.net
       print("📤 Uploading ${mediaFiles.length} media files...");
 
-      final uploadedUrls = await S3UploadService.uploadMediaFiles(
+      final int clientItemId =
+          (data['clientItemId'] is int)
+              ? data['clientItemId'] as int
+              : int.tryParse(data['clientItemId']?.toString() ?? '') ?? 0;
+
+      final uploadResult = await S3UploadService.uploadMediaFiles(
         filePaths: mediaFiles,
-        itemId: itemId,
-        onProgress: (current, total, progress) async {
+        clientItemId: clientItemId,
+        useSequentialIdx: true,
+        onProgress: (current, total, progress) {
           final overallProgress =
               ((current - 1) / total * 100 + progress * 100 / total).toInt();
-          await UploadNotificationService.showUploadProgress(
-            id: notificationId,
-            title: 'جاري رفع المنتج',
-            body: 'رفع الملف $current من $total - ${overallProgress}%',
-            progress: overallProgress,
-            maxProgress: 100,
+          print(
+            "Upload progress: file $current/$total — $overallProgress%",
           );
         },
       );
 
-      if (uploadedUrls.isEmpty) {
+      if (uploadResult.urls.isEmpty) {
         print("❌ No media files uploaded");
         return;
       }
 
+      if (uploadResult.nextIdx == null) {
+        print("❌ No idx allocated for S3 folder");
+        return;
+      }
+
+      if (clientItemId <= 0) {
+        print("❌ No client_id from insertNewOne — skipping client thumbnail");
+      }
+
+      print("📁 S3 upload idx folder: ${uploadResult.nextIdx}");
+      print("📁 Client items id for thumbnail: $clientItemId");
+
       // Step 2: Create media string for database
-      final mediaString = uploadedUrls
+      final mediaString = uploadResult.urls
           .map((url) {
             final fileName = url.split('/').last;
             return fileName;
@@ -1431,24 +1426,20 @@ class _AddProductScreenState extends State<AddProductScreen>
         visibility: data['visibility'],
         comments: data['comments'],
         media: mediaString,
+        idx: uploadResult.nextIdx,
+        clientId: clientItemId > 0 ? clientItemId : uploadResult.clientId,
       );
 
       if (updateResult['success'] == true) {
         print("✅ Product uploaded successfully: ${data['name']}");
 
-        // Show success notification
-        await UploadNotificationService.showUploadComplete(
-          id: notificationId,
-          title: 'تم رفع المنتج بنجاح',
-          body: 'تم رفع منتج ${data['name']} بنجاح',
-        );
         final request = await Dio().post(
           "https://www.Globee-Trading.com/app2026/sql.php",
           data: FormData.fromMap({"action": "get_tokens"}),
         );
-        List player_ids = request.data['player_ids'];
+        List playerIds = request.data['player_ids'];
         List<String> setPlayers = [];
-        for (var player_id in player_ids) {
+        for (var player_id in playerIds) {
           setPlayers.add(player_id['player_id'].toString());
           await OneSignalService.sendNotificationToMultipleUsers(
             playerIds: setPlayers,
@@ -1459,32 +1450,13 @@ class _AddProductScreenState extends State<AddProductScreen>
         }
       } else {
         print("❌ Failed to update database: ${updateResult['error']}");
-
-        // Show error notification
-        await UploadNotificationService.showUploadError(
-          id: notificationId,
-          title: 'فشل رفع المنتج',
-          body: 'حدث خطأ أثناء رفع المنتج',
-        );
       }
 
       data.clear();
       mediaFiles.clear();
     } catch (e) {
       print("❌ Error uploading product: $e");
-
-      // Show error notification
-      await UploadNotificationService.showUploadError(
-        id: notificationId,
-        title: 'فشل رفع المنتج',
-        body: 'حدث خطأ: ${e.toString()}',
-      );
     }
-  }
-
-  // Keep old method for compatibility
-  static void _runBackgroundUpload(Map<String, dynamic> data) async {
-    // This method is kept for backward compatibility but not used
   }
 
   void _showError(String message) {

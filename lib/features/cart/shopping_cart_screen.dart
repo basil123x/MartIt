@@ -261,13 +261,19 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
     );
   }
 
+// id ===> itmid
+// a1 ===> barcode
+// a3 ===> arabic name
+// a4 ===> eng name
+// a5 ===> group
+// a7 ===> arabic description
+// a8 ===> eng description
+// a10 ===> price
+// a30 ===> stock
+
+
   Widget _buildCartItem(CartItemModel cartItem) {
-    String thumbnail = "";
-    if (cartItem.item.idx != '') {
-      thumbnail = "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/items/${cartItem.item.idx}.jpg";
-    } else {
-      thumbnail = "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/${cartItem.item.id}/1.jpg";
-    }
+    String thumbnail = "https://martit.s3.ap-south-1.amazonaws.com/store_2/${cartItem.item.idx}/1.png";
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(

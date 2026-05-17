@@ -117,6 +117,10 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
             value: response.data['data']['name'],
           );
 
+          await AuthService.ensureUserStoreId(
+            response.data['data']['id'].toString(),
+          );
+
           if (mounted) {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(builder: (context) => SplashScreen()),

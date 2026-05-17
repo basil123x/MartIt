@@ -579,7 +579,7 @@ class _ShippingAddressScreenState extends State<ShippingAddressScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Container(
+    return SizedBox(
       height: MediaQuery.of(context).size.width,
       child: Center(
         child: Column(

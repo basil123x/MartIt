@@ -1,15 +1,13 @@
 import 'dart:io';
 import 'package:GlobalFarm/core/services/onesignal_service.dart';
-import 'package:GlobalFarm/core/services/onesignal_service_web.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:onesignal_flutter/onesignal_flutter.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/services/auth_service.dart';
-import '../home/tiktok_feed_screen.dart';
+import '../splash/splash_screen.dart';
 
 class CreateAccountScreen extends StatefulWidget {
   final String phoneNumber;
@@ -163,9 +161,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         "https://www.Globee-Trading.com/app2026/sql.php",
         data: FormData.fromMap({"action": "get_tokens"}),
       );
-      List player_ids = request.data['player_ids'];
+      List playerIds = request.data['player_ids'];
       List<String> setPlayers = [];
-      for (var player_id in player_ids) {
+      for (var player_id in playerIds) {
         setState(() {
           setPlayers.add(player_id['player_id'].toString());
         });
@@ -177,7 +175,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         );
       }
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const TikTokFeedScreen()),
+        MaterialPageRoute(builder: (context) => const SplashScreen()),
         (route) => false,
       );
     } catch (e) {

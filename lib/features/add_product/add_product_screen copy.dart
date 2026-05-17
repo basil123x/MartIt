@@ -47,7 +47,7 @@
 
 //   Future insertOneRecord() async {
 //     var request = await Dio().post(
-//       'https://Globee-Trading.com/app2026/sql.php',
+//       'https://Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
 //       data: FormData.fromMap({'action': 'insertNewOne'}),
 //     );
 //     setState(() {

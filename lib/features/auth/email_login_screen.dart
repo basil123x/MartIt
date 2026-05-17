@@ -99,23 +99,22 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
       _isLoading = true;
     });
 
-    await Future.delayed(const Duration(milliseconds: 500));
+    if (!mounted) return;
 
     setState(() {
       _isLoading = false;
     });
 
-    if (mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => EmailOTPScreen(
-            email: _emailController.text,
-            password: _passwordController.text,
-          ),
+    // Always verify email via OTP first; signup/login happens after OTP screen.
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EmailOTPScreen(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
         ),
-      );
-    }
+      ),
+    );
   }
 
   void _showError(String message) {

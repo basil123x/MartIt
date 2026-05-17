@@ -35,43 +35,43 @@ class _OTPScreenState extends State<OTPScreen> {
   bool _isLoading = false;
   String _enteredOTP = '';
 
-  Future sendOTP() async {
-    await Dio().post(
-      "https://graph.facebook.com/v22.0/1020621547810315/messages",
-      options: Options(
-        headers: {
-          "Authorization":
-              "Bearer EAAdhZCjMZCRZBABQZBhtWgeoQcYCOzXj32zhFSLi7aELSVCWDp32TaP8pd0NNbiZChZB95UwEvQw89izAsQuQEXugIMyiqZAQT8ZAxuq0CZAk8T323L6xJdxcLyG5MybKsaO4wtR9iCZBYMAHQdUg3ZAo9ApDHCld4Y6wri7JG39JBsagQa0aqqQAHWM8BfnEJsMgZDZD",
-          "Content-Type": "application/json",
-        },
-      ),
-      data: {
-        "messaging_product": "whatsapp",
-        "to": "${widget.countryCode}${widget.phoneNumber}",
-        "type": "template",
-        "template": {
-          "name": "send_otp",
-          "language": {"code": "ar"},
-          "components": [
-            {
-              "type": "body",
-              "parameters": [
-                {"type": "text", "text": widget.generatedOTP},
-              ],
-            },
-            {
-              "type": "button",
-              "sub_type": "url",
-              "index": 0,
-              "parameters": [
-                {"type": "text", "text": widget.generatedOTP},
-              ],
-            },
-          ],
-        },
-      },
-    );
-  }
+  // Future sendOTP() async {
+  //   await Dio().post(
+  //     "https://graph.facebook.com/v22.0/1020621547810315/messages",
+  //     options: Options(
+  //       headers: {
+  //         "Authorization":
+  //             "Bearer EAAdhZCjMZCRZBABQZBhtWgeoQcYCOzXj32zhFSLi7aELSVCWDp32TaP8pd0NNbiZChZB95UwEvQw89izAsQuQEXugIMyiqZAQT8ZAxuq0CZAk8T323L6xJdxcLyG5MybKsaO4wtR9iCZBYMAHQdUg3ZAo9ApDHCld4Y6wri7JG39JBsagQa0aqqQAHWM8BfnEJsMgZDZD",
+  //         "Content-Type": "application/json",
+  //       },
+  //     ),
+  //     data: {
+  //       "messaging_product": "whatsapp",
+  //       "to": "${widget.countryCode}${widget.phoneNumber}",
+  //       "type": "template",
+  //       "template": {
+  //         "name": "send_otp",
+  //         "language": {"code": "ar"},
+  //         "components": [
+  //           {
+  //             "type": "body",
+  //             "parameters": [
+  //               {"type": "text", "text": widget.generatedOTP},
+  //             ],
+  //           },
+  //           {
+  //             "type": "button",
+  //             "sub_type": "url",
+  //             "index": 0,
+  //             "parameters": [
+  //               {"type": "text", "text": widget.generatedOTP},
+  //             ],
+  //           },
+  //         ],
+  //       },
+  //     },
+  //   );
+  // }
 
   @override
   void initState() {
@@ -79,7 +79,7 @@ class _OTPScreenState extends State<OTPScreen> {
     // Auto focus first field
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNodes[0].requestFocus();
-      sendOTP();
+      // sendOTP();
     });
   }
 
@@ -142,14 +142,14 @@ class _OTPScreenState extends State<OTPScreen> {
     } else {
       String? userId = OneSignal.User.pushSubscription.id;
       final responseuid = await Dio().post(
-        'https://www.Globee-Trading.com/app2026/sql.php',
+        'https://www.Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "get_user_details",
           "phone": widget.phoneNumber,
         }),
       );
       final response = await Dio().post(
-        'https://www.Globee-Trading.com/app2026/sql.php',
+        'https://www.Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "get_user_details",
           "phone": widget.phoneNumber,

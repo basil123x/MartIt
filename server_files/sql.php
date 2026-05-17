@@ -8,8 +8,11 @@ header('Content-Type: application/json');
 
 include 'xtras/config.php';
 
-// Get action from POST request
+// Get action from POST or GET request
 $action = isset($_POST['action']) ? $_POST['action'] : '';
+if ($action === '' && isset($_GET['action'])) {
+    $action = $_GET['action'];
+}
 
 // Response array
 $response = array('success' => false);
@@ -105,7 +108,7 @@ try {
                 SELECT user_id, buyer_id
                 FROM Followers " . (!empty($user_id) ? "WHERE buyer_id = '$user_id'" : "WHERE 1=0") . "
             ) followers ON Users.uid = followers.user_id
-            WHERE Items.Visibility = 'Public' AND Items.status = 1 AND Items.country = '$country' $get_store $d1 $d3
+            WHERE Items.Visibility = 'Public' AND Items.country = '$country' $get_store $d1 $d3
             ORDER BY RAND()
             LIMIT $limit OFFSET $offset";
 
@@ -248,7 +251,7 @@ try {
                 $orderBy = "id ASC";
             }
             
-            $sql = "SELECT id, `name`, price, Views, media, created_at FROM Items WHERE uid = '$uid' ORDER BY $orderBy LIMIT $limit OFFSET $offset";
+            $sql = "SELECT id,idx,  `name`, price, Views, media, created_at FROM Items WHERE uid = '$uid' ORDER BY $orderBy LIMIT $limit OFFSET $offset";
             $result = $conn->query($sql);
             $items = array();
             
@@ -267,6 +270,7 @@ try {
                     
                     $item = array(
                         'id' => (string)$row['id'],
+                        'idx' => (string)$row['idx'],
                         'name' => (string)$row['name'],
                         'price' => (string)$row['price'],
                         'views' => (int)$row['Views'],
@@ -308,6 +312,9 @@ try {
             $visibility = isset($_POST['visibility']) ? $conn->real_escape_string($_POST['visibility']) : 'Public';
             $media = isset($_POST['media']) ? $conn->real_escape_string($_POST['media']) : '';
             $comments = isset($_POST['comments']) ? $conn->real_escape_string($_POST['comments']) : '';
+            $idx = isset($_POST['idx']) ? (int)$_POST['idx'] : 0;
+            $client_id = isset($_POST['client_id']) ? (int)$_POST['client_id'] : 0;
+            $idx_sql = $idx > 0 ? ", idx = $idx" : '';
 
             if (empty($uid) || empty($name) || empty($price)) {
                 $response = array(
@@ -320,13 +327,31 @@ try {
             // $sql = "INSERT INTO Items (uid, `name`, price, qtt, description, Visibility, media, Views) 
             //         VALUES ('$uid', '$name', '$price', $qtt, '$description', '$visibility', '$media', 0)";
             
-            $sql = "UPDATE Items SET uid = '$uid', barcode = '$barcode' ,name = '$name', eng = '$eng', description = '$description', description_arb = '$description_arb', category = '$category', price = '$price', qtt = '$qtt', Visibility = '$visibility', comments = '$comments', media = '$media' WHERE id = '$itemId'";
+            $sql = "UPDATE Items SET uid = '$uid', barcode = '$barcode' ,name = '$name', eng = '$eng', description = '$description', description_arb = '$description_arb', category = '$category', price = '$price', qtt = '$qtt', Visibility = '$visibility', comments = '$comments', media = '$media'$idx_sql WHERE id = '$itemId'";
 
             if ($conn->query($sql)) {
+                 // Sync to client
+    $syncData = [
+    'barcode'         => $barcode,
+    'name'            => $name,
+    'eng'             => $eng,
+    'description'     => $description,
+    'description_arb' => $description_arb,
+    'price'           => $price,
+    'qtt'             => $qtt,
+    'category'        => $category,
+    'comments'        => $comments,
+    'idx'             => $idx,
+];
+    if ($client_id > 0) {
+        $syncData['id'] = $client_id;
+    }
+    $syncResult = syncToClientServer($syncData);
                 $response = array(
                     'success' => true,
                     'message' => 'تم إضافة الصنف بنجاح',
-                    'item_id' => $conn->insert_id
+                    'item_id' => $conn->insert_id,
+                    'sync_result' => $syncResult
                 );
             } else {
                 $response = array(
@@ -336,6 +361,37 @@ try {
             }
             break;
             
+        // =====================================
+        // آخر idx للمتجر (لتسمية مجلدات S3)
+        // =====================================
+        case 'get_last_idx':
+            $store_id = isset($_GET['store_id']) ? $conn->real_escape_string($_GET['store_id']) : '';
+            if ($store_id === '' && isset($_POST['store_id'])) {
+                $store_id = $conn->real_escape_string($_POST['store_id']);
+            }
+            if ($store_id === '') {
+                $store_id = '2';
+            }
+            try {
+                $sql = "SELECT MAX(CAST(idx AS UNSIGNED)) AS last_idx FROM Items WHERE store_id = '$store_id' AND idx IS NOT NULL AND idx != ''";
+                $result = $conn->query($sql);
+                $last_idx = 0;
+                if ($result && $row = $result->fetch_assoc()) {
+                    $last_idx = $row['last_idx'] !== null ? (int)$row['last_idx'] : 0;
+                }
+                $response = array(
+                    'success' => true,
+                    'last_idx' => $last_idx
+                );
+            } catch (Exception $e) {
+                $response = array(
+                    'success' => false,
+                    'error' => 'خطأ في جلب last_idx: ' . $e->getMessage(),
+                    'last_idx' => 0
+                );
+            }
+            break;
+
         case 'insertNewOne':
             // التحقق من البيانات المطلوبة
             $date = date('Y-m-d H:i:s');
@@ -345,11 +401,13 @@ try {
             $sql = "INSERT INTO Items (id, created_at, status, store_id, country) VALUES (null, '$date', '0', '$store_id', '$country')";
 
             if ($conn->query($sql)) {
+                $newItemId = $conn->insert_id;
+                $clientId = syncEmptyItemToClient();
                 $response = array(
                     'success' => true,
                     'message' => 'تم إضافة الصنف بنجاح',
-                    'item_id' => $conn->insert_id,
-                    'sql_testing' => $sql
+                    'item_id' => $newItemId,
+                    'client_id' => $clientId
                 );
             } else {
                 $response = array(
@@ -374,26 +432,29 @@ try {
         // جلب التصنيفات (Get Categories)
         // =====================================
         case 'get_categories':
-            $sql = "SELECT DISTINCT category 
-                    FROM Items 
-                    WHERE category IS NOT NULL 
-                    AND category != '' 
-                    ORDER BY category ASC";
-            
-            $result = $conn->query($sql);
-            $categories = array();
-            
-            if ($result && $result->num_rows > 0) {
-                while ($row = $result->fetch_assoc()) {
-                    $categories[] = $row['category'];
-                }
-            }
-            
-            $response = array(
-                'status' => 'success',
-                'categories' => $categories
-            );
-            break;
+    $store_id = isset($_POST['store_id']) ? $conn->real_escape_string($_POST['store_id']) : '2';
+    
+    $sql = "SELECT DISTINCT category 
+            FROM Items 
+            WHERE category IS NOT NULL 
+            AND category != '' 
+            AND store_id = '$store_id'
+            ORDER BY category ASC";
+    
+    $result = $conn->query($sql);
+    $categories = array();
+    
+    if ($result && $result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            $categories[] = $row['category'];
+        }
+    }
+    
+    $response = array(
+        'status' => 'success',
+        'categories' => $categories
+    );
+    break;
 
         // =====================================
         // تحديث صنف (Update Item)
@@ -679,7 +740,7 @@ try {
                 $id = isset($_POST['id']) ? trim($_POST['id']) : '';
                 $oid = isset($_POST['oid']) ? trim($_POST['oid']) : '';
                 $fcm_token = isset($_POST['fcm_token']) ? trim($_POST['fcm_token']) : '';
-                $conn->query("UPDATE Users SET player_id = '$fcm_token', oid = '$oid' WHERE uid = '$id' ");
+                $conn->query("UPDATE Users SET player_id = '$fcm_token', oid = '$oid', store_id = '2' WHERE uid = '$id' ");
             }
         
             try {
@@ -738,8 +799,10 @@ try {
             $name = isset($_POST['name']) ? trim($_POST['name']) : '';
             $phone = isset($_POST['phone']) ? trim($_POST['phone']) : '';
             $player_id = isset($_POST['player_id']) ? trim($_POST['player_id']) : '';
-            $store_id = isset($_POST['store_id']) ? trim($_POST['store_id']) : '1';
-            $login_type = isset($_POST['login_type']) ? trim($_POST['login_type']) : '';
+            $store_id = isset($_POST['store_id']) ? trim($_POST['store_id']) : '2';
+            $login_type = isset($_POST['login_type']) ? trim($_POST['login_type']) : 'Phone';
+            // GlobalFarm app — all new users belong to store 2
+            $store_id = '2';
             $date = date('Y-m-d');
         
             if (empty($phone)) {
@@ -969,7 +1032,7 @@ try {
                     WHERE user_id = '$user_id'
                     GROUP BY item_id
                 ) cart_count ON Items.id = cart_count.item_id
-                WHERE Items.Visibility = 'Public' AND Items.status = 1 AND Items.country = '$country' $get_store $d1 $d3
+                WHERE Items.Visibility = 'Public' AND Items.country = '$country' $get_store $d1 $d3
                 ORDER BY RAND()
                 LIMIT $limit OFFSET $offset";
         
@@ -2313,6 +2376,48 @@ try {
             break;
 
         // =====================================
+        // جلب مستخدم بالبريد (للتحقق قبل إنشاء حساب جديد)
+        // =====================================
+        case 'get_user_by_email':
+            $email = isset($_POST['email']) ? trim($_POST['email']) : '';
+            if ($email === '') {
+                $response = [
+                    'success' => false,
+                    'message' => 'البريد الإلكتروني مطلوب'
+                ];
+                break;
+            }
+            $email_esc = $conn->real_escape_string($email);
+            try {
+                $sql = "SELECT uid, oid, Fullname, Email FROM Users WHERE LOWER(TRIM(Email)) = LOWER(TRIM('$email_esc')) LIMIT 1";
+                $result = $conn->query($sql);
+                if ($result && $result->num_rows > 0) {
+                    $row = $result->fetch_assoc();
+                    $response = [
+                        'success' => true,
+                        'message' => 'المستخدم موجود',
+                        'data' => [
+                            'id' => (string)$row['uid'],
+                            'oid' => (string)$row['oid'],
+                            'name' => $row['Fullname'],
+                            'email' => $row['Email'],
+                        ]
+                    ];
+                } else {
+                    $response = [
+                        'success' => false,
+                        'message' => 'المستخدم غير موجود'
+                    ];
+                }
+            } catch (Exception $e) {
+                $response = [
+                    'success' => false,
+                    'error' => 'خطأ في البحث: ' . $e->getMessage()
+                ];
+            }
+            break;
+
+        // =====================================
         // إنشاء حساب بالبريد الإلكتروني
         // =====================================
         case 'create_email_account':
@@ -2321,6 +2426,10 @@ try {
             $password = isset($_POST['password']) ? $_POST['password'] : '';
             $player_id = isset($_POST['player_id']) ? $conn->real_escape_string($_POST['player_id']) : '';
             $avatar_url = isset($_POST['avatar_url']) ? $conn->real_escape_string($_POST['avatar_url']) : '';
+            $store_id = isset($_POST['store_id']) ? $conn->real_escape_string($_POST['store_id']) : '2';
+            $login_type = isset($_POST['login_type']) ? $conn->real_escape_string($_POST['login_type']) : 'Email';
+            // GlobalFarm app — all new users belong to store 2
+            $store_id = '2';
             // $hashed_password = password_hash($password, PASSWORD_DEFAULT);
             
             try {
@@ -2336,8 +2445,8 @@ try {
                     $uid = rand(1000, 9000);
                     $oid = rand(1000, 9000);
                     
-                    $sql = "INSERT INTO Users (uid, oid, Fullname, Email, Password, player_id, urlAvatar, Created_At) 
-                            VALUES ('$uid', '$oid', '$name', '$email', '$password', '$player_id', '$avatar_url', NOW())";
+                    $sql = "INSERT INTO Users (uid, oid, Fullname, Email, Password, player_id, urlAvatar, Created_At, store_id, login_type) 
+                            VALUES ('$uid', '$oid', '$name', '$email', '$password', '$player_id', '$avatar_url', NOW(), '$store_id', '$login_type')";
                     
                     if ($conn->query($sql)) {
                         $response = [
@@ -2372,11 +2481,14 @@ try {
             $oid = rand(1000, 9000);
             $avatar_url = isset($_POST['avatar_url']) ? $conn->real_escape_string($_POST['avatar_url']) : '';
             $player_id = isset($_POST['player_id']) ? $conn->real_escape_string($_POST['player_id']) : '';
-            $login_type = isset($_POST['login_type']) ? $conn->real_escape_string($_POST['login_type']) : '';
+            $login_type = isset($_POST['login_type']) ? $conn->real_escape_string($_POST['login_type']) : 'Google';
+            $store_id = isset($_POST['store_id']) ? $conn->real_escape_string($_POST['store_id']) : '2';
+            // GlobalFarm app — all new users belong to store 2
+            $store_id = '2';
             $date = date('Y-m-d');
             try {
-                    $sql = "INSERT INTO Users (uid, oid, Fullname, Email, player_id, login_type, urlAvatar, Created_At) 
-                            VALUES ('$uid', '$oid', '$name', '$email', '$player_id', '$login_type', '$avatar_url', '$date')";
+                    $sql = "INSERT INTO Users (uid, oid, Fullname, Email, player_id, login_type, urlAvatar, Created_At, store_id) 
+                            VALUES ('$uid', '$oid', '$name', '$email', '$player_id', '$login_type', '$avatar_url', '$date', '$store_id')";
                     
                     if ($conn->query($sql)) {
                         $response = [
@@ -2434,6 +2546,41 @@ try {
             break;
 
         // =====================================
+        // تعيين store_id للمستخدم (GlobalFarm = 2)
+        // =====================================
+        case 'set_user_store_id':
+            $uid = isset($_POST['uid']) ? $conn->real_escape_string($_POST['uid']) : '';
+            $store_id = '2';
+            if ($uid === '') {
+                $response = [
+                    'success' => false,
+                    'message' => 'معرف المستخدم مطلوب'
+                ];
+                break;
+            }
+            try {
+                $sql = "UPDATE Users SET store_id = '$store_id' WHERE uid = '$uid'";
+                if ($conn->query($sql)) {
+                    $response = [
+                        'success' => true,
+                        'message' => 'تم تحديث المتجر بنجاح',
+                        'store_id' => $store_id
+                    ];
+                } else {
+                    $response = [
+                        'success' => false,
+                        'error' => 'فشل في تحديث المتجر: ' . $conn->error
+                    ];
+                }
+            } catch (Exception $e) {
+                $response = [
+                    'success' => false,
+                    'error' => 'خطأ في تحديث المتجر: ' . $e->getMessage()
+                ];
+            }
+            break;
+
+        // =====================================
         // تحديث FCM Token
         // =====================================
         case 'update_fcm_token':
@@ -2441,7 +2588,7 @@ try {
             $fcm_token = isset($_POST['fcm_token']) ? $conn->real_escape_string($_POST['fcm_token']) : '';
             
             try {
-                $sql = "UPDATE Users SET player_id = '$fcm_token' WHERE Email = '$email'";
+                $sql = "UPDATE Users SET player_id = '$fcm_token', store_id = '2' WHERE Email = '$email'";
                 
                 if ($conn->query($sql)) {
                     $response = [
@@ -2523,6 +2670,54 @@ try {
         'success' => false,
         'error' => 'خطأ في قاعدة البيانات: ' . $e->getMessage()
     );
+}
+
+// =====================================
+// Sync empty placeholder row on client (returns real insert_id)
+// =====================================
+function syncEmptyItemToClient() {
+    $clientUrl = 'https://gfnursery.com/s2026/sync_receive.php';
+    $secretKey = 'GlobalFarm_Secret_2026';
+    $postData = json_encode(['action' => 'insert_empty']);
+
+    $ch = curl_init($clientUrl);
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'X-Sync-Key: ' . $secretKey
+    ]);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+    $result = curl_exec($ch);
+    curl_close($ch);
+
+    $decoded = json_decode($result, true);
+    return isset($decoded['id']) ? (int)$decoded['id'] : 0;
+}
+
+// =====================================
+// Sync to client server
+// =====================================
+function syncToClientServer($data) {
+    $clientUrl = 'https://gfnursery.com/s2026/sync_receive.php';
+    $secretKey = 'GlobalFarm_Secret_2026';
+    
+    $postData = json_encode($data);
+    
+    $ch = curl_init($clientUrl);
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'X-Sync-Key: ' . $secretKey
+    ]);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5); // مش هنستنى أكتر من 5 ثواني
+    $result = curl_exec($ch);
+    curl_close($ch);
+    
+    return $result;
 }
 
 

@@ -195,12 +195,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildSearchResultItem(dynamic item) {
-    String thumbnail = "";
-    if (item['idx'] != null) {
-      thumbnail = "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/items/${item['idx']}.jpg";
-    } else {
-      thumbnail = "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/${item['id']}/1.jpg";
-    }
+    String thumbnail = "https://martit.s3.ap-south-1.amazonaws.com/store_2/${item['idx']}/1.png";
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       color: Color(0xFFB4D4F0).withAlpha(40),

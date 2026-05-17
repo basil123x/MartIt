@@ -5,6 +5,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/models/item_model.dart';
+import '../../core/widgets/media_viewer_widget.dart';
 import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -598,21 +599,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-class ProfileItemCard extends StatefulWidget {
+class ProfileItemCard extends StatelessWidget {
   final Map<String, dynamic> item;
 
   const ProfileItemCard({super.key, required this.item});
 
   @override
-  State<ProfileItemCard> createState() => _ProfileItemCardState();
-}
-
-class _ProfileItemCardState extends State<ProfileItemCard> {
-  int _currentIndex = 0; // كل card ليها index خاص بيها
-
-  @override
   Widget build(BuildContext context) {
-    print(widget.item);
     return Card(
       color: Color(0xFFB4D4F0).withAlpha(40),
       elevation: 0,
@@ -625,63 +618,19 @@ class _ProfileItemCardState extends State<ProfileItemCard> {
         children: [
           Expanded(
             flex: 3,
-            child: Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(12),
-                  ),
-                  child: widget.item['idx'] != '' ? Image.network(
-                        "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/items/${widget.item['idx']}.jpg",
-                        fit: BoxFit.cover,
-                      ) : PageView.builder(
-                    onPageChanged: (value) {
-                      setState(() {
-                        _currentIndex = value;
-                      });
-                    },
-                    itemCount: widget.item['media'].length,
-                    itemBuilder: (context, i) {
-                      var thumbnail = widget.item['media'][i].toString().replaceAll("https://globee.b-cdn.net", "https://globalfarmnursery.s3.ap-south-1.amazonaws.com");
-                      return Image.network(
-                        thumbnail,
-                        fit: BoxFit.cover,
-                      );
-                    },
-                  ),
-                ),
-                // Dots Indicator
-                if (widget.item['media'].length > 1)
-                  Positioned(
-                    bottom: 10,
-                    left: 0,
-                    right: 0,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(widget.item['media'].length, (
-                        index,
-                      ) {
-                        return Container(
-                          width: 6,
-                          height: 6,
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          decoration: BoxDecoration(
-                            color: _currentIndex == index
-                                ? AppColors.primary
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(50),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.3),
-                                blurRadius: 2,
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
-              ],
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(12),
+              ),
+              child: MediaViewerWidget(
+                mediaUrls: const [],
+                itmId: "${item["id"] ?? ""}",
+                itmIdx: "${item["idx"] ?? ""}",
+                storeid: "${item["storeid"] ?? "1"}",
+                autoPlayVideo: false,
+                showControls: false,
+                showIndicators: false,
+              ),
             ),
           ),
           Expanded(
@@ -692,7 +641,7 @@ class _ProfileItemCardState extends State<ProfileItemCard> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    widget.item['name'] ?? 'غير متوفر',
+                    item['name'] ?? 'غير متوفر',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
@@ -703,7 +652,7 @@ class _ProfileItemCardState extends State<ProfileItemCard> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${widget.item['price']} ريال',
+                    '${item['price']} ريال',
                     style: const TextStyle(
                       color: AppColors.primary,
                       fontWeight: FontWeight.bold,
@@ -717,7 +666,7 @@ class _ProfileItemCardState extends State<ProfileItemCard> {
                     children: [
                       const Icon(Iconsax.eye, size: 12, color: Colors.grey),
                       Text(
-                        widget.item['views']?.toString() ?? "0",
+                        item['views']?.toString() ?? "0",
                         style: const TextStyle(
                           color: Colors.grey,
                           fontSize: 10,

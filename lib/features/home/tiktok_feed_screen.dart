@@ -18,14 +18,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/constants/app_colors.dart';
-import '../../core/constants/app_strings.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/database_service.dart';
 import '../../core/models/item_model.dart';
-import '../../core/widgets/video_player_widget.dart';
 import '../../core/widgets/media_viewer_widget.dart';
-import '../auth/login_screen.dart';
 import '../search/search_screen.dart';
 import '../profile/profile_screen.dart';
 import '../comments/comments_modal.dart';
@@ -62,29 +59,28 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
   bool _isLoadingCategories = false;
   String? _currentStoreId; // ✅ المتجر الحالي للمنتج المعروض
 
-
   Future<String> getUserCountry() async {
-  try {
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied || 
-        permission == LocationPermission.deniedForever) {
-      return 'Qatar'; // default
-    }
-    
-    Position position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.low, // ✅ low بدل high أسرع
-      timeLimit: Duration(seconds: 5), // ✅ timeout
-    );
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return 'Qatar'; // default
+      }
 
-    List<Placemark> placemarks = await placemarkFromCoordinates(
-      position.latitude,
-      position.longitude,
-    );
-    return placemarks.first.country ?? 'Unknown';
-  } catch (e) {
-    return 'Qatar'; // ✅ default بدل Unknown
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.low, // ✅ low بدل high أسرع
+        timeLimit: Duration(seconds: 5), // ✅ timeout
+      );
+
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      return placemarks.first.country ?? 'Unknown';
+    } catch (e) {
+      return 'Qatar'; // ✅ default بدل Unknown
+    }
   }
-}
 
   @override
   void initState() {
@@ -97,12 +93,12 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
     final page = _pageController.page?.round() ?? 0;
     if (page != _currentIndex && page < _items.length) {
       final newStoreId = _items[page].storeid;
-      
+
       setState(() {
         _currentIndex = page;
         _currentItemId = _items[page].id;
       });
-      
+
       // ✅ تحديث التصنيفات إذا تغير المتجر
       if (newStoreId != _currentStoreId) {
         _loadCategoriesForStore(newStoreId);
@@ -111,19 +107,19 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
   }
 
   Future<void> _checkLoginStatus() async {
-    final _currentUserIdx = await AuthService.getCurrentUserId();
+    final currentUserIdx = await AuthService.getCurrentUserId();
     final isLoggedIn = await AuthService.isLoggedIn();
-    
+
     String? userRole;
-    
+
     // ✅ لو مش مسجل دخول، متعملش الـ API call أصلاً
-    if (isLoggedIn && _currentUserIdx != null) {
+    if (isLoggedIn && currentUserIdx != null) {
       try {
         var result = await Dio().get(
-          'http://globee-trading.com/app2026/profile.php?user_id=$_currentUserIdx&k=${DateTime.now().millisecondsSinceEpoch}',
+          'https://globee-trading.com/app2026/profile.php?user_id=$currentUserIdx&k=${DateTime.now().millisecondsSinceEpoch}',
           options: Options(headers: {'Content-Type': 'application/json'}),
         );
-        
+
         // ✅ تحقق إن data و data['data'] مش null قبل ما تجيب الـ role
         if (result.data != null && result.data['data'] != null) {
           userRole = result.data['data']['role'];
@@ -136,7 +132,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
     setState(() {
       _isLoggedIn = isLoggedIn;
-      _currentUserId = _currentUserIdx;
+      _currentUserId = currentUserIdx;
       _currentUserRole = userRole; // ✅ هيبقى null لو مش مسجل أو فيه error
     });
 
@@ -158,13 +154,14 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
         _categories = categories;
         _currentStoreId = storeId;
         _isLoadingCategories = false;
-        
+
         // ✅ إذا التصنيف المختار غير موجود في المتجر الجديد، نرجع لـ "الكل"
-        if (_selectedCategory != null && !categories.contains(_selectedCategory)) {
+        if (_selectedCategory != null &&
+            !categories.contains(_selectedCategory)) {
           _selectedCategory = null;
         }
       });
-      
+
       print('📦 Loaded ${categories.length} categories for store: $storeId');
     } catch (e) {
       print('Error loading categories for store $storeId: $e');
@@ -201,7 +198,6 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           ? await AuthService.getCurrentUserId()
           : null;
 
-
       if (_isLoggedIn && currentUserId != null) {
         // ✅ لو مسجل دخول، نستخدم fetchItemsWithLikes
         items = await ApiService.fetchItemsWithLikes(
@@ -232,7 +228,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
         _isLoading = false;
         _currentPage++;
       });
-      
+
       // ✅ تحميل التصنيفات للمتجر الأول بعد تحميل المنتجات
       if (items.isNotEmpty && isRefresh) {
         _loadCategoriesForStore(items[0].storeid);
@@ -264,7 +260,6 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    
     return WillPopScope(
       onWillPop: () async {
         // تعرض Dialog لتأكيد الخروج
@@ -353,35 +348,39 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                   _buildBottomInfo(),
 
                   if (_items.isEmpty)
-                  Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Iconsax.box, size: 64, color: Colors.white),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'لا توجد منتجات',
-                          style: TextStyle(
+                    Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Iconsax.box,
+                            size: 64,
                             color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w500,
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () => _loadItems(
-                            isRefresh: true,
-                            category: _selectedCategory,
+                          const SizedBox(height: 16),
+                          const Text(
+                            'لا توجد منتجات',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: () => _loadItems(
+                              isRefresh: true,
+                              category: _selectedCategory,
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Text('إعادة المحاولة'),
                           ),
-                          child: const Text('إعادة المحاولة'),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
                 ],
               ),
       ),
@@ -397,9 +396,51 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           children: [
             // Add Product Button
             if (_isLoggedIn)
-            Visibility(
-              visible: _currentUserRole == 'Admin' ? true : false,
-              child: IconButton(
+              Visibility(
+                visible: _currentUserRole == 'Admin' ? true : false,
+                child: IconButton(
+                  onPressed: () async {
+                    // AuthService.getUserStatus();
+                    String? uid = await AuthService.getCurrentUID();
+                    if (_isLoggedIn) {
+                      AuthService.getUserStatus(uid).then((val) {
+                        if (val['status'] == '2') {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'تم حظرك نهائياً من إستخدام التطبيق يرجى التواصل مع الدعم لحل المشكلة!',
+                              ),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        } else {
+                          _handleAddProduct();
+                        }
+                      });
+                    } else {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const LoginScreen(),
+                        ),
+                      );
+                    }
+                  },
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.secondary,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Iconsax.add,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                ),
+              ),
+            if (!_isLoggedIn)
+              IconButton(
                 onPressed: () async {
                   // AuthService.getUserStatus();
                   String? uid = await AuthService.getCurrentUID();
@@ -432,47 +473,13 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                     color: AppColors.secondary,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Iconsax.add, color: Colors.white, size: 24),
+                  child: const Icon(
+                    Iconsax.login,
+                    color: Colors.white,
+                    size: 24,
+                  ),
                 ),
               ),
-            ),
-            if (!_isLoggedIn)
-            IconButton(
-              onPressed: () async {
-                // AuthService.getUserStatus();
-                String? uid = await AuthService.getCurrentUID();
-                if (_isLoggedIn) {
-                  AuthService.getUserStatus(uid).then((val) {
-                    if (val['status'] == '2') {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'تم حظرك نهائياً من إستخدام التطبيق يرجى التواصل مع الدعم لحل المشكلة!',
-                          ),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    } else {
-                      _handleAddProduct();
-                    }
-                  });
-                } else {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const LoginScreen(),
-                    ),
-                  );
-                }
-              },
-              icon: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.secondary,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Iconsax.login, color: Colors.white, size: 24),
-              ),
-            ),
 
             // Actions
             Row(
@@ -569,11 +576,11 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
         ),
       );
     }
-    
+
     if (_categories.isEmpty) return const SizedBox();
 
     return Positioned(
-      top: 100, // تحت الأيقونات العلوية
+      top: 130, // تحت الأيقونات العلوية
       left: 0,
       right: 0,
       child: Container(
@@ -590,8 +597,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                 label: 'الكل',
                 isSelected: _selectedCategory == null,
                 onTap: () {
-                  if (_selectedCategory == null)
+                  if (_selectedCategory == null) {
                     return; // لو مختار بالفعل، متعملش حاجة
+                  }
 
                   setState(() {
                     _selectedCategory = null;
@@ -611,8 +619,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
               label: category,
               isSelected: _selectedCategory == category,
               onTap: () {
-                if (_selectedCategory == category)
+                if (_selectedCategory == category) {
                   return; // لو مختار بالفعل، متعملش حاجة
+                }
 
                 setState(() {
                   _selectedCategory = category;
@@ -683,8 +692,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
   }
 
   Widget _buildSideActions() {
-    if (_items.isEmpty || _currentIndex >= _items.length)
+    if (_items.isEmpty || _currentIndex >= _items.length) {
       return const SizedBox();
+    }
 
     final item = _items[_currentIndex];
     return Positioned(
@@ -991,8 +1001,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
   }
 
   Widget _buildBottomInfo() {
-    if (_items.isEmpty || _currentIndex >= _items.length)
+    if (_items.isEmpty || _currentIndex >= _items.length) {
       return const SizedBox();
+    }
 
     final item = _items[_currentIndex];
 
@@ -1940,10 +1951,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           const SizedBox(height: 8),
           Text(
             title,
-            style: const TextStyle(
-              color: Color(0xFF1A1A2E),
-              fontSize: 12,
-            ),
+            style: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 12),
           ),
           const SizedBox(height: 4),
           Text(
@@ -2137,9 +2145,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           "https://www.Globee-Trading.com/app2026/sql.php",
           data: FormData.fromMap({"action": "get_tokens"}),
         );
-        List player_ids = request.data['player_ids'];
+        List playerIds = request.data['player_ids'];
         List<String> setPlayers = [];
-        for (var player_id in player_ids) {
+        for (var player_id in playerIds) {
           setPlayers.add(player_id['player_id'].toString());
           await OneSignalServiceWebSys.sendNotificationToMultipleUsers(
             playerIds: setPlayers,
@@ -2318,9 +2326,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           "https://www.Globee-Trading.com/app2026/sql.php",
           data: FormData.fromMap({"action": "get_tokens"}),
         );
-        List player_ids = request.data['player_ids'];
+        List playerIds = request.data['player_ids'];
         List<String> setPlayers = [];
-        for (var player_id in player_ids) {
+        for (var player_id in playerIds) {
           setPlayers.add(player_id['player_id'].toString());
           await OneSignalServiceWebSys.sendNotificationToMultipleUsers(
             playerIds: setPlayers,
@@ -2522,12 +2530,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
       print('Error loading cart quantity: $e');
     }
 
-    String thumbnail = "";
-    if (item.idx != '') {
-      thumbnail = "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/items/${item.idx}.jpg";
-    } else {
-      thumbnail = "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/${item.id}/1.jpg";
-    }
+    String thumbnail = "https://martit.s3.ap-south-1.amazonaws.com/store_2/${item.idx}/1.png";
 
     showModalBottomSheet(
       context: context,
@@ -2629,8 +2632,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                                     },
                                     loadingBuilder:
                                         (context, child, loadingProgress) {
-                                          if (loadingProgress == null)
+                                          if (loadingProgress == null) {
                                             return child;
+                                          }
                                           return Container(
                                             color: Colors.grey[300],
                                             child: const Center(

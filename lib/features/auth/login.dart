@@ -1,14 +1,15 @@
-import 'dart:async';
 import 'dart:io';
-import 'dart:math';
+
+import 'package:GlobalFarm/core/services/auth_service.dart';
 import 'package:GlobalFarm/core/services/google_auth_service.dart';
 import 'package:GlobalFarm/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import 'phone_login_screen.dart';
@@ -22,74 +23,234 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final GoogleAuthService googleAuthService = GoogleAuthService();
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
+
+  String _appleEmailCacheKey(String appleUserId) =>
+      'apple_cached_email_$appleUserId';
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  /// Persists server session + optional Google profile/tokens, then navigates.
+  Future<bool> _completeLoginAndNavigate({
+    required Map<String, dynamic> serverUser,
+    required String email,
+    required String displayName,
+    String? photoUrl,
+    required String loginMethod,
+    String? firebaseUid,
+    String? idToken,
+    String? accessToken,
+  }) async {
+    final normalized = AuthService.normalizeUserData(serverUser);
+    final serverUid = normalized['id'] ?? '';
+    if (serverUid.isEmpty) {
+      _showSnack('لم يتم استلام معرف المستخدم من الخادم');
+      return false;
+    }
+
+    if (email.isNotEmpty) {
+      await AuthService.updateFcmTokenForEmail(email);
+    }
+
+    final saved = await AuthService.persistLoginSession(
+      serverUid: serverUid,
+      serverOid: normalized['oid'] ?? '',
+      email: email,
+      name: (normalized['name'] ?? '').isNotEmpty
+          ? normalized['name']!
+          : displayName,
+      photoUrl: photoUrl,
+      loginMethod: loginMethod,
+      firebaseUid: firebaseUid,
+      idToken: idToken,
+      accessToken: accessToken,
+    );
+
+    if (!saved) {
+      _showSnack('تعذر حفظ بيانات الجلسة. حاول مرة أخرى.');
+      return false;
+    }
+
+    if (!mounted) return false;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => const SplashScreen()),
+    );
+    return true;
+  }
+
+  Future<Map<String, dynamic>?> _resolveServerUserForGoogle({
+    required String email,
+    required String displayName,
+    required String photoUrl,
+    required String? playerId,
+  }) async {
+    final Map<String, dynamic>? existing =
+        await AuthService.getUserByEmail(email);
+    if (existing != null) {
+      return existing;
+    }
+
+    final Response<dynamic> result = await Dio().post(
+      '${AuthService.baseUrl}/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+      data: FormData.fromMap({
+        'action': 'create_social_account',
+        'name': displayName,
+        'email': email,
+        'avatar_url': photoUrl,
+        'player_id': playerId ?? '',
+        'login_type': 'Google',
+        ...AuthService.registrationStoreFields(),
+      }),
+    );
+
+    final dynamic body = result.data;
+    if (body is Map && body['success'] == true && body['data'] != null) {
+      return Map<String, dynamic>.from(body['data'] as Map);
+    }
+
+    // Account may already exist if get_user_by_email is missing on server.
+    final Map<String, dynamic>? retry =
+        await AuthService.getUserByEmail(email);
+    if (retry != null) return retry;
+
+    return null;
+  }
 
   Future<void> _googleSignIn() async {
     try {
-      User? user = await GoogleAuthService().signInWithGoogle();
-      if (user != null) {
-        int uid = 1000 + Random().nextInt(9000);
-        int oid = 1000 + Random().nextInt(9000);
-        
-        await FlutterSecureStorage().write(key: "user_uid", value: uid.toString());
-        await FlutterSecureStorage().write(key: "user_oid", value: oid.toString());
-        await FlutterSecureStorage().write(key: 'social_name', value: user.displayName);
-        await FlutterSecureStorage().write(key: 'social_email', value: user.email);
-        await FlutterSecureStorage().write(key: 'social_avatar', value: user.photoURL);
-        
-        String? playerId = OneSignal.User.pushSubscription.id;
-        
-        var result = await Dio().post(
-          "https://www.globee-trading.com/app2026/sql.php?k=${DateTime.now().millisecond}",
-          data: FormData.fromMap({
-            "action": "create_account",
-            "uid": uid,
-            "oid": oid,
-            "name": user.displayName,
-            "email": user.email,
-            "phone": "",
-            "player_id": playerId,
-            "store_id": "2",
-            "login_type": "Google",
-          }),
-        );
-        
-        // ← أضف الـ print دي
-        print('🔥 API Response: ${result.data}');
-        
-        if (result.data['success'] == true) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => SplashScreen()),
-          );
-        } else {
-          
-          if (result.data['success'] == false) {
-            await FlutterSecureStorage().write(key: "user_uid", value: result.data['uid']['uid'].toString());
-            await FlutterSecureStorage().write(key: "user_oid", value: result.data['uid']['oid'].toString());
-            await FlutterSecureStorage().write(key: 'social_name', value: user.displayName);
-            await FlutterSecureStorage().write(key: 'social_email', value: user.email);
-            await FlutterSecureStorage().write(key: 'social_avatar', value: user.photoURL);
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => SplashScreen()),
-            );
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('API Error: ${result.data}')),
-            );
-          }
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('فشل تسجيل الدخول، حاول مرة تانية')),
+      final GoogleSignInResult? signInResult =
+          await GoogleAuthService().signInWithGoogle();
+      if (signInResult == null) {
+        _showSnack('فشل تسجيل الدخول، حاول مرة تانية');
+        return;
+      }
+
+      final String? email = signInResult.email;
+      if (email == null || email.isEmpty) {
+        _showSnack('لا يوجد بريد إلكتروني مرتبط بحساب جوجل');
+        return;
+      }
+
+      final String displayName =
+          signInResult.displayName ?? 'Google User';
+      final String photoUrl = signInResult.photoUrl ?? '';
+      final String? playerId = OneSignal.User.pushSubscription.id;
+
+      final Map<String, dynamic>? serverUser =
+          await _resolveServerUserForGoogle(
+        email: email,
+        displayName: displayName,
+        photoUrl: photoUrl,
+        playerId: playerId,
+      );
+
+      if (serverUser == null) {
+        _showSnack('فشل مزامنة الحساب مع الخادم');
+        return;
+      }
+
+      await _completeLoginAndNavigate(
+        serverUser: serverUser,
+        email: email,
+        displayName: displayName,
+        photoUrl: photoUrl,
+        loginMethod: 'google',
+        firebaseUid: signInResult.firebaseUid,
+        idToken: signInResult.idToken,
+        accessToken: signInResult.accessToken,
+      );
+    } catch (e) {
+      _showSnack('Error: $e');
+    }
+  }
+
+  Future<void> _appleSignIn() async {
+    if (!Platform.isIOS) return;
+
+    try {
+      final AuthorizationCredentialAppleID credential =
+          await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      final String? appleUserId = credential.userIdentifier;
+      if (appleUserId == null || appleUserId.isEmpty) {
+        _showSnack('تعذر الحصول على معرف Apple.');
+        return;
+      }
+
+      String? email = credential.email;
+      if (email == null || email.isEmpty) {
+        email = await _secureStorage.read(
+          key: _appleEmailCacheKey(appleUserId),
         );
       }
-    } catch (e) {
-      print('❌ Error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
+      if (email == null || email.isEmpty) {
+        _showSnack(
+          'لم يتم استلام البريد من Apple. فعّل مشاركة البريد أو استخدم طريقة أخرى للدخول.',
+        );
+        return;
+      }
+
+      await _secureStorage.write(
+        key: _appleEmailCacheKey(appleUserId),
+        value: email,
       );
+
+      String displayName =
+          '${credential.givenName ?? ''} ${credential.familyName ?? ''}'.trim();
+      if (displayName.isEmpty) {
+        displayName = 'Apple User';
+      }
+
+      Map<String, dynamic>? serverUser =
+          await AuthService.getUserByEmail(email);
+      if (serverUser == null) {
+        final String? playerId = OneSignal.User.pushSubscription.id;
+        final Response<dynamic> result = await Dio().post(
+          '${AuthService.baseUrl}/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+          data: FormData.fromMap({
+            'action': 'create_social_account',
+            'name': displayName,
+            'email': email,
+            'avatar_url': '',
+            'player_id': playerId ?? '',
+            'login_type': 'Apple',
+            ...AuthService.registrationStoreFields(),
+          }),
+        );
+        final dynamic body = result.data;
+        if (body is Map && body['success'] == true && body['data'] != null) {
+          serverUser = Map<String, dynamic>.from(body['data'] as Map);
+        } else {
+          serverUser = await AuthService.getUserByEmail(email);
+        }
+      }
+
+      if (serverUser == null) {
+        _showSnack('فشل مزامنة الحساب مع الخادم');
+        return;
+      }
+
+      await _completeLoginAndNavigate(
+        serverUser: serverUser,
+        email: email,
+        displayName: displayName,
+        photoUrl: '',
+        loginMethod: 'apple',
+      );
+    } catch (e) {
+      _showSnack('Error: $e');
     }
-  } 
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +262,6 @@ class _LoginScreenState extends State<LoginScreen> {
             padding: const EdgeInsets.all(24.0),
             child: Column(
               children: [
-                // Logo
                 Container(
                   width: 100,
                   decoration: BoxDecoration(
@@ -118,7 +278,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(25),
                     child: Image.asset(
-                      "assets/images/Logo.png",
+                      'assets/images/Logo.png',
                       fit: BoxFit.cover,
                     ),
                   ),
@@ -126,14 +286,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 20),
 
-                // App Name
                 Text(
                   AppStrings.appName,
                   style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 32,
-                  ),
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 32,
+                      ),
                 ),
 
                 const SizedBox(height: 12),
@@ -142,20 +301,18 @@ class _LoginScreenState extends State<LoginScreen> {
                   'مرحباً بك في عالم التسوق الذكي',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppColors.textSecondary,
-                    fontSize: 16,
-                  ),
+                        color: AppColors.textSecondary,
+                        fontSize: 16,
+                      ),
                 ),
 
                 const SizedBox(height: 30),
-
-                
 
                 const SizedBox(height: 16),
 
                 _buildLoginOptionButton(
                   context: context,
-                  imageTxt: "assets/images/social/google.png",
+                  imageTxt: 'assets/images/social/google.png',
                   isimg: true,
                   title: 'سجل بواسطة جوجل',
                   gradient: LinearGradient(
@@ -169,14 +326,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 16),
 
-                // Email Login Button
                 _buildLoginOptionButton(
                   context: context,
                   icon: Iconsax.sms,
                   isimg: false,
                   title: 'التسجيل بالبريد الإلكتروني',
-                  gradient: LinearGradient(
-                    colors: [const Color(0xFF6366F1), const Color(0xFF8B5CF6)],
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
                   ),
                   onTap: () {
                     Navigator.push(
@@ -190,29 +346,23 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 16),
 
-                Opacity(
-                  opacity: 0.4,
-                  child: Visibility(
-                    visible: Platform.isIOS ? true : false,
-                    child: _buildLoginOptionButton(
-                      context: context,
-                      imageTxt: "assets/images/social/apple.png",
-                      isimg: true,
-                      title: 'سجل بواسطة أبل',
-                      subtitle: 'قريباً',
-                      gradient: LinearGradient(
-                        colors: [
-                          AppColors.primary,
-                          AppColors.primary.withValues(alpha: 0.8),
-                        ],
-                      ),
+                if (Platform.isIOS)
+                  _buildLoginOptionButton(
+                    context: context,
+                    imageTxt: 'assets/images/social/apple.png',
+                    isimg: true,
+                    title: 'سجل بواسطة أبل',
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.primary,
+                        AppColors.primary.withValues(alpha: 0.8),
+                      ],
                     ),
+                    onTap: () async => _appleSignIn(),
                   ),
-                ),
 
                 const SizedBox(height: 30),
 
-                // Divider
                 Row(
                   children: [
                     Expanded(
@@ -223,8 +373,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Text(
                         'أو تسجيل الدخول باستخدام',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
+                              color: AppColors.textSecondary,
+                            ),
                       ),
                     ),
                     Expanded(
@@ -234,7 +384,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 30),
 
-                // Phone Login Button
                 _buildLoginOptionButton(
                   context: context,
                   icon: Iconsax.mobile,
@@ -262,7 +411,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   opacity: 0.4,
                   child: _buildLoginOptionButton(
                     context: context,
-                    imageTxt: "assets/images/social/face.png",
+                    imageTxt: 'assets/images/social/face.png',
                     isimg: true,
                     title: 'سجل بواسطة الفيسبوك',
                     subtitle: 'قريباً',
@@ -277,13 +426,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 50),
 
-                // Footer
                 Text(
                   'بالمتابعة، أنت توافق على شروط الاستخدام وسياسة الخصوصية',
                   textAlign: TextAlign.center,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: AppColors.textHint),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textHint,
+                      ),
                 ),
               ],
             ),
@@ -310,7 +458,7 @@ class _LoginScreenState extends State<LoginScreen> {
         textDirection: TextDirection.rtl,
         child: Container(
           width: double.infinity,
-          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           decoration: BoxDecoration(
             gradient: gradient,
             borderRadius: BorderRadius.circular(20),
@@ -332,7 +480,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 child: isimg != true
                     ? Icon(icon, color: Colors.white, size: 28)
-                    : Image.asset(imageTxt ?? "", width: 20),
+                    : Image.asset(imageTxt ?? '', width: 20),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -351,15 +499,15 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                         ),
                         Visibility(
-                          visible: subtitle != null ? true : false,
+                          visible: subtitle != null,
                           child: Text(
-                            subtitle ?? "",
-                            style: TextStyle(color: Colors.white),
+                            subtitle ?? '',
+                            style: const TextStyle(color: Colors.white),
                           ),
                         ),
                       ],
                     ),
-                    Icon(
+                    const Icon(
                       Icons.arrow_forward_ios,
                       color: Colors.white,
                       size: 20,
@@ -370,34 +518,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildSocialButton({
-    required BuildContext context,
-    required String icon,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        width: 70,
-        height: 70,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.lightGrey, width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: Center(child: Image.asset(icon, width: 32, height: 32)),
       ),
     );
   }

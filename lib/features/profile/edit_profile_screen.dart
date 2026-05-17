@@ -1,11 +1,11 @@
 import 'dart:io';
+import 'package:GlobalFarm/core/services/s3_upload_service.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/api_service.dart';
-import '../../core/services/bunny_upload_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final String currentName;
@@ -212,15 +212,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final remotePath = 'users/${widget.currentUid}/avatar.jpg';
       
-      final uploadedUrls = await S3UploadService.uploadMediaFiles(
+      final uploadResult = await S3UploadService.uploadMediaFiles(
         filePaths: [imageFile.path],
-        itemId: 'users/${widget.currentUid}',
+        folderName: 'users/${widget.currentUid}',
+        useSequentialIdx: false,
         onProgress: (current, total, progress) {
           print('Uploading profile image: ${(progress * 100).toStringAsFixed(1)}%');
         },
       );
 
-      if (uploadedUrls.isNotEmpty) {
+      if (uploadResult.urls.isNotEmpty) {
         setState(() {
           _uploadedImageUrl = 'https://globee.b-cdn.net/users/${widget.currentUid}/avatar.jpg?t=$timestamp';
           _isUploadingImage = false;

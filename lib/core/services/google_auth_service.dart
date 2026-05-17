@@ -1,18 +1,35 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+/// Google + Firebase sign-in payload used to persist session locally.
+class GoogleSignInResult {
+  final User firebaseUser;
+  final String? idToken;
+  final String? accessToken;
+
+  const GoogleSignInResult({
+    required this.firebaseUser,
+    this.idToken,
+    this.accessToken,
+  });
+
+  String? get email => firebaseUser.email;
+  String? get displayName => firebaseUser.displayName;
+  String? get photoUrl => firebaseUser.photoURL;
+  String get firebaseUid => firebaseUser.uid;
+}
+
 class GoogleAuthService {
-  Future<User?> signInWithGoogle() async {
+  Future<GoogleSignInResult?> signInWithGoogle() async {
     try {
       await GoogleSignIn.instance.initialize();
       await GoogleSignIn.instance.signOut().catchError((_) {});
 
-      final GoogleSignInAccount? googleUser =
+      final GoogleSignInAccount googleUser =
           await GoogleSignIn.instance.authenticate();
-      if (googleUser == null) return null;
 
       final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+          googleUser.authentication;
 
       final credential = GoogleAuthProvider.credential(
         idToken: googleAuth.idToken,
@@ -22,18 +39,22 @@ class GoogleAuthService {
           await FirebaseAuth.instance.signInWithCredential(credential);
 
       final User? user = userCredential.user;
-      print('✅ Name: ${user?.displayName}');
-      print('✅ Email: ${user?.email}');
-      print('✅ UID: ${user?.uid}');
-      return user;
+      if (user == null) return null;
+
+      String? firebaseIdToken;
+      try {
+        firebaseIdToken = await user.getIdToken();
+      } catch (_) {}
+
+      return GoogleSignInResult(
+        firebaseUser: user,
+        idToken: googleAuth.idToken,
+        accessToken: firebaseIdToken,
+      );
     } catch (e) {
-      print('❌ Google Sign In Error: $e');
-      
       if (e.toString().contains('canceled')) {
         return null;
       }
-      
-      // أي error تاني وريه رسالة
       throw Exception('فشل تسجيل الدخول، حاول تاني');
     }
   }
