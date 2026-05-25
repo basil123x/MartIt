@@ -2,6 +2,9 @@ class AppConstants {
   // App Info
   static const String appName = 'Globee';
   static const String appVersion = '1.0.0';
+
+  /// Albadaa store on Globee / martit S3 (store_4).
+  static const String albadaaStoreId = '4';
   
   // API Configuration
   static const String baseUrl = 'https://your-api-domain.com/api/';

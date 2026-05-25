@@ -25,6 +25,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/database_service.dart';
 import '../../core/models/item_model.dart';
+import '../../core/utils/product_image_url.dart';
 import '../../core/widgets/video_player_widget.dart';
 import '../../core/widgets/media_viewer_widget.dart';
 import '../auth/login_screen.dart';
@@ -64,29 +65,28 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
   bool _isLoadingCategories = false;
   String? _currentStoreId; // ✅ المتجر الحالي للمنتج المعروض
 
-
   Future<String> getUserCountry() async {
-  try {
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied || 
-        permission == LocationPermission.deniedForever) {
-      return 'Qatar'; // default
-    }
-    
-    Position position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.low, // ✅ low بدل high أسرع
-      timeLimit: Duration(seconds: 5), // ✅ timeout
-    );
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return 'Qatar'; // default
+      }
 
-    List<Placemark> placemarks = await placemarkFromCoordinates(
-      position.latitude,
-      position.longitude,
-    );
-    return placemarks.first.country ?? 'Unknown';
-  } catch (e) {
-    return 'Qatar'; // ✅ default بدل Unknown
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.low, // ✅ low بدل high أسرع
+        timeLimit: Duration(seconds: 5), // ✅ timeout
+      );
+
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      return placemarks.first.country ?? 'Unknown';
+    } catch (e) {
+      return 'Qatar'; // ✅ default بدل Unknown
+    }
   }
-}
 
   @override
   void initState() {
@@ -99,12 +99,12 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
     final page = _pageController.page?.round() ?? 0;
     if (page != _currentIndex && page < _items.length) {
       final newStoreId = _items[page].storeid;
-      
+
       setState(() {
         _currentIndex = page;
         _currentItemId = _items[page].id;
       });
-      
+
       // ✅ تحديث التصنيفات إذا تغير المتجر
       if (newStoreId != _currentStoreId) {
         _loadCategoriesForStore(newStoreId);
@@ -115,25 +115,32 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
   Future<void> _checkLoginStatus() async {
     final _currentUserIdx = await AuthService.getCurrentUserId();
     final isLoggedIn = await AuthService.isLoggedIn();
-    
+
     String? userRole;
-    
+
     if (isLoggedIn && _currentUserIdx != null) {
       try {
         var result = await Dio().get(
           'http://globee-trading.com/app2026/profile.php?user_id=$_currentUserIdx&k=${DateTime.now().millisecondsSinceEpoch}',
           options: Options(headers: {'Content-Type': 'application/json'}),
         );
-        
+
         // ✅ تحقق إن data و data['data'] مش null قبل ما تجيب الـ role
         if (result.data != null && result.data['data'] != null) {
-          userRole = result.data['data']['role'];
+          final roleFromApi = result.data['data']['role'];
+          debugPrint('🔑 User role from API: "$roleFromApi"');
+          debugPrint('🔑 Role type: ${roleFromApi.runtimeType}');
+          userRole = roleFromApi?.toString();
         }
       } catch (e) {
         print('Error fetching user profile: $e');
         // ✅ لو فيه error في الـ API، الصفحة تكمل بدون role
       }
     }
+
+    debugPrint(
+      '🔑 Final _currentUserRole: "$userRole" (${userRole.runtimeType})',
+    );
 
     setState(() {
       _isLoggedIn = isLoggedIn;
@@ -159,13 +166,14 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
         _categories = categories;
         _currentStoreId = storeId;
         _isLoadingCategories = false;
-        
+
         // ✅ إذا التصنيف المختار غير موجود في المتجر الجديد، نرجع لـ "الكل"
-        if (_selectedCategory != null && !categories.contains(_selectedCategory)) {
+        if (_selectedCategory != null &&
+            !categories.contains(_selectedCategory)) {
           _selectedCategory = null;
         }
       });
-      
+
       print('📦 Loaded ${categories.length} categories for store: $storeId');
     } catch (e) {
       print('Error loading categories for store $storeId: $e');
@@ -202,7 +210,6 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           ? await AuthService.getCurrentUserId()
           : null;
 
-
       print("cccccccccc $currentUserId");
 
       if (_isLoggedIn && currentUserId != null) {
@@ -235,7 +242,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
         _isLoading = false;
         _currentPage++;
       });
-      
+
       // ✅ تحميل التصنيفات للمتجر الأول بعد تحميل المنتجات
       if (items.isNotEmpty && isRefresh) {
         _loadCategoriesForStore(items[0].storeid);
@@ -267,7 +274,6 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    
     return WillPopScope(
       onWillPop: () async {
         // تعرض Dialog لتأكيد الخروج
@@ -398,9 +404,51 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           children: [
             // Add Product Button
             if (_isLoggedIn)
-            Visibility(
-              visible: _currentUserRole == 'Admin' ? true : false,
-              child: IconButton(
+              Visibility(
+                visible: _currentUserRole?.toLowerCase() == 'admin',
+                child: IconButton(
+                  onPressed: () async {
+                    // AuthService.getUserStatus();
+                    String? uid = await AuthService.getCurrentUID();
+                    if (_isLoggedIn) {
+                      AuthService.getUserStatus(uid).then((val) {
+                        if (val['status'] == '2') {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'تم حظرك نهائياً من إستخدام التطبيق يرجى التواصل مع الدعم لحل المشكلة!',
+                              ),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        } else {
+                          _handleAddProduct();
+                        }
+                      });
+                    } else {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const LoginScreen(),
+                        ),
+                      );
+                    }
+                  },
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.secondary,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Iconsax.add,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                ),
+              ),
+            if (!_isLoggedIn)
+              IconButton(
                 onPressed: () async {
                   // AuthService.getUserStatus();
                   String? uid = await AuthService.getCurrentUID();
@@ -433,47 +481,13 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                     color: AppColors.secondary,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Iconsax.add, color: Colors.white, size: 24),
+                  child: const Icon(
+                    Iconsax.login,
+                    color: Colors.white,
+                    size: 24,
+                  ),
                 ),
               ),
-            ),
-            if (!_isLoggedIn)
-            IconButton(
-              onPressed: () async {
-                // AuthService.getUserStatus();
-                String? uid = await AuthService.getCurrentUID();
-                if (_isLoggedIn) {
-                  AuthService.getUserStatus(uid).then((val) {
-                    if (val['status'] == '2') {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'تم حظرك نهائياً من إستخدام التطبيق يرجى التواصل مع الدعم لحل المشكلة!',
-                          ),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    } else {
-                      _handleAddProduct();
-                    }
-                  });
-                } else {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const LoginScreen(),
-                    ),
-                  );
-                }
-              },
-              icon: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.secondary,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Iconsax.login, color: Colors.white, size: 24),
-              ),
-            ),
 
             // Actions
             Row(
@@ -570,7 +584,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
         ),
       );
     }
-    
+
     if (_categories.isEmpty) return const SizedBox();
 
     return Positioned(
@@ -1124,19 +1138,27 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
   }
 
   Widget _buildVideoItem(ItemModel item) {
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      color: Colors.black,
-      child: MediaViewerWidget(
-              mediaUrls: item.media,
-              itmId: item.id,
-              itmIdx: item.idx,
-              storeid: item.storeid,
-              autoPlayVideo: true,
-              showControls: false,
-              showIndicators: item.media.length > 1,
-            ),
+    final feedUrls = item.feedMediaUrls;
+    final imageUrl = feedUrls.isNotEmpty
+        ? feedUrls.first
+        : ProductImageUrl.albadaaImageUrl(idx: item.idx, id: item.id);
+    debugPrint(
+      '🖼️ Feed item ${item.id} store=${item.storeid} mediaCount=${feedUrls.length} imageUrl=$imageUrl',
+    );
+
+    return SizedBox.expand(
+      child: ColoredBox(
+        color: Colors.black,
+        child: MediaViewerWidget(
+          mediaUrls: feedUrls.isNotEmpty ? feedUrls : [imageUrl],
+          itmId: item.id,
+          itmIdx: item.idx,
+          storeid: item.storeid,
+          autoPlayVideo: true,
+          showControls: false,
+          showIndicators: feedUrls.length > 1,
+        ),
+      ),
     );
   }
 
@@ -1938,10 +1960,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           const SizedBox(height: 8),
           Text(
             title,
-            style: const TextStyle(
-              color: Color(0xFF1A1A2E),
-              fontSize: 12,
-            ),
+            style: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 12),
           ),
           const SizedBox(height: 4),
           Text(
@@ -2431,9 +2450,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
   void _handleShare(ItemModel item) async {
     try {
-      final response = await http.get(
-        Uri.parse("https://globee.b-cdn.net/${item.id}/1.jpg"),
-      );
+      final response = await http.get(Uri.parse(item.primaryImageUrl));
       final bytes = response.bodyBytes;
 
       // حفظ الصورة في ملف مؤقت
@@ -2520,12 +2537,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
       print('Error loading cart quantity: $e');
     }
 
-    String thumbnail = "";
-    if (item.idx != '') {
-      thumbnail = "https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmx/${item.idx}.png";
-    } else {
-      thumbnail = "https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmapp/${item.id}/1.png";
-    }
+    final thumbnail = item.primaryImageUrl;
 
     showModalBottomSheet(
       context: context,

@@ -33,26 +33,37 @@ class DatabaseService {
     required String visibility,
     required String comments,
     required String media,
+    String? clientIdBadaa,
+    String? storeId,
   }) async {
     try {
+      final fields = <String, dynamic>{
+        'action': 'insert',
+        'item_id': itemId,
+        'uid': uid,
+        'barcode': barcode,
+        'name': name,
+        'eng': eng,
+        'description': description,
+        'description_arb': description_arb,
+        'category': category,
+        'price': price,
+        'qtt': quantity,
+        'visibility': visibility,
+        'comments': comments,
+        'media': media,
+      };
+      if (clientIdBadaa != null && clientIdBadaa.isNotEmpty) {
+        fields['client_id_badaa'] = clientIdBadaa;
+        fields['idx'] = clientIdBadaa;
+      }
+      if (storeId != null && storeId.isNotEmpty) {
+        fields['store_id'] = storeId;
+      }
+
       final response = await _dio.post(
         '$_baseUrl/sql.php',
-        data: FormData.fromMap({
-          'action': 'insert',
-          'item_id': itemId,
-          'uid': uid,
-          'barcode': barcode,
-          'name': name,
-          'eng': eng,
-          'description': description,
-          'description_arb': description_arb,
-          'category': category,
-          'price': price,
-          'qtt': quantity,
-          'visibility': visibility,
-          'comments': comments,
-          'media': media,
-        }),
+        data: FormData.fromMap(fields),
       );
 
       return response.data;

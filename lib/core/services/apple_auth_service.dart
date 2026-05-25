@@ -1,28 +1,29 @@
 import 'dart:convert';
 import 'dart:math';
-import 'package:Albadaa/features/auth/create_account_screen.dart';
+
+import 'package:Albadaa/core/services/social_auth_service.dart';
 import 'package:Albadaa/features/splash/splash_screen.dart';
 import 'package:crypto/crypto.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
-/// بنعمل nonce عشان Apple تتأكد من الـ request
 String generateNonce([int length = 32]) {
-  const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
+  const charset =
+      '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
   final random = Random.secure();
-  return List.generate(length, (_) => charset[random.nextInt(charset.length)]).join();
+  return List.generate(
+    length,
+    (_) => charset[random.nextInt(charset.length)],
+  ).join();
 }
 
 String sha256ofString(String input) {
   final bytes = utf8.encode(input);
-  final digest = sha256.convert(bytes);
-  return digest.toString();
+  return sha256.convert(bytes).toString();
 }
 
-Future signInWithApple(BuildContext context) async {
+Future<void> signInWithApple(BuildContext context) async {
   try {
     final rawNonce = generateNonce();
     final nonce = sha256ofString(rawNonce);
@@ -35,73 +36,69 @@ Future signInWithApple(BuildContext context) async {
       nonce: nonce,
     );
 
-    final String userIdentifier = credential.userIdentifier ?? '';
-    final String identityToken = credential.identityToken ?? '';
-    final String firstName = credential.givenName ?? '';
-    final String lastName = credential.familyName ?? '';
-    final String email = credential.email ?? '';
-    final String fullName = '$firstName $lastName'.trim();
+    final userIdentifier = credential.userIdentifier ?? '';
+    final identityToken = credential.identityToken ?? '';
+    final firstName = credential.givenName ?? '';
+    final lastName = credential.familyName ?? '';
+    final emailFromApple = credential.email ?? '';
+    final fullNameFromApple = '$firstName $lastName'.trim();
 
-    final storage = FlutterSecureStorage();
-    await storage.write(key: 'apple_id', value: userIdentifier);
-    await storage.write(key: 'apple_token', value: identityToken);
-    int uid = 1000 + Random().nextInt(9000);
-    int oid = 1000 + Random().nextInt(9000);
-    await FlutterSecureStorage().write(key: "user_uid", value: uid.toString());
-    await FlutterSecureStorage().write(key: "user_oid", value: oid.toString());
-    await FlutterSecureStorage().write(key: 'social_name', value: fullName);
-    await FlutterSecureStorage().write(key: 'social_email', value: email);
-    
-    String? playerId = OneSignal.User.pushSubscription.id;
-    
-    var result = await Dio().post(
-      "https://www.globee-trading.com/app2026/sql.php?k=${DateTime.now().millisecond}",
-      data: FormData.fromMap({
-        "action": "create_account",
-        "uid": uid,
-        "oid": oid,
-        "name": fullName,
-        "email": email,
-        "player_id": playerId,
-        "store_id": "4",
-        "login_type": "Apple",
-        "social_id": userIdentifier,
-      }),
-    );
+    await socialAuthStorage.write(key: 'apple_id', value: userIdentifier);
+    await socialAuthStorage.write(key: 'apple_token', value: identityToken);
 
-    print(result.data);
-    print(fullName);
-    print(email);
-    print(userIdentifier);
-
-    if (result.data['success'] == true) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => SplashScreen()),
-      );
-    } else {
-      
-      if (result.data['success'] == false) {
-        await FlutterSecureStorage().write(key: "user_uid", value: result.data['api']['uid'].toString());
-        await FlutterSecureStorage().write(key: "user_oid", value: result.data['api']['oid'].toString());
-        await FlutterSecureStorage().write(key: 'social_name', value: result.data['api']['fullName'].toString());
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => SplashScreen()),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('API Error: ${result.data}')),
-        );
-      }
+    if (emailFromApple.isNotEmpty) {
+      await socialAuthStorage.write(key: 'social_email', value: emailFromApple);
+    }
+    if (fullNameFromApple.isNotEmpty) {
+      await socialAuthStorage.write(key: 'social_name', value: fullNameFromApple);
     }
 
+    final email =
+        emailFromApple.isNotEmpty
+            ? emailFromApple
+            : (await socialAuthStorage.read(key: 'social_email') ?? '');
+    final fullName =
+        fullNameFromApple.isNotEmpty
+            ? fullNameFromApple
+            : (await socialAuthStorage.read(key: 'social_name') ?? 'Apple User');
+
+    if (email.isEmpty) {
+      throw Exception(
+        'Apple did not provide an email. Sign out of Apple ID for this app and try again.',
+      );
+    }
+
+    final playerId = OneSignal.User.pushSubscription.id;
+    final userData = await resolveSocialUserByEmail(
+      email: email,
+      name: fullName,
+      loginType: 'Apple',
+      playerId: playerId,
+    );
+
+    final ids = parseSocialUserIds(userData);
+    await persistSocialAuthSession(
+      uid: ids.uid,
+      oid: ids.oid,
+      email: email,
+      name: userData['name']?.toString() ?? fullName,
+    );
+
+    if (!context.mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => const SplashScreen()),
+    );
   } on SignInWithAppleAuthorizationException catch (e) {
-    switch (e.code) {
-      case AuthorizationErrorCode.canceled:
-        break;
-      case AuthorizationErrorCode.failed:
-        break;
-      default:
-        break;
+    if (e.code != AuthorizationErrorCode.canceled && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Apple sign in failed: ${e.code.name}')),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Apple sign in error: $e')),
+      );
     }
   }
 }

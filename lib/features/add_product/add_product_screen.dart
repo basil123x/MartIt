@@ -4,7 +4,8 @@ import 'dart:math' as math;
 import 'dart:ui';
 import 'package:Albadaa/core/services/onesignal_service.dart';
 import 'package:Albadaa/core/services/onesignal_service_web.dart';
-import 'package:Albadaa/core/services/upload_notification_service.dart';
+import 'package:Albadaa/core/services/albadaa_sync_service.dart';
+import 'package:Albadaa/core/services/s3_upload_service.dart';
 import 'package:Albadaa/features/home/tiktok_feed_screen.dart';
 import 'package:Albadaa/shared/providers/app_provider.dart';
 import 'package:dio/dio.dart';
@@ -20,11 +21,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/app_constants.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/widgets/video_player_widget.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/database_service.dart';
-import '../../core/services/bunny_upload_service.dart';
 import '../camera/camera_screen.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -118,7 +119,9 @@ class _AddProductScreenState extends State<AddProductScreen>
   bool _commentsEnabled = true;
   bool _isUploading = false;
   String? _currentItemId;
-  
+  String? _currentClientIdBadaa;
+  bool _insertOneRecordStarted = false;
+
   // Categories for autocomplete
   List<String> _categories = [];
   bool _isLoadingCategories = true;
@@ -158,21 +161,51 @@ class _AddProductScreenState extends State<AddProductScreen>
   }
 
   Future insertOneRecord() async {
-    String country = await getUserCountry();
+    if (_insertOneRecordStarted) {
+      print('⚠️ insertNewOne already in progress — skipping duplicate call');
+      return;
+    }
+    _insertOneRecordStarted = true;
+
+    await getUserCountry();
     var request = await Dio().post(
       'https://Globee-Trading.com/app2026/sql.php',
-      data: FormData.fromMap({'action': 'insertNewOne', 'country': 'QA', 'store_id': '4'}),
+      data: FormData.fromMap({
+        'action': 'insertNewOne',
+        'country': 'QA',
+        'store_id': AppConstants.albadaaStoreId,
+      }),
     );
-    setState(() {
-      _currentItemId = request.data['item_id'].toString();
-    });
+    final data = request.data;
+    final clientIdBadaa =
+        (data['client_id_badaa'] ?? data['idx'] ?? '').toString();
+    if (mounted) {
+      setState(() {
+        _currentItemId = data['item_id'].toString();
+        _currentClientIdBadaa = clientIdBadaa;
+      });
+    } else {
+      _currentItemId = data['item_id'].toString();
+      _currentClientIdBadaa = clientIdBadaa;
+    }
+    print(
+      '📦 insertNewOne item_id=$_currentItemId client_id_badaa=$_currentClientIdBadaa '
+      '(single Albadaa id for S3 / VPS / sync)',
+    );
+    if (clientIdBadaa.isEmpty ||
+        S3UploadService.parseApiInt(clientIdBadaa) <= 0) {
+      print('❌ insertNewOne did not return a valid client_id_badaa');
+    }
   }
 
   Future<void> _fetchCategories() async {
     try {
       final response = await Dio().post(
         'https://Globee-Trading.com/app2026/sql.php',
-        data: FormData.fromMap({'action': 'get_categories', 'store_id': '4'}),
+        data: FormData.fromMap({
+          'action': 'get_categories',
+          'store_id': AppConstants.albadaaStoreId,
+        }),
       );
       
       if (response.data['status'] == 'success' && response.data['categories'] != null) {
@@ -1301,10 +1334,16 @@ class _AddProductScreenState extends State<AddProductScreen>
       return;
     }
 
-    // if (_currentItemId == null) {
-    //   _showError('خطأ في إنشاء المنتج');
-    //   return;
-    // }
+    if (_currentItemId == null || _currentItemId!.isEmpty) {
+      _showError('خطأ في إنشاء المنتج (Globee item_id)');
+      return;
+    }
+    if (_currentClientIdBadaa == null ||
+        _currentClientIdBadaa!.isEmpty ||
+        S3UploadService.parseApiInt(_currentClientIdBadaa) <= 0) {
+      _showError('خطأ في إنشاء سجل البضاعة (client_id_badaa)');
+      return;
+    }
 
     setState(() {
       _isUploading = true;
@@ -1316,6 +1355,8 @@ class _AddProductScreenState extends State<AddProductScreen>
     // Prepare data for background upload
     Map<String, dynamic> data = {
       'itemId': _currentItemId,
+      'clientIdBadaa': _currentClientIdBadaa,
+      'storeId': AppConstants.albadaaStoreId,
       'uid': uid,
       'userName': userName,
       'barcode': _barcodeController.text.trim(),
@@ -1351,75 +1392,81 @@ class _AddProductScreenState extends State<AddProductScreen>
   void _startBackgroundUpload(Map<String, dynamic> data) async {
     try {
       final appProvider = Provider.of<AppProvider>(context, listen: false);
-      final notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-
-      // Initialize notification service
-      await UploadNotificationService.initialize();
-
-      // Show initial notification
-      await UploadNotificationService.showUploadProgress(
-        id: notificationId,
-        title: 'جاري رفع المنتج',
-        body: 'جاري تحضير الملفات...',
-        progress: 0,
-        maxProgress: 100,
-      );
-
-      // Start background upload without isolate
-      _runBackgroundUploadWithNotification(data, notificationId);
+      _runBackgroundUpload(data);
       appProvider.allMedia.clear();
     } catch (e) {
       print('Error starting background upload: $e');
     }
   }
 
-  void _runBackgroundUploadWithNotification(
-    Map<String, dynamic> data,
-    int notificationId,
-  ) async {
+  void _runBackgroundUpload(Map<String, dynamic> data) async {
     try {
       print("🚀 Starting product upload: ${data['name']}");
 
-      final itemId = data['itemId'];
+      final storeId =
+          data['storeId']?.toString() ?? AppConstants.albadaaStoreId;
+      final globeeItemId = data['itemId'].toString();
+      final clientIdBadaa = S3UploadService.parseApiInt(
+        data['clientIdBadaa'] ?? data['client_id_badaa'] ?? data['idx'],
+      );
       final mediaFiles = List<String>.from(data['mediaFiles']);
 
-      // Step 1: Upload media files to Bunny.net
+      if (storeId == AppConstants.albadaaStoreId && clientIdBadaa <= 0) {
+        print('❌ Missing client_id_badaa from insertNewOne — cannot upload to S3');
+        return;
+      }
+
+      // Upload media files to S3 (+ Albadaa VPS thumbnail when store is Albadaa)
       print("📤 Uploading ${mediaFiles.length} media files...");
 
-      final uploadedUrls = await AlbadaaUploadService.uploadMediaFiles(
+      final uploadResult = await S3UploadService.uploadMediaFiles(
         filePaths: mediaFiles,
-        itemId: itemId,
-        onProgress: (current, total, progress) async {
+        globeeItemId: S3UploadService.parseApiInt(data['itemId']),
+        clientIdBadaa: clientIdBadaa,
+        storeId: storeId,
+        onProgress: (current, total, progress) {
           final overallProgress =
               ((current - 1) / total * 100 + progress * 100 / total).toInt();
-          await UploadNotificationService.showUploadProgress(
-            id: notificationId,
-            title: 'جاري رفع المنتج',
-            body: 'رفع الملف $current من $total - ${overallProgress}%',
-            progress: overallProgress,
-            maxProgress: 100,
-          );
+          print('Upload progress: file $current/$total — $overallProgress%');
         },
       );
 
-      if (uploadedUrls.isEmpty) {
+      if (uploadResult.urls.isEmpty) {
         print("❌ No media files uploaded");
         return;
       }
 
-      // Step 2: Create media string for database
-      final mediaString = uploadedUrls
-          .map((url) {
-            final fileName = url.split('/').last;
-            return fileName;
-          })
+      if (uploadResult.nextIdx == null) {
+        print("❌ No S3 folder id returned");
+        return;
+      }
+
+      print("📁 Globee item_id (DB only): $globeeItemId");
+      print("📁 client_id_badaa (S3 / VPS / sync / sql.php): $clientIdBadaa");
+
+      final mediaString = uploadResult.urls
+          .map((url) => url.split('/').last)
           .join(', ');
 
       print("📝 Media string: $mediaString");
 
-      // Step 3: Update item in database
+      if (storeId == AppConstants.albadaaStoreId && clientIdBadaa > 0) {
+        await AlbadaaSyncService.syncItemData(
+          id: clientIdBadaa,
+          barcode: data['barcode']?.toString() ?? '',
+          englishName: data['eng']?.toString() ?? '',
+          arabicName: data['name']?.toString() ?? '',
+          category: data['category']?.toString() ?? '',
+          price: data['price']?.toString() ?? '',
+          quantity: data['quantity']?.toString() ?? '',
+        );
+      }
+
+      // Update item in Globee database (item_id = Globee internal id only)
       final updateResult = await DatabaseService.updateItem(
-        itemId: itemId,
+        itemId: globeeItemId,
+        clientIdBadaa: clientIdBadaa.toString(),
+        storeId: storeId,
         uid: data['uid'],
         barcode: data['barcode'],
         name: data['name'],
@@ -1437,12 +1484,6 @@ class _AddProductScreenState extends State<AddProductScreen>
       if (updateResult['success'] == true) {
         print("✅ Product uploaded successfully: ${data['name']}");
 
-        // Show success notification
-        await UploadNotificationService.showUploadComplete(
-          id: notificationId,
-          title: 'تم رفع المنتج بنجاح',
-          body: 'تم رفع منتج ${data['name']} بنجاح',
-        );
         final request = await Dio().post(
           "https://www.Globee-Trading.com/app2026/sql.php",
           data: FormData.fromMap({"action": "get_tokens"}),
@@ -1460,32 +1501,13 @@ class _AddProductScreenState extends State<AddProductScreen>
         }
       } else {
         print("❌ Failed to update database: ${updateResult['error']}");
-
-        // Show error notification
-        await UploadNotificationService.showUploadError(
-          id: notificationId,
-          title: 'فشل رفع المنتج',
-          body: 'حدث خطأ أثناء رفع المنتج',
-        );
       }
 
       data.clear();
       mediaFiles.clear();
     } catch (e) {
       print("❌ Error uploading product: $e");
-
-      // Show error notification
-      await UploadNotificationService.showUploadError(
-        id: notificationId,
-        title: 'فشل رفع المنتج',
-        body: 'حدث خطأ: ${e.toString()}',
-      );
     }
-  }
-
-  // Keep old method for compatibility
-  static void _runBackgroundUpload(Map<String, dynamic> data) async {
-    // This method is kept for backward compatibility but not used
   }
 
   void _showError(String message) {

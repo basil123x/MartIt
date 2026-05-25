@@ -7,9 +7,16 @@ ini_set('display_errors', 1);
 header('Content-Type: application/json');
 
 include 'xtras/config.php';
+if (file_exists(__DIR__ . '/sync_helper.php')) {
+    require_once __DIR__ . '/sync_helper.php';
+}
+require_once __DIR__ . '/media_helper.php';
 
-// Get action from POST request
+// Get action from POST or GET request
 $action = isset($_POST['action']) ? $_POST['action'] : '';
+if ($action === '' && isset($_GET['action'])) {
+    $action = $_GET['action'];
+}
 
 // Response array
 $response = array('success' => false);
@@ -24,11 +31,11 @@ try {
             $page = isset($_POST['page']) ? (int)$_POST['page'] : 0;
             $limit = isset($_POST['limit']) ? (int)$_POST['limit'] : 10;
             $offset = $page * $limit;
-            $user_id = isset($_POST['user_id']) ? $conn->real_escape_string($_POST['user_id']) : '';
-            $itemSrchId = isset($_POST['itemSrchId']) ? $conn->real_escape_string($_POST['itemSrchId']) : '';
-            $store_id = isset($_POST['store_id']) ? $conn->real_escape_string($_POST['store_id']) : '';
-            $category = isset($_POST['category']) ? $conn->real_escape_string($_POST['category']) : '';
-            $country = isset($_POST['country']) ? $conn->real_escape_string($_POST['country']) : '';
+            $user_id = isset($_POST['user_id']) ? $conx->real_escape_string($_POST['user_id']) : '';
+            $itemSrchId = isset($_POST['itemSrchId']) ? $conx->real_escape_string($_POST['itemSrchId']) : '';
+            $store_id = isset($_POST['store_id']) ? $conx->real_escape_string($_POST['store_id']) : '';
+            $category = isset($_POST['category']) ? $conx->real_escape_string($_POST['category']) : '';
+            $country = isset($_POST['country']) ? $conx->real_escape_string($_POST['country']) : '';
             $get_store = "";
             
             // Debug logging
@@ -105,7 +112,7 @@ try {
                 SELECT user_id, buyer_id
                 FROM Followers " . (!empty($user_id) ? "WHERE buyer_id = '$user_id'" : "WHERE 1=0") . "
             ) followers ON Users.uid = followers.user_id
-            WHERE Items.Visibility = 'Public' AND Items.status = 1 AND Items.country = '$country' $get_store $d1 $d3
+            WHERE Items.Visibility = 'Public' AND Items.country = '$country' $get_store $d1 $d3
             ORDER BY RAND()
             LIMIT $limit OFFSET $offset";
 
@@ -113,25 +120,23 @@ try {
             // Debug: Log the SQL query
             error_log("📦 fetch SQL: " . $sql);
             
-            $result = $conn->query($sql);
+            $result = $conx->query($sql);
             $items = array();
             
             if ($result && $result->num_rows > 0) {
                 while($row = $result->fetch_assoc()) {
-                    $mediaFiles = array();
-                    if (!empty($row['media'])) {
-                        $mediaArray = explode(',', $row['media']);
-                        foreach ($mediaArray as $media) {
-                            $media = trim($media);
-                            if (!empty($media)) {
-                                // $mediaFiles[] = $img_url . $row['id'] . "/" . $media;
-                                $mediaFiles[] = $img_url . $row['id'];
-                            }
-                        }
-                    }
+                    $storeid = (string)$row['storeid'];
+                    $itemId = (string)$row['id'];
+                    $mediaFiles = build_item_media_urls(
+                        $storeid,
+                        $itemId,
+                        $row['media'],
+                        $img_url,
+                        (string)$row['idx']
+                    );
                     
                     $item = array(
-                        'id' => (string)$row['id'],
+                        'id' => $itemId,
                         'idx' => (string)$row['idx'],
                         'storeid' => (string)$row['storeid'],
                         'barcode' => (string)$row['barcode'],
@@ -170,9 +175,9 @@ try {
             break;
             
         case 'follow_user':
-            $buyer_id = isset($_POST['buyer_id']) ? $conn->real_escape_string($_POST['buyer_id']) : '';
-            $user_id = isset($_POST['user_id']) ? $conn->real_escape_string($_POST['user_id']) : '';
-            $user_token = isset($_POST['user_token']) ? $conn->real_escape_string($_POST['user_token']) : '';
+            $buyer_id = isset($_POST['buyer_id']) ? $conx->real_escape_string($_POST['buyer_id']) : '';
+            $user_id = isset($_POST['user_id']) ? $conx->real_escape_string($_POST['user_id']) : '';
+            $user_token = isset($_POST['user_token']) ? $conx->real_escape_string($_POST['user_token']) : '';
         
             if (empty($buyer_id) || empty($user_id)) {
                 $response = array(
@@ -193,13 +198,13 @@ try {
         
             // ✅ شيك لو في متابعة موجودة
             $check_sql = "SELECT * FROM Followers WHERE buyer_id = '$buyer_id' AND user_id = '$user_id'";
-            $check_result = $conn->query($check_sql);
+            $check_result = $conx->query($check_sql);
         
             if ($check_result && $check_result->num_rows > 0) {
                 // ✅ لو موجود، احذف المتابعة (unfollow)
                 $delete_sql = "DELETE FROM Followers WHERE buyer_id = '$buyer_id' AND user_id = '$user_id'";
                 
-                if ($conn->query($delete_sql)) {
+                if ($conx->query($delete_sql)) {
                     $response = array(
                         'success' => true,
                         'message' => 'تم إلغاء المتابعة',
@@ -208,7 +213,7 @@ try {
                 } else {
                     $response = array(
                         'success' => false,
-                        'error' => 'فشل في إلغاء المتابعة: ' . $conn->error
+                        'error' => 'فشل في إلغاء المتابعة: ' . $conx->error
                     );
                 }
             } else {
@@ -216,7 +221,7 @@ try {
                 $insert_sql = "INSERT INTO Followers (buyer_id, user_id, user_token) 
                                VALUES ('$buyer_id', '$user_id', '$user_token')";
                 
-                if ($conn->query($insert_sql)) {
+                if ($conx->query($insert_sql)) {
                     $response = array(
                         'success' => true,
                         'message' => 'تمت المتابعة بنجاح',
@@ -225,7 +230,7 @@ try {
                 } else {
                     $response = array(
                         'success' => false,
-                        'error' => 'فشل في المتابعة: ' . $conn->error
+                        'error' => 'فشل في المتابعة: ' . $conx->error
                     );
                 }
             }
@@ -248,8 +253,8 @@ try {
                 $orderBy = "id ASC";
             }
             
-            $sql = "SELECT id, `name`, price, Views, media, created_at FROM Items WHERE uid = '$uid' ORDER BY $orderBy LIMIT $limit OFFSET $offset";
-            $result = $conn->query($sql);
+            $sql = "SELECT id,idx,  `name`, price, Views, media, created_at FROM Items WHERE uid = '$uid' ORDER BY $orderBy LIMIT $limit OFFSET $offset";
+            $result = $conx->query($sql);
             $items = array();
             
             if ($result && $result->num_rows > 0) {
@@ -267,6 +272,7 @@ try {
                     
                     $item = array(
                         'id' => (string)$row['id'],
+                        'idx' => (string)$row['idx'],
                         'name' => (string)$row['name'],
                         'price' => (string)$row['price'],
                         'views' => (int)$row['Views'],
@@ -280,7 +286,7 @@ try {
             
             // Get total count for pagination info
             $countSql = "SELECT COUNT(*) as total FROM Items WHERE uid = '$uid'";
-            $countResult = $conn->query($countSql);
+            $countResult = $conx->query($countSql);
             $totalCount = 0;
             if ($countResult && $countRow = $countResult->fetch_assoc()) {
                 $totalCount = (int)$countRow['total'];
@@ -295,19 +301,24 @@ try {
             break;
         case 'insert':
             // التحقق من البيانات المطلوبة
-            $itemId = isset($_POST['item_id']) ? $conn->real_escape_string($_POST['item_id']) : '';
-            $uid = isset($_POST['uid']) ? $conn->real_escape_string($_POST['uid']) : '';
-            $barcode = isset($_POST['barcode']) ? $conn->real_escape_string($_POST['barcode']) : '';
-            $name = isset($_POST['name']) ? $conn->real_escape_string($_POST['name']) : '';
-            $eng = isset($_POST['eng']) ? $conn->real_escape_string($_POST['eng']) : '';
-            $category = isset($_POST['category']) ? $conn->real_escape_string($_POST['category']) : '';
-            $price = isset($_POST['price']) ? $conn->real_escape_string($_POST['price']) : '';
+            $itemId = isset($_POST['item_id']) ? $conx->real_escape_string($_POST['item_id']) : '';
+            $uid = isset($_POST['uid']) ? $conx->real_escape_string($_POST['uid']) : '';
+            $barcode = isset($_POST['barcode']) ? $conx->real_escape_string($_POST['barcode']) : '';
+            $name = isset($_POST['name']) ? $conx->real_escape_string($_POST['name']) : '';
+            $eng = isset($_POST['eng']) ? $conx->real_escape_string($_POST['eng']) : '';
+            $category = isset($_POST['category']) ? $conx->real_escape_string($_POST['category']) : '';
+            $price = isset($_POST['price']) ? $conx->real_escape_string($_POST['price']) : '';
             $qtt = isset($_POST['qtt']) ? (int)$_POST['qtt'] : 0;
-            $description = isset($_POST['description']) ? $conn->real_escape_string($_POST['description']) : '';
-            $description_arb = isset($_POST['description_arb']) ? $conn->real_escape_string($_POST['description_arb']) : '';
-            $visibility = isset($_POST['visibility']) ? $conn->real_escape_string($_POST['visibility']) : 'Public';
-            $media = isset($_POST['media']) ? $conn->real_escape_string($_POST['media']) : '';
-            $comments = isset($_POST['comments']) ? $conn->real_escape_string($_POST['comments']) : '';
+            $description = isset($_POST['description']) ? $conx->real_escape_string($_POST['description']) : '';
+            $description_arb = isset($_POST['description_arb']) ? $conx->real_escape_string($_POST['description_arb']) : '';
+            $visibility = isset($_POST['visibility']) ? $conx->real_escape_string($_POST['visibility']) : 'Public';
+            $media = isset($_POST['media']) ? $conx->real_escape_string($_POST['media']) : '';
+            $comments = isset($_POST['comments']) ? $conx->real_escape_string($_POST['comments']) : '';
+            $idx = isset($_POST['idx']) ? (int)$_POST['idx'] : 0;
+            $client_id = isset($_POST['client_id']) ? (int)$_POST['client_id'] : 0;
+            $client_id_ges = isset($_POST['client_id_ges']) ? (int)$_POST['client_id_ges'] : $idx;
+            $idx_sql = $idx > 0 ? ", idx = $idx" : '';
+            $store_id = isset($_POST['store_id']) ? $conx->real_escape_string($_POST['store_id']) : '2';
 
             if (empty($uid) || empty($name) || empty($price)) {
                 $response = array(
@@ -317,52 +328,149 @@ try {
                 break;
             }
 
-            // $sql = "INSERT INTO Items (uid, `name`, price, qtt, description, Visibility, media, Views) 
-            //         VALUES ('$uid', '$name', '$price', $qtt, '$description', '$visibility', '$media', 0)";
-            
-            $sql = "UPDATE Items SET uid = '$uid', barcode = '$barcode' ,name = '$name', eng = '$eng', description = '$description', description_arb = '$description_arb', category = '$category', price = '$price', qtt = '$qtt', Visibility = '$visibility', comments = '$comments', media = '$media' WHERE id = '$itemId'";
 
-            if ($conn->query($sql)) {
+            
+            $sql = "UPDATE Items SET uid = '$uid', barcode = '$barcode' ,name = '$name', eng = '$eng', description = '$description', description_arb = '$description_arb', category = '$category', price = '$price', qtt = '$qtt', Visibility = '$visibility', comments = '$comments', media = '$media'$idx_sql WHERE id = '$itemId'";
+
+            if ($conx->query($sql)) {
+                 // Sync to client
+    $syncData = [
+    'barcode'         => $barcode,
+    'name'            => $name,
+    'eng'             => $eng,
+    'description'     => $description,
+    'description_arb' => $description_arb,
+    'price'           => $price,
+    'qtt'             => $qtt,
+    'category'        => $category,
+    'comments'        => $comments,
+    'idx'             => $idx,
+];
+// ✅ عرّف المتغيرات الأول
+$syncResult = null;
+$syncResult_ges = null;
+
+if ($store_id == '2') {
+    $syncData['id'] = $client_id;
+    $syncResult = syncToClient($syncData, '2');
+}
+
+if ($store_id == '3') {
+    $syncData['id'] = $client_id_ges;
+    $syncResult_ges = syncToClient($syncData, '3');
+}
+
+if ($store_id == '4') {
+    $syncData['id'] = isset($_POST['client_id_badaa']) ? (int)$_POST['client_id_badaa'] : 0;
+    syncToClient($syncData, '4');
+}
+
                 $response = array(
                     'success' => true,
                     'message' => 'تم إضافة الصنف بنجاح',
-                    'item_id' => $conn->insert_id
+                    'item_id' => $conx->insert_id,
+                    'sync_result' => $syncResult,
+                    'ges_sync_result' => $syncResult_ges
                 );
             } else {
                 $response = array(
                     'success' => false,
-                    'error' => 'فشل في إضافة الصنف: ' . $conn->error
+                    'error' => 'فشل في إضافة الصنف: ' . $conx->error
                 );
             }
             break;
             
+        // =====================================
+        // آخر idx للمتجر (لتسمية مجلدات S3)
+        // =====================================
+        case 'get_last_idx':
+            $store_id = isset($_GET['store_id']) ? $conx->real_escape_string($_GET['store_id']) : '';
+            if ($store_id === '' && isset($_POST['store_id'])) {
+                $store_id = $conx->real_escape_string($_POST['store_id']);
+            }
+            if ($store_id === '') {
+                $store_id = '2';
+            }
+            try {
+                $sql = "SELECT MAX(CAST(idx AS UNSIGNED)) AS last_idx FROM Items WHERE store_id = '$store_id' AND idx IS NOT NULL AND idx != ''";
+                $result = $conx->query($sql);
+                $last_idx = 0;
+                if ($result && $row = $result->fetch_assoc()) {
+                    $last_idx = $row['last_idx'] !== null ? (int)$row['last_idx'] : 0;
+                }
+                $response = array(
+                    'success' => true,
+                    'last_idx' => $last_idx
+                );
+            } catch (Exception $e) {
+                $response = array(
+                    'success' => false,
+                    'error' => 'خطأ في جلب last_idx: ' . $e->getMessage(),
+                    'last_idx' => 0
+                );
+            }
+            break;
+
         case 'insertNewOne':
-            // التحقق من البيانات المطلوبة
-            $date = date('Y-m-d H:i:s');
-            $store_id = isset($_POST['store_id']) ? $conn->real_escape_string($_POST['store_id']) : '1';
-            $country = isset($_POST['country']) ? $conn->real_escape_string($_POST['country']) : '1';
-
-            $sql = "INSERT INTO Items (id, created_at, status, store_id, country) VALUES (null, '$date', '0', '$store_id', '$country')";
-
-            if ($conn->query($sql)) {
-                $response = array(
-                    'success' => true,
-                    'message' => 'تم إضافة الصنف بنجاح',
-                    'item_id' => $conn->insert_id,
-                    'sql_testing' => $sql
-                );
+    $date = date('Y-m-d H:i:s');
+    $store_id = isset($_POST['store_id']) ? $conx->real_escape_string($_POST['store_id']) : '1';
+    $country = isset($_POST['country']) ? $conx->real_escape_string($_POST['country']) : '1';
+    
+    $client_id_badaa = '';
+    if ($store_id !== '4') {
+            $idxResult = $conx->query(
+                "SELECT COALESCE(MAX(CAST(idx AS UNSIGNED)), 0) + 1 AS next_idx
+                 FROM Items
+                 WHERE store_id = '$store_id'"
+            );
+            if ($idxResult && $row = $idxResult->fetch_assoc()) {
+                $client_id_badaa = (string)$row['next_idx'];
             } else {
-                $response = array(
-                    'success' => false,
-                    'error' => 'فشل في إضافة الصنف: ' . $conn->error
-                );
+                $client_id_badaa = '1';
             }
-            break;
+    }
+
+    $sql = "INSERT INTO Items (id, created_at, status, store_id, country) VALUES (null, '$date', '0', '$store_id', '$country')";
+
+    if ($conx->query($sql)) {
+        $newItemId = $conx->insert_id;
+        
+        $clientId = $gesClientId = $badaaClientId = 0;
+
+        if ($store_id == '2') {
+            $clientId = syncEmptyToClient('2');
+        }
+
+        if ($store_id == '3') {
+            $gesClientId = syncEmptyToClient('3');
+        }
+
+        // store 4: single Albadaa insert_empty via server (same id for S3 / VPS / sync)
+        if ($store_id == '4') {
+            $badaaClientId = syncEmptyToClient('4');
+            if ($badaaClientId > 0) {
+                $client_id_badaa = (string)$badaaClientId;
+                $conx->query("UPDATE Items SET idx = '$badaaClientId' WHERE id = '$newItemId'");
+            }
+        } elseif ($clientId > 0) {
+            $conx->query("UPDATE Items SET idx = '$clientId' WHERE id = '$newItemId'");
+        }
+        
+        $response = array(
+            'success' => true,
+            'item_id' => $newItemId,
+            'client_id' => $clientId,
+            'client_id_ges' => $gesClientId,
+            'client_id_badaa' => $client_id_badaa,
+            'idx' => $client_id_badaa,
+        );
+    }
+    break;
             
         case 'user_status':
-            $uid = isset($_POST['uid']) ? $conn->real_escape_string($_POST['uid']) : '';
+            $uid = isset($_POST['uid']) ? $conx->real_escape_string($_POST['uid']) : '';
             $sql = "SELECT status FROM Users WHERE uid = '$uid' ";
-            $status = $conn->query($sql)->fetch_array()[0];
+            $status = $conx->query($sql)->fetch_array()[0];
 
             $response = array(
                 'success' => true,
@@ -374,26 +482,29 @@ try {
         // جلب التصنيفات (Get Categories)
         // =====================================
         case 'get_categories':
-            $sql = "SELECT DISTINCT category 
-                    FROM Items 
-                    WHERE category IS NOT NULL 
-                    AND category != '' 
-                    ORDER BY category ASC";
-            
-            $result = $conn->query($sql);
-            $categories = array();
-            
-            if ($result && $result->num_rows > 0) {
-                while ($row = $result->fetch_assoc()) {
-                    $categories[] = $row['category'];
-                }
-            }
-            
-            $response = array(
-                'status' => 'success',
-                'categories' => $categories
-            );
-            break;
+    $store_id = isset($_POST['store_id']) ? $conx->real_escape_string($_POST['store_id']) : '2';
+    
+    $sql = "SELECT DISTINCT category 
+            FROM Items 
+            WHERE category IS NOT NULL 
+            AND category != '' 
+            AND store_id = '$store_id'
+            ORDER BY category ASC";
+    
+    $result = $conx->query($sql);
+    $categories = array();
+    
+    if ($result && $result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            $categories[] = $row['category'];
+        }
+    }
+    
+    $response = array(
+        'status' => 'success',
+        'categories' => $categories
+    );
+    break;
 
         // =====================================
         // تحديث صنف (Update Item)
@@ -412,11 +523,11 @@ try {
             $updates = array();
             
             if (isset($_POST['name'])) {
-                $name = $conn->real_escape_string($_POST['name']);
+                $name = $conx->real_escape_string($_POST['name']);
                 $updates[] = "`name` = '$name'";
             }
             if (isset($_POST['price'])) {
-                $price = $conn->real_escape_string($_POST['price']);
+                $price = $conx->real_escape_string($_POST['price']);
                 $updates[] = "price = '$price'";
             }
             if (isset($_POST['quantity'])) {
@@ -424,15 +535,15 @@ try {
                 $updates[] = "qtt = $qtt";
             }
             if (isset($_POST['description'])) {
-                $description = $conn->real_escape_string($_POST['description']);
+                $description = $conx->real_escape_string($_POST['description']);
                 $updates[] = "description = '$description'";
             }
             if (isset($_POST['visibility'])) {
-                $visibility = $conn->real_escape_string($_POST['visibility']);
+                $visibility = $conx->real_escape_string($_POST['visibility']);
                 $updates[] = "Visibility = '$visibility'";
             }
             if (isset($_POST['media'])) {
-                $media = $conn->real_escape_string($_POST['media']);
+                $media = $conx->real_escape_string($_POST['media']);
                 $updates[] = "media = '$media'";
             }
 
@@ -446,16 +557,16 @@ try {
 
             $sql = "UPDATE Items SET " . implode(', ', $updates) . " WHERE id = $item_id";
 
-            if ($conn->query($sql)) {
+            if ($conx->query($sql)) {
                 $response = array(
                     'success' => true,
                     'message' => 'تم تحديث الصنف بنجاح',
-                    'affected_rows' => $conn->affected_rows
+                    'affected_rows' => $conx->affected_rows
                 );
             } else {
                 $response = array(
                     'success' => false,
-                    'error' => 'فشل في تحديث الصنف: ' . $conn->error
+                    'error' => 'فشل في تحديث الصنف: ' . $conx->error
                 );
             }
             break;
@@ -476,16 +587,16 @@ try {
 
             $sql = "DELETE FROM Items WHERE id = $item_id";
 
-            if ($conn->query($sql)) {
+            if ($conx->query($sql)) {
                 $response = array(
                     'success' => true,
                     'message' => 'تم حذف الصنف بنجاح',
-                    'affected_rows' => $conn->affected_rows
+                    'affected_rows' => $conx->affected_rows
                 );
             } else {
                 $response = array(
                     'success' => false,
-                    'error' => 'فشل في حذف الصنف: ' . $conn->error
+                    'error' => 'فشل في حذف الصنف: ' . $conx->error
                 );
             }
             break;
@@ -514,7 +625,7 @@ try {
                 ON Items.uid = Users.uid
             WHERE Items.id = $item_id";
 
-            $result = $conn->query($sql);
+            $result = $conx->query($sql);
             
             if ($result && $result->num_rows > 0) {
                 $row = $result->fetch_assoc();
@@ -574,7 +685,7 @@ try {
 
             $sql = "UPDATE Items SET Views = Views + 1 WHERE id = $item_id";
 
-            if ($conn->query($sql)) {
+            if ($conx->query($sql)) {
                 $response = array(
                     'success' => true,
                     'message' => 'تم تحديث المشاهدات'
@@ -582,7 +693,7 @@ try {
             } else {
                 $response = array(
                     'success' => false,
-                    'error' => 'فشل في تحديث المشاهدات: ' . $conn->error
+                    'error' => 'فشل في تحديث المشاهدات: ' . $conx->error
                 );
             }
             break;
@@ -590,7 +701,7 @@ try {
         // =====================================
         // البحث عن أصناف (Search Items)
         // =====================================
-        case 'search':
+         case 'search':
             $searchQuery = isset($_GET['q']) ? trim($_GET['q']) : '';
     
             try {
@@ -603,42 +714,49 @@ try {
                 }
                 
                 // SQL query to search items by name
-                $searchQuery = $conn->real_escape_string($searchQuery);
+                $searchQuery = $conx->real_escape_string($searchQuery);
+                $store_id_filter = isset($_GET['store_id']) ? $conx->real_escape_string($_GET['store_id']) : '';
+                $store_clause = $store_id_filter !== '' ? " AND Items.store_id = '$store_id_filter'" : '';
+
                 $sql = "SELECT
                     Items.id,
+                    Items.idx,
                     Items.`name`,
                     Items.price,
                     Items.media,
+                    Items.store_id AS storeid,
                     Users.Fullname,
                     Users.id AS user_id
                 FROM
                     Items
                 LEFT JOIN Users
                     ON Items.uid = Users.uid
-                WHERE Items.Visibility = 'Public' 
+                WHERE Items.Visibility = 'Public'
+                    AND Items.status = 1
                     AND Items.`name` LIKE '%$searchQuery%'
+                    $store_clause
                 ORDER BY Items.`name` ASC
                 LIMIT 20";
             
-                $result = $conn->query($sql);
+                $result = $conx->query($sql);
                 
                 if ($result->num_rows > 0) {
                     $items = array();
                     
                     while($row = $result->fetch_assoc()) {
-                        // Get first media file for thumbnail
-                        $thumbnail = '';
-                        if (!empty($row['media'])) {
-                            $mediaArray = explode(',', $row['media']);
-                            $firstMedia = trim($mediaArray[0]);
-                            if (!empty($firstMedia)) {
-                                $thumbnail = "https://globee.b-cdn.net/" . $row['id'] . "/" . $firstMedia;
-                            }
-                        }
+                        $storeid = !empty($row['storeid']) ? (string)$row['storeid'] : '4';
+                        $itemId = (string)$row['id'];
+                        $itemIdx = (string)($row['idx'] ?? '');
+                        $thumbnail = ($storeid === '4')
+                            ? albadaa_thumbnail_url($itemId, $itemIdx)
+                            : "https://globee.b-cdn.net/{$itemId}/1.png";
                         
                         // Build search result object
                         $item = array(
                             'id' => $row['id'],
+                            'idx' => $itemIdx,
+                            'store_id' => $storeid,
+                            'storeid' => $storeid,
                             'name' => $row['name'],
                             'price' => $row['price'],
                             'thumbnail' => $thumbnail,
@@ -670,7 +788,7 @@ try {
                 ));
             }
             
-            $conn->close();
+            $conx->close();
         
         case 'get_user_details':
             $phone = isset($_POST['phone']) ? trim($_POST['phone']) : '';
@@ -679,7 +797,7 @@ try {
                 $id = isset($_POST['id']) ? trim($_POST['id']) : '';
                 $oid = isset($_POST['oid']) ? trim($_POST['oid']) : '';
                 $fcm_token = isset($_POST['fcm_token']) ? trim($_POST['fcm_token']) : '';
-                $conn->query("UPDATE Users SET player_id = '$fcm_token', oid = '$oid' WHERE uid = '$id' ");
+                $conx->query("UPDATE Users SET player_id = '$fcm_token', oid = '$oid', store_id = '2' WHERE uid = '$id' ");
             }
         
             try {
@@ -692,13 +810,13 @@ try {
                 }
                 
                 // استخدم prepared statement للأمان
-                $phone = $conn->real_escape_string($phone);
+                $phone = $conx->real_escape_string($phone);
                 $sql = "SELECT Fullname, PhoneNumber, uid, urlAvatar, oid
                         FROM Users 
                         WHERE PhoneNumber = '$phone' 
                         LIMIT 1";
             
-                $result = $conn->query($sql);
+                $result = $conx->query($sql);
                 
                 // تحقق من وجود نتائج
                 if ($result && $result->num_rows > 0) {
@@ -738,8 +856,10 @@ try {
             $name = isset($_POST['name']) ? trim($_POST['name']) : '';
             $phone = isset($_POST['phone']) ? trim($_POST['phone']) : '';
             $player_id = isset($_POST['player_id']) ? trim($_POST['player_id']) : '';
-            $store_id = isset($_POST['store_id']) ? trim($_POST['store_id']) : '1';
-            $login_type = isset($_POST['login_type']) ? trim($_POST['login_type']) : '';
+            $store_id = isset($_POST['store_id']) ? trim($_POST['store_id']) : '2';
+            $login_type = isset($_POST['login_type']) ? trim($_POST['login_type']) : 'Phone';
+            // GlobalFarm app — all new users belong to store 2
+            $store_id = '2';
             $date = date('Y-m-d');
         
             if (empty($phone)) {
@@ -750,9 +870,9 @@ try {
                 break;
             }
             
-            $userExists = $conn->query("SELECT PhoneNumber, uid FROM Users WHERE PhoneNumber = '$phone'");
+            $userExists = $conx->query("SELECT PhoneNumber, uid FROM Users WHERE PhoneNumber = '$phone'");
             
-            if (mysqli_num_rows($userExists) > 0) {
+            if ($userExists && $userExists->num_rows > 0) {
                 // المستخدم موجود - لا تضيف
                 $response = array(
                     'success' => false,
@@ -761,8 +881,8 @@ try {
             } else {
                 // المستخدم غير موجود - أضف
                 $sql = "INSERT INTO Users(Fullname, PhoneNumber, uid, oid, Created_at, status, player_id, login_type, store_id) VALUES('$name', '$phone', '$uid', '$oid', '$date', '0', '$player_id', '$login_type', '$store_id')";
-                $conn->query("UPDATE employees SET player_id = '$player_id' WHERE phone = '$phone'");
-                $result = $conn->query($sql);
+                $conx->query("UPDATE employees SET player_id = '$player_id' WHERE phone = '$phone'");
+                $result = $conx->query($sql);
                 
                 $response = array(
                     'success' => true,
@@ -773,7 +893,7 @@ try {
         case 'get_tokens':
                 $empnumbers = '71402613';
                 $sql = "SELECT id, phone, player_id FROM employees WHERE phone IN ($empnumbers)";
-                $result = $conn->query($sql);
+                $result = $conx->query($sql);
                 $player_ids = array();
                 while($rows = $result->fetch_assoc()) {
                     $player_ids[] = $rows;
@@ -813,7 +933,7 @@ try {
                 WHERE Items.id = $item_id
                 GROUP BY Items.id";
 
-                $result = $conn->query($sql);
+                $result = $conx->query($sql);
                 
                 if ($result && $result->num_rows > 0) {
                     $row = $result->fetch_assoc();
@@ -855,9 +975,9 @@ try {
         // إضافة بلاغ (Add Report)
         // =====================================
         case 'add_report':
-            $item_id = isset($_POST['item_id']) ? $conn->real_escape_string($_POST['item_id']) : '';
-            $user_id = isset($_POST['user_id']) ? $conn->real_escape_string($_POST['user_id']) : '';
-            $reason = isset($_POST['reason']) ? $conn->real_escape_string($_POST['reason']) : '';
+            $item_id = isset($_POST['item_id']) ? $conx->real_escape_string($_POST['item_id']) : '';
+            $user_id = isset($_POST['user_id']) ? $conx->real_escape_string($_POST['user_id']) : '';
+            $reason = isset($_POST['reason']) ? $conx->real_escape_string($_POST['reason']) : '';
             $created_at = date('Y-m-d H:i:s');
             
             if (empty($item_id) || empty($user_id) || empty($reason)) {
@@ -872,7 +992,7 @@ try {
                 $sql = "INSERT INTO Flags (item_id, user_id, reason, created_at, status) 
                         VALUES ('$item_id', '$user_id', '$reason', '$created_at', 'pending')";
 
-                if ($conn->query($sql)) {
+                if ($conx->query($sql)) {
                     $response = array(
                         'success' => true,
                         'message' => 'تم إرسال البلاغ بنجاح'
@@ -880,7 +1000,7 @@ try {
                 } else {
                     $response = array(
                         'success' => false,
-                        'error' => 'فشل في إرسال البلاغ: ' . $conn->error
+                        'error' => 'فشل في إرسال البلاغ: ' . $conx->error
                     );
                 }
                 
@@ -896,13 +1016,13 @@ try {
         // جلب الأصناف مع حالة الإعجابات (Fetch with Likes)
         // =====================================
         case 'fetch_with_likes':
-            $user_id = isset($_POST['user_id']) ? $conn->real_escape_string($_POST['user_id']) : '';
+            $user_id = isset($_POST['user_id']) ? $conx->real_escape_string($_POST['user_id']) : '';
             $limit = isset($_POST['limit']) ? (int)$_POST['limit'] : 10;
             $offset = isset($_POST['offset']) ? (int)$_POST['offset'] : 0;
-            $itemSrchId = isset($_POST['itemSrchId']) ? $conn->real_escape_string($_POST['itemSrchId']) : '';
-            $store_id = isset($_POST['store_id']) ? $conn->real_escape_string($_POST['store_id']) : '';
-            $category = isset($_POST['category']) ? $conn->real_escape_string($_POST['category']) : '';
-            $country = isset($_POST['country']) ? $conn->real_escape_string($_POST['country']) : '';
+            $itemSrchId = isset($_POST['itemSrchId']) ? $conx->real_escape_string($_POST['itemSrchId']) : '';
+            $store_id = isset($_POST['store_id']) ? $conx->real_escape_string($_POST['store_id']) : '';
+            $category = isset($_POST['category']) ? $conx->real_escape_string($_POST['category']) : '';
+            $country = isset($_POST['country']) ? $conx->real_escape_string($_POST['country']) : '';
             $get_store = "";
             if ($store_id) {
                 $get_store = "AND Items.store_id = '$store_id'";
@@ -969,31 +1089,29 @@ try {
                     WHERE user_id = '$user_id'
                     GROUP BY item_id
                 ) cart_count ON Items.id = cart_count.item_id
-                WHERE Items.Visibility = 'Public' AND Items.status = 1 AND Items.country = '$country' $get_store $d1 $d3
+                WHERE Items.Visibility = 'Public' AND Items.country = '$country' $get_store $d1 $d3
                 ORDER BY RAND()
                 LIMIT $limit OFFSET $offset";
         
-                $result = $conn->query($sql);
+                $result = $conx->query($sql);
                 
                 if ($result) {
                     $items = array();
                     while ($row = $result->fetch_assoc()) {
-                        // ✅ معالجة الميديا
-                        $mediaFiles = array();
-                        if (!empty($row['media'])) {
-                            $mediaArray = explode(',', $row['media']);
-                            foreach ($mediaArray as $media) {
-                                $media = trim($media);
-                                if (!empty($media)) {
-                                    $mediaFiles[] = $img_url . $row['id'] . "/" . $media;
-                                }
-                            }
-                        }
-                        
+                        $storeid = (string)$row['storeid'];
+                        $itemId = (string)$row['id'];
+                        $mediaFiles = build_item_media_urls(
+                            $storeid,
+                            $itemId,
+                            $row['media'],
+                            $img_url,
+                            (string)$row['idx']
+                        );
+
                         $item = array(
-                            'id' => (string)$row['id'],
+                            'id' => $itemId,
                             'idx' => (string)$row['idx'],
-                            'storeid' => (string)$row['storeid'],
+                            'storeid' => $storeid,
                             'barcode' => (string)$row['barcode'],
                             'name' => (string)$row['name'],
                             'price' => (string)$row['price'],
@@ -1027,7 +1145,7 @@ try {
                 } else {
                     $response = array(
                         'success' => false,
-                        'error' => 'فشل في جلب الأصناف: ' . $conn->error
+                        'error' => 'فشل في جلب الأصناف: ' . $conx->error
                     );
                 }
                 
@@ -1039,11 +1157,11 @@ try {
             }
             break;
         case 'get_token_followers':
-            $user_id = isset($_POST['user_id']) ? $conn->real_escape_string($_POST['user_id']) : '';
+            $user_id = isset($_POST['user_id']) ? $conx->real_escape_string($_POST['user_id']) : '';
             
             try {
                 $sql = "SELECT user_token FROM Followers WHERE user_id = '$user_id'";
-                $result = $conn->query($sql);
+                $result = $conx->query($sql);
                 $tokens = array();
                 while ($row = $result->fetch_assoc()) {
                     $tokens[] = $row;
@@ -1065,8 +1183,8 @@ try {
         // إدارة الإعجابات (Like/Unlike)
         // =====================================
         case 'toggle_like':
-            $item_id = isset($_POST['item_id']) ? $conn->real_escape_string($_POST['item_id']) : '';
-            $user_id = isset($_POST['user_id']) ? $conn->real_escape_string($_POST['user_id']) : '';
+            $item_id = isset($_POST['item_id']) ? $conx->real_escape_string($_POST['item_id']) : '';
+            $user_id = isset($_POST['user_id']) ? $conx->real_escape_string($_POST['user_id']) : '';
             
             if (empty($item_id) || empty($user_id)) {
                 $response = array(
@@ -1079,12 +1197,12 @@ try {
             try {
                 // التحقق من وجود إعجاب سابق
                 $checkSql = "SELECT id FROM Likes WHERE item_id = '$item_id' AND user_id = '$user_id'";
-                $checkResult = $conn->query($checkSql);
+                $checkResult = $conx->query($checkSql);
                 
                 if ($checkResult && $checkResult->num_rows > 0) {
                     // إزالة الإعجاب
                     $deleteSql = "DELETE FROM Likes WHERE item_id = '$item_id' AND user_id = '$user_id'";
-                    if ($conn->query($deleteSql)) {
+                    if ($conx->query($deleteSql)) {
                         $response = array(
                             'success' => true,
                             'action' => 'unliked',
@@ -1093,14 +1211,14 @@ try {
                     } else {
                         $response = array(
                             'success' => false,
-                            'error' => 'فشل في إلغاء الإعجاب: ' . $conn->error
+                            'error' => 'فشل في إلغاء الإعجاب: ' . $conx->error
                         );
                     }
                 } else {
                     // إضافة إعجاب جديد
                     $created_at = date('Y-m-d H:i:s');
                     $insertSql = "INSERT INTO Likes (item_id, user_id, created_at) VALUES ('$item_id', '$user_id', '$created_at')";
-                    if ($conn->query($insertSql)) {
+                    if ($conx->query($insertSql)) {
                         $response = array(
                             'success' => true,
                             'action' => 'liked',
@@ -1109,7 +1227,7 @@ try {
                     } else {
                         $response = array(
                             'success' => false,
-                            'error' => 'فشل في إضافة الإعجاب: ' . $conn->error
+                            'error' => 'فشل في إضافة الإعجاب: ' . $conx->error
                         );
                     }
                 }
@@ -1125,8 +1243,8 @@ try {
         // إدارة سلة التسوق (Cart Management)
         // =====================================
         case 'add_to_cart':
-            $item_id = isset($_POST['item_id']) ? $conn->real_escape_string($_POST['item_id']) : '';
-            $user_id = isset($_POST['user_id']) ? $conn->real_escape_string($_POST['user_id']) : '';
+            $item_id = isset($_POST['item_id']) ? $conx->real_escape_string($_POST['item_id']) : '';
+            $user_id = isset($_POST['user_id']) ? $conx->real_escape_string($_POST['user_id']) : '';
             $quantity = isset($_POST['quantity']) ? (int)$_POST['quantity'] : 1;
             
             if (empty($item_id) || empty($user_id)) {
@@ -1140,7 +1258,7 @@ try {
             try {
                 // ✅ التحقق من وجود الصنف في السلة
                 $checkSql = "SELECT id, qtt FROM Cart WHERE item_id = '$item_id' AND user_id = '$user_id'";
-                $checkResult = $conn->query($checkSql);
+                $checkResult = $conx->query($checkSql);
                 
                 
                 
@@ -1150,7 +1268,7 @@ try {
                     $newQuantity = $row['qtt'] + $quantity;
                     $updateSql = "UPDATE Cart SET qtt = $newQuantity WHERE id = " . $row['id'];
                     
-                    if ($conn->query($updateSql)) {
+                    if ($conx->query($updateSql)) {
                         $response = array(
                             'success' => true,
                             'message' => 'تم تحديث الكمية في السلة',
@@ -1159,17 +1277,17 @@ try {
                     } else {
                         $response = array(
                             'success' => false,
-                            'error' => 'فشل في تحديث السلة: ' . $conn->error
+                            'error' => 'فشل في تحديث السلة: ' . $conx->error
                         );
                     }
                 } else {
                      // ✅ إضافة صنف جديد للسلة
                         // ✅ رقم طلب عشوائي مكون من 8 أرقام
-                        $order_id = isset($_POST['oid']) ? $conn->real_escape_string($_POST['oid']) : '';
+                        $order_id = isset($_POST['oid']) ? $conx->real_escape_string($_POST['oid']) : '';
                         
                         $insertSql = "INSERT INTO Cart (user_id, item_id, qtt, order_id) VALUES ('$user_id', '$item_id', $quantity, '$order_id')";
                         
-                        if ($conn->query($insertSql)) {
+                        if ($conx->query($insertSql)) {
                             $response = array(
                                 'success' => true,
                                 'message' => 'تم إضافة الصنف للسلة',
@@ -1179,7 +1297,7 @@ try {
                         } else {
                             $response = array(
                                 'success' => false,
-                                'error' => 'فشل في إضافة الصنف للسلة: ' . $conn->error,
+                                'error' => 'فشل في إضافة الصنف للسلة: ' . $conx->error,
                                 'sql' => $insertSql
                             );
                         }
@@ -1195,8 +1313,8 @@ try {
             break;
         
         case 'remove_from_cart':
-            $item_id = isset($_POST['item_id']) ? $conn->real_escape_string($_POST['item_id']) : '';
-            $user_id = isset($_POST['user_id']) ? $conn->real_escape_string($_POST['user_id']) : '';
+            $item_id = isset($_POST['item_id']) ? $conx->real_escape_string($_POST['item_id']) : '';
+            $user_id = isset($_POST['user_id']) ? $conx->real_escape_string($_POST['user_id']) : '';
             
             if (empty($item_id) || empty($user_id)) {
                 $response = array(
@@ -1211,7 +1329,7 @@ try {
                 $checkSql = "SELECT id, qtt FROM Cart 
                              WHERE item_id = '$item_id' 
                              AND user_id = '$user_id'";
-                $checkResult = $conn->query($checkSql);
+                $checkResult = $conx->query($checkSql);
                 
                 if ($checkResult && $checkResult->num_rows > 0) {
                     $row = $checkResult->fetch_assoc();
@@ -1222,7 +1340,7 @@ try {
                         $newQuantity = $currentQuantity - 1;
                         $updateSql = "UPDATE Cart SET qtt = $newQuantity WHERE id = " . $row['id'];
                         
-                        if ($conn->query($updateSql)) {
+                        if ($conx->query($updateSql)) {
                             $response = array(
                                 'success' => true,
                                 'message' => 'تم تقليل الكمية',
@@ -1231,14 +1349,14 @@ try {
                         } else {
                             $response = array(
                                 'success' => false,
-                                'error' => 'فشل في تحديث السلة: ' . $conn->error
+                                'error' => 'فشل في تحديث السلة: ' . $conx->error
                             );
                         }
                     } else {
                         // ✅ حذف الصنف من السلة (الكمية = 1)
                         $deleteSql = "DELETE FROM Cart WHERE id = " . $row['id'];
                         
-                        if ($conn->query($deleteSql)) {
+                        if ($conx->query($deleteSql)) {
                             $response = array(
                                 'success' => true,
                                 'message' => 'تم حذف الصنف من السلة',
@@ -1247,7 +1365,7 @@ try {
                         } else {
                             $response = array(
                                 'success' => false,
-                                'error' => 'فشل في حذف الصنف: ' . $conn->error
+                                'error' => 'فشل في حذف الصنف: ' . $conx->error
                             );
                         }
                     }
@@ -1268,8 +1386,8 @@ try {
             break;
         
         case 'get_cart_quantity':
-            $item_id = isset($_POST['item_id']) ? $conn->real_escape_string($_POST['item_id']) : '';
-            $user_id = isset($_POST['user_id']) ? $conn->real_escape_string($_POST['user_id']) : '';
+            $item_id = isset($_POST['item_id']) ? $conx->real_escape_string($_POST['item_id']) : '';
+            $user_id = isset($_POST['user_id']) ? $conx->real_escape_string($_POST['user_id']) : '';
             
             if (empty($item_id) || empty($user_id)) {
                 $response = array(
@@ -1284,7 +1402,7 @@ try {
                         FROM Cart 
                         WHERE item_id = '$item_id' 
                         AND user_id = '$user_id'";
-                $result = $conn->query($sql);
+                $result = $conx->query($sql);
                 
                 if ($result) {
                     $row = $result->fetch_assoc();
@@ -1295,7 +1413,7 @@ try {
                 } else {
                     $response = array(
                         'success' => false,
-                        'error' => 'فشل في جلب كمية السلة: ' . $conn->error
+                        'error' => 'فشل في جلب كمية السلة: ' . $conx->error
                     );
                 }
                 
@@ -1311,8 +1429,8 @@ try {
         // جلب عناصر السلة (Get Cart Items)
         // =====================================
         case 'get_from_cart':
-            $user_id = isset($_POST['user_id']) ? $conn->real_escape_string($_POST['user_id']) : '';
-            $store_id = isset($_POST['store_id']) ? $conn->real_escape_string($_POST['store_id']) : '1';
+            $user_id = isset($_POST['user_id']) ? $conx->real_escape_string($_POST['user_id']) : '';
+            $store_id = isset($_POST['store_id']) ? $conx->real_escape_string($_POST['store_id']) : '1';
             
             if (empty($user_id)) {
                 $response = array(
@@ -1346,7 +1464,7 @@ try {
                 WHERE Cart.user_id = '$user_id' $get_store
                 ORDER BY Cart.id DESC";
 
-                $result = $conn->query($sql);
+                $result = $conx->query($sql);
                 $cartItems = array();
                 
                 if ($result && $result->num_rows > 0) {
@@ -1421,7 +1539,7 @@ try {
                     $sql = "UPDATE Cart SET qtt = $quantity WHERE id = $cart_id";
                 }
 
-                if ($conn->query($sql)) {
+                if ($conx->query($sql)) {
                     $response = array(
                         'success' => true,
                         'message' => $quantity == 0 ? 'تم حذف العنصر من السلة' : 'تم تحديث الكمية',
@@ -1430,7 +1548,7 @@ try {
                 } else {
                     $response = array(
                         'success' => false,
-                        'error' => 'فشل في تحديث السلة: ' . $conn->error
+                        'error' => 'فشل في تحديث السلة: ' . $conx->error
                     );
                 }
                 
@@ -1446,16 +1564,16 @@ try {
         // إضافة عنوان شحن جديد (Add Shipping Address)
         // =====================================
         case 'add_shipping_address':
-            $fullname = isset($_POST['fullname']) ? $conn->real_escape_string($_POST['fullname']) : '';
-            $mobile = isset($_POST['mobile']) ? $conn->real_escape_string($_POST['mobile']) : '';
-            $email = isset($_POST['email']) ? $conn->real_escape_string($_POST['email']) : '';
-            $country = isset($_POST['country']) ? $conn->real_escape_string($_POST['country']) : '';
-            $city = isset($_POST['city']) ? $conn->real_escape_string($_POST['city']) : '';
-            $zone_number = isset($_POST['zone_number']) ? $conn->real_escape_string($_POST['zone_number']) : '';
-            $street_number = isset($_POST['street_number']) ? $conn->real_escape_string($_POST['street_number']) : '';
-            $building_number = isset($_POST['building_number']) ? $conn->real_escape_string($_POST['building_number']) : '';
-            $uid = isset($_POST['uid']) ? $conn->real_escape_string($_POST['uid']) : '';
-            $oid = isset($_POST['oid']) ? $conn->real_escape_string($_POST['oid']) : '';
+            $fullname = isset($_POST['fullname']) ? $conx->real_escape_string($_POST['fullname']) : '';
+            $mobile = isset($_POST['mobile']) ? $conx->real_escape_string($_POST['mobile']) : '';
+            $email = isset($_POST['email']) ? $conx->real_escape_string($_POST['email']) : '';
+            $country = isset($_POST['country']) ? $conx->real_escape_string($_POST['country']) : '';
+            $city = isset($_POST['city']) ? $conx->real_escape_string($_POST['city']) : '';
+            $zone_number = isset($_POST['zone_number']) ? $conx->real_escape_string($_POST['zone_number']) : '';
+            $street_number = isset($_POST['street_number']) ? $conx->real_escape_string($_POST['street_number']) : '';
+            $building_number = isset($_POST['building_number']) ? $conx->real_escape_string($_POST['building_number']) : '';
+            $uid = isset($_POST['uid']) ? $conx->real_escape_string($_POST['uid']) : '';
+            $oid = isset($_POST['oid']) ? $conx->real_escape_string($_POST['oid']) : '';
             
             if (empty($fullname) || empty($mobile) || empty($uid)) {
                 $response = array(
@@ -1469,16 +1587,16 @@ try {
                 $sql = "INSERT INTO Shipping_Orders (Fullname, MobileNumber, Email, Country, City, `Zone Number`, `Street Number`, `Building Number`, uid, oid) 
                         VALUES ('$fullname', '$mobile', '$email', '$country', '$city', '$zone_number', '$street_number', '$building_number', '$uid', '$oid')";
 
-                if ($conn->query($sql)) {
+                if ($conx->query($sql)) {
                     $response = array(
                         'success' => true,
                         'message' => 'تم إضافة العنوان بنجاح',
-                        'address_id' => $conn->insert_id
+                        'address_id' => $conx->insert_id
                     );
                 } else {
                     $response = array(
                         'success' => false,
-                        'error' => 'فشل في إضافة العنوان: ' . $conn->error
+                        'error' => 'فشل في إضافة العنوان: ' . $conx->error
                     );
                 }
                 
@@ -1494,7 +1612,7 @@ try {
         // جلب عناوين الشحن (Get Shipping Addresses)
         // =====================================
         case 'get_shipping_addresses':
-            $uid = isset($_POST['uid']) ? $conn->real_escape_string($_POST['uid']) : '';
+            $uid = isset($_POST['uid']) ? $conx->real_escape_string($_POST['uid']) : '';
             
             if (empty($uid)) {
                 $response = array(
@@ -1506,7 +1624,7 @@ try {
 
             try {
                 $sql = "SELECT * FROM Shipping_Orders WHERE uid = '$uid' ORDER BY id DESC";
-                $result = $conn->query($sql);
+                $result = $conx->query($sql);
                 $addresses = array();
                 
                 if ($result && $result->num_rows > 0) {
@@ -1546,7 +1664,7 @@ try {
         // جلب البائعين الذين اشترى منهم المستخدم (Get User's Sellers)
         // =====================================
         case 'get_user_sellers':
-            $user_id = isset($_POST['user_id']) ? $conn->real_escape_string($_POST['user_id']) : '';
+            $user_id = isset($_POST['user_id']) ? $conx->real_escape_string($_POST['user_id']) : '';
             
             if (empty($user_id)) {
                 $response = array(
@@ -1581,7 +1699,7 @@ try {
                 ORDER BY
                     Users.Fullname ASC";
 
-                $result = $conn->query($sql);
+                $result = $conx->query($sql);
                 $sellers = array();
                 
                 if ($result && $result->num_rows > 0) {
@@ -1615,9 +1733,9 @@ try {
         // تحديث الملف الشخصي
         // =====================================
         case 'update_user_profile':
-            $uid = isset($_POST['uid']) ? $conn->real_escape_string($_POST['uid']) : '';
-            $name = isset($_POST['name']) ? $conn->real_escape_string($_POST['name']) : '';
-            $phone = isset($_POST['phone']) ? $conn->real_escape_string($_POST['phone']) : '';
+            $uid = isset($_POST['uid']) ? $conx->real_escape_string($_POST['uid']) : '';
+            $name = isset($_POST['name']) ? $conx->real_escape_string($_POST['name']) : '';
+            $phone = isset($_POST['phone']) ? $conx->real_escape_string($_POST['phone']) : '';
             
             if (empty($uid) || empty($name) || empty($phone)) {
                 $response = ['success' => false, 'error' => 'جميع الحقول مطلوبة'];
@@ -1626,35 +1744,10 @@ try {
             
             $sql = "UPDATE Users SET Fullname = '$name', PhoneNumber = '$phone' WHERE uid = '$uid'";
             
-            if ($conn->query($sql) === TRUE) {
+            if ($conx->query($sql) === TRUE) {
                 $response = ['success' => true, 'message' => 'تم تحديث الملف الشخصي بنجاح'];
             } else {
-                $response = ['success' => false, 'error' => 'فشل في تحديث الملف الشخصي: ' . $conn->error];
-            }
-            break;
-
-        // =====================================
-        // حذف الحساب (Delete Account - Soft Delete)
-        // =====================================
-        case 'delete_account':
-            $uid = isset($_POST['uid']) ? $conn->real_escape_string($_POST['uid']) : '';
-            
-            if (empty($uid)) {
-                $response = ['success' => false, 'error' => 'معرف المستخدم مطلوب'];
-                break;
-            }
-            
-            // Soft delete: Update status to 4 (deleted)
-            $sql = "UPDATE Users SET status = 4 WHERE uid = '$uid'";
-            
-            if ($conn->query($sql) === TRUE) {
-                if ($conn->affected_rows > 0) {
-                    $response = ['success' => true, 'message' => 'تم حذف الحساب بنجاح'];
-                } else {
-                    $response = ['success' => false, 'error' => 'المستخدم غير موجود'];
-                }
-            } else {
-                $response = ['success' => false, 'error' => 'فشل في حذف الحساب: ' . $conn->error];
+                $response = ['success' => false, 'error' => 'فشل في تحديث الملف الشخصي: ' . $conx->error];
             }
             break;
 
@@ -1662,8 +1755,8 @@ try {
         // تفريغ السلة وتحديث OID
         // =====================================
         case 'clear_cart_update_oid':
-            $user_id = isset($_POST['user_id']) ? $conn->real_escape_string($_POST['user_id']) : '';
-            $new_oid = isset($_POST['new_oid']) ? $conn->real_escape_string($_POST['new_oid']) : '';
+            $user_id = isset($_POST['user_id']) ? $conx->real_escape_string($_POST['user_id']) : '';
+            $new_oid = isset($_POST['new_oid']) ? $conx->real_escape_string($_POST['new_oid']) : '';
             
             if (empty($user_id) || empty($new_oid)) {
                 $response = ['success' => false, 'error' => 'معرف المستخدم والـ OID الجديد مطلوبان'];
@@ -1671,28 +1764,28 @@ try {
             }
             
             // Start transaction
-            $conn->begin_transaction();
+            $conx->begin_transaction();
             
             try {
                 // Clear cart for user
                 $clear_cart_sql = "DELETE FROM Cart WHERE user_id = '$user_id'";
-                if (!$conn->query($clear_cart_sql)) {
-                    throw new Exception('فشل في تفريغ السلة: ' . $conn->error);
+                if (!$conx->query($clear_cart_sql)) {
+                    throw new Exception('فشل في تفريغ السلة: ' . $conx->error);
                 }
                 
                 // Update user OID
                 $update_oid_sql = "UPDATE Users SET oid = '$new_oid' WHERE uid = '$user_id'";
-                if (!$conn->query($update_oid_sql)) {
-                    throw new Exception('فشل في تحديث OID: ' . $conn->error);
+                if (!$conx->query($update_oid_sql)) {
+                    throw new Exception('فشل في تحديث OID: ' . $conx->error);
                 }
                 
                 // Commit transaction
-                $conn->commit();
+                $conx->commit();
                 $response = ['success' => true, 'message' => 'تم تفريغ السلة وتحديث OID بنجاح'];
                 
             } catch (Exception $e) {
                 // Rollback transaction
-                $conn->rollback();
+                $conx->rollback();
                 $response = ['success' => false, 'error' => $e->getMessage()];
             }
             break;
@@ -1701,9 +1794,9 @@ try {
         // جلب رسائل الدردشة
         // =====================================
         case 'get_chat_messages':
-            $sender_id = isset($_POST['sender_id']) ? $conn->real_escape_string($_POST['sender_id']) : '';
-            $receiver_id = isset($_POST['receiver_id']) ? $conn->real_escape_string($_POST['receiver_id']) : '';
-            $conversation_id = isset($_POST['conversation_id']) ? $conn->real_escape_string($_POST['conversation_id']) : '';
+            $sender_id = isset($_POST['sender_id']) ? $conx->real_escape_string($_POST['sender_id']) : '';
+            $receiver_id = isset($_POST['receiver_id']) ? $conx->real_escape_string($_POST['receiver_id']) : '';
+            $conversation_id = isset($_POST['conversation_id']) ? $conx->real_escape_string($_POST['conversation_id']) : '';
             
             if (empty($sender_id) || empty($receiver_id)) {
                 $response = ['success' => false, 'error' => 'معرف المرسل والمستقبل مطلوبان'];
@@ -1723,7 +1816,7 @@ try {
                         ORDER BY timestamp ASC";
             }
             
-            $result = $conn->query($sql);
+            $result = $conx->query($sql);
             $messages = [];
             
             if ($result && $result->num_rows > 0) {
@@ -1739,13 +1832,13 @@ try {
         // إرسال رسالة دردشة
         // =====================================
         case 'send_chat_message':
-            $sender_id = isset($_POST['sender_id']) ? $conn->real_escape_string($_POST['sender_id']) : '';
-            $receiver_id = isset($_POST['receiver_id']) ? $conn->real_escape_string($_POST['receiver_id']) : '';
-            $message = isset($_POST['message']) ? $conn->real_escape_string($_POST['message']) : '';
-            $conversation_id = isset($_POST['conversation_id']) ? $conn->real_escape_string($_POST['conversation_id']) : '';
-            $message_type = isset($_POST['message_type']) ? $conn->real_escape_string($_POST['message_type']) : 'text';
-            $location_lat = isset($_POST['location_lat']) ? $conn->real_escape_string($_POST['location_lat']) : null;
-            $location_lng = isset($_POST['location_lng']) ? $conn->real_escape_string($_POST['location_lng']) : null;
+            $sender_id = isset($_POST['sender_id']) ? $conx->real_escape_string($_POST['sender_id']) : '';
+            $receiver_id = isset($_POST['receiver_id']) ? $conx->real_escape_string($_POST['receiver_id']) : '';
+            $message = isset($_POST['message']) ? $conx->real_escape_string($_POST['message']) : '';
+            $conversation_id = isset($_POST['conversation_id']) ? $conx->real_escape_string($_POST['conversation_id']) : '';
+            $message_type = isset($_POST['message_type']) ? $conx->real_escape_string($_POST['message_type']) : 'text';
+            $location_lat = isset($_POST['location_lat']) ? $conx->real_escape_string($_POST['location_lat']) : null;
+            $location_lng = isset($_POST['location_lng']) ? $conx->real_escape_string($_POST['location_lng']) : null;
             
             if (empty($sender_id) || empty($receiver_id) || empty($message)) {
                 $response = ['success' => false, 'error' => 'جميع الحقول مطلوبة'];
@@ -1759,7 +1852,7 @@ try {
                               WHERE (sender_id = '$sender_id' AND receiver_id = '$receiver_id')
                               OR (sender_id = '$receiver_id' AND receiver_id = '$sender_id')
                               LIMIT 1";
-                $check_result = $conn->query($check_sql);
+                $check_result = $conx->query($check_sql);
                 
                 if ($check_result && $check_result->num_rows > 0) {
                     // استخدام conversation_id الموجود
@@ -1778,11 +1871,11 @@ try {
                     ($location_lat ? "'$location_lat'" : "NULL") . ", " . 
                     ($location_lng ? "'$location_lng'" : "NULL") . ", NOW(), 0)";
             
-            if ($conn->query($sql) === TRUE) {
-                $message_id = $conn->insert_id;
+            if ($conx->query($sql) === TRUE) {
+                $message_id = $conx->insert_id;
                 $response = ['success' => true, 'message_id' => $message_id, 'conversation_id' => $conversation_id];
             } else {
-                $response = ['success' => false, 'error' => 'فشل في إرسال الرسالة: ' . $conn->error];
+                $response = ['success' => false, 'error' => 'فشل في إرسال الرسالة: ' . $conx->error];
             }
             break;
 
@@ -1790,9 +1883,9 @@ try {
         // إرسال إشعار دردشة
         // =====================================
         case 'send_chat_notification':
-            $receiver_id = isset($_POST['receiver_id']) ? $conn->real_escape_string($_POST['receiver_id']) : '';
-            $sender_name = isset($_POST['sender_name']) ? $conn->real_escape_string($_POST['sender_name']) : '';
-            $message = isset($_POST['message']) ? $conn->real_escape_string($_POST['message']) : '';
+            $receiver_id = isset($_POST['receiver_id']) ? $conx->real_escape_string($_POST['receiver_id']) : '';
+            $sender_name = isset($_POST['sender_name']) ? $conx->real_escape_string($_POST['sender_name']) : '';
+            $message = isset($_POST['message']) ? $conx->real_escape_string($_POST['message']) : '';
             
             if (empty($receiver_id)) {
                 $response = ['success' => false, 'error' => 'معرف المستقبل مطلوب'];
@@ -1801,7 +1894,7 @@ try {
             
             // Get receiver's FCM token
             $sql = "SELECT fcm_token FROM Users WHERE uid = '$receiver_id'";
-            $result = $conn->query($sql);
+            $result = $conx->query($sql);
             
             if ($result && $result->num_rows > 0) {
                 $row = $result->fetch_assoc();
@@ -1823,8 +1916,8 @@ try {
         // جلب قائمة المحادثات
         // =====================================
         case 'get_chat_conversations':
-            $user_id = isset($_POST['user_id']) ? $conn->real_escape_string($_POST['user_id']) : '';
-            $store_id = isset($_POST['store_id']) ? $conn->real_escape_string($_POST['store_id']) : '';
+            $user_id = isset($_POST['user_id']) ? $conx->real_escape_string($_POST['user_id']) : '';
+            $store_id = isset($_POST['store_id']) ? $conx->real_escape_string($_POST['store_id']) : '';
             
             if (empty($user_id)) {
                 $response = ['success' => false, 'error' => 'معرف المستخدم مطلوب'];
@@ -1884,7 +1977,7 @@ try {
             
             error_log("🔍 get_chat_conversations - user_id: $user_id");
             
-            $result = $conn->query($sql);
+            $result = $conx->query($sql);
             
             // ✅ إذا فشل الاستعلام (MySQL قديم لا يدعم ROW_NUMBER)، نستخدم استعلام بديل
             if (!$result) {
@@ -1918,7 +2011,7 @@ try {
                 GROUP BY participant_id
                 ORDER BY last_message_time DESC";
                 
-                $result = $conn->query($sql);
+                $result = $conx->query($sql);
             }
             
             $conversations = [];
@@ -1937,7 +2030,7 @@ try {
         // تحديث حالة الاتصال
         // =====================================
         case 'update_online_status':
-            $user_id = isset($_POST['user_id']) ? $conn->real_escape_string($_POST['user_id']) : '';
+            $user_id = isset($_POST['user_id']) ? $conx->real_escape_string($_POST['user_id']) : '';
             
             if (empty($user_id)) {
                 $response = ['success' => false, 'error' => 'معرف المستخدم مطلوب'];
@@ -1946,7 +2039,7 @@ try {
             
             $sql = "UPDATE Users SET last_seen = NOW() WHERE uid = '$user_id'";
             
-            if ($conn->query($sql) === TRUE) {
+            if ($conx->query($sql) === TRUE) {
                 $response = ['success' => true];
             } else {
                 $response = ['success' => false, 'error' => 'فشل في تحديث الحالة'];
@@ -1957,7 +2050,7 @@ try {
         // جلب حالة الاتصال
         // =====================================
         case 'get_user_status':
-            $user_id = isset($_POST['user_id']) ? $conn->real_escape_string($_POST['user_id']) : '';
+            $user_id = isset($_POST['user_id']) ? $conx->real_escape_string($_POST['user_id']) : '';
             
             if (empty($user_id)) {
                 echo json_encode(['success' => false, 'error' => 'معرف المستخدم مطلوب']);
@@ -1968,7 +2061,7 @@ try {
                     TIMESTAMPDIFF(SECOND, last_seen, NOW()) as seconds_ago 
                     FROM Users WHERE uid = '$user_id'";
             
-            $result = $conn->query($sql);
+            $result = $conx->query($sql);
             
             if ($result && $result->num_rows > 0) {
                 $row = $result->fetch_assoc();
@@ -1994,12 +2087,12 @@ try {
         // إنشاء طلب جديد (Create Order)
         // =====================================
         case 'create_order':
-            $uid = isset($_POST['uid']) ? $conn->real_escape_string($_POST['uid']) : '';
-            $cust_id = isset($_POST['cust_id']) ? $conn->real_escape_string($_POST['cust_id']) : '';
-            $oid = isset($_POST['oid']) ? $conn->real_escape_string($_POST['oid']) : '';
-            $ship_id = isset($_POST['ship_id']) ? $conn->real_escape_string($_POST['ship_id']) : '';
+            $uid = isset($_POST['uid']) ? $conx->real_escape_string($_POST['uid']) : '';
+            $cust_id = isset($_POST['cust_id']) ? $conx->real_escape_string($_POST['cust_id']) : '';
+            $oid = isset($_POST['oid']) ? $conx->real_escape_string($_POST['oid']) : '';
+            $ship_id = isset($_POST['ship_id']) ? $conx->real_escape_string($_POST['ship_id']) : '';
             $items = isset($_POST['items']) ? $_POST['items'] : '';
-            $total_amount = isset($_POST['total_amount']) ? $conn->real_escape_string($_POST['total_amount']) : '';
+            $total_amount = isset($_POST['total_amount']) ? $conx->real_escape_string($_POST['total_amount']) : '';
             
             if (empty($uid) || empty($cust_id) || empty($oid)) {
                 $response = ['success' => false, 'error' => 'البيانات المطلوبة ناقصة'];
@@ -2011,14 +2104,14 @@ try {
                 $sql = "INSERT INTO Orders (uid, cust_id, oid, ship_id, created_at, status, items, total_amount) 
                         VALUES ('$uid', '$cust_id', '$oid', '$ship_id', '$created_at', 'pending', '$items', '$total_amount')";
                 
-                if ($conn->query($sql)) {
+                if ($conx->query($sql)) {
                     $response = [
                         'success' => true,
                         'message' => 'تم إنشاء الطلب بنجاح',
-                        'order_id' => $conn->insert_id
+                        'order_id' => $conx->insert_id
                     ];
                 } else {
-                    $response = ['success' => false, 'error' => 'فشل في إنشاء الطلب: ' . $conn->error];
+                    $response = ['success' => false, 'error' => 'فشل في إنشاء الطلب: ' . $conx->error];
                 }
             } catch (Exception $e) {
                 $response = ['success' => false, 'error' => 'خطأ في إنشاء الطلب: ' . $e->getMessage()];
@@ -2029,8 +2122,8 @@ try {
         // جلب طلباتي كمشتري (Get My Orders as Buyer)
         // =====================================
         case 'get_my_orders':
-            $cust_id = isset($_POST['cust_id']) ? $conn->real_escape_string($_POST['cust_id']) : '';
-            $store_id = isset($_POST['store_id']) ? $conn->real_escape_string($_POST['store_id']) : '';
+            $cust_id = isset($_POST['cust_id']) ? $conx->real_escape_string($_POST['cust_id']) : '';
+            $store_id = isset($_POST['store_id']) ? $conx->real_escape_string($_POST['store_id']) : '';
             $myorders = "";
             // ✅ فقط نضيف فلتر المتجر إذا كان محدداً وليس فارغاً
             if (!empty($store_id) && $store_id != '1') {
@@ -2060,7 +2153,7 @@ try {
                 // Debug: Log the SQL query
                 error_log("🔍 get_my_orders SQL: " . $sql);
                 
-                $result = $conn->query($sql);
+                $result = $conx->query($sql);
                 $orders = [];
                 
                 // Debug: Log result count
@@ -2096,7 +2189,7 @@ try {
         // جلب طلبات العملاء كبائع (Get Customer Orders as Seller)
         // =====================================
         case 'get_customer_orders':
-            $uid = isset($_POST['uid']) ? $conn->real_escape_string($_POST['uid']) : '';
+            $uid = isset($_POST['uid']) ? $conx->real_escape_string($_POST['uid']) : '';
             
             if (empty($uid)) {
                 $response = ['success' => false, 'error' => 'معرف البائع مطلوب'];
@@ -2118,7 +2211,7 @@ try {
                 WHERE Orders.uid = '$uid'
                 ORDER BY Orders.created_at DESC";
                 
-                $result = $conn->query($sql);
+                $result = $conx->query($sql);
                 $orders = [];
                 
                 if ($result && $result->num_rows > 0) {
@@ -2155,8 +2248,8 @@ try {
         // تحديث حالة الطلب (Update Order Status)
         // =====================================
         case 'update_order_status':
-            $order_id = isset($_POST['order_id']) ? $conn->real_escape_string($_POST['order_id']) : '';
-            $status = isset($_POST['status']) ? $conn->real_escape_string($_POST['status']) : '';
+            $order_id = isset($_POST['order_id']) ? $conx->real_escape_string($_POST['order_id']) : '';
+            $status = isset($_POST['status']) ? $conx->real_escape_string($_POST['status']) : '';
             
             if (empty($order_id) || empty($status)) {
                 $response = ['success' => false, 'error' => 'معرف الطلب والحالة مطلوبان'];
@@ -2181,14 +2274,15 @@ try {
                                     ON Orders.uid = Users.uid
                                     WHERE Orders.oid = '$order_id'";
                 $custo = array();
-                $cok = $conn->query($customer_id);
-                while($rows=mysqli_fetch_array($cok))
-                {
-                    $custo[] = $rows;
+                $cok = $conx->query($customer_id);
+                if ($cok) {
+                    while ($rows = $cok->fetch_assoc()) {
+                        $custo[] = $rows;
+                    }
                 }
                 
-                if ($conn->query($sql)) {
-                    if ($conn->affected_rows > 0) {
+                if ($conx->query($sql)) {
+                    if ($conx->affected_rows > 0) {
                         $response = [
                             'success' => true, 
                             'message' => 'تم تحديث حالة الطلب بنجاح',
@@ -2199,7 +2293,7 @@ try {
                         $response = ['success' => false, 'error' => 'الطلب غير موجود أو الحالة لم تتغير'];
                     }
                 } else {
-                    $response = ['success' => false, 'error' => 'فشل في تحديث الحالة: ' . $conn->error];
+                    $response = ['success' => false, 'error' => 'فشل في تحديث الحالة: ' . $conx->error];
                 }
             } catch (Exception $e) {
                 $response = ['success' => false, 'error' => 'خطأ في تحديث حالة الطلب: ' . $e->getMessage()];
@@ -2210,19 +2304,19 @@ try {
         // حذف الحساب نهائياً
         // =====================================
         case 'delete_account_permit':
-            $uid = isset($_POST['uid']) ? $conn->real_escape_string($_POST['uid']) : '';
+            $uid = isset($_POST['uid']) ? $conx->real_escape_string($_POST['uid']) : '';
             
             try {
                 $sql = "DELETE FROM Users WHERE uid = '$uid'";
  
                 
-                if ($conn->query($sql)) {
+                if ($conx->query($sql)) {
                     $response = [
                         'success' => true, 
                         'message' => 'تم حذف الحساب نهائياً بنجاح',
                     ];
                 } else {
-                    $response = ['success' => false, 'error' => 'فشل في تحديث الحالة: ' . $conn->error];
+                    $response = ['success' => false, 'error' => 'فشل في تحديث الحالة: ' . $conx->error];
                 }
             } catch (Exception $e) {
                 $response = ['success' => false, 'error' => 'خطأ في تحديث حالة الطلب: ' . $e->getMessage()];
@@ -2230,7 +2324,7 @@ try {
             break;
             
        case 'get_group':
-            $store_id = isset($_POST['store_id']) ? $conn->real_escape_string($_POST['store_id']) : '';
+            $store_id = isset($_POST['store_id']) ? $conx->real_escape_string($_POST['store_id']) : '';
             $get_store = "";
             
             if ($store_id) {
@@ -2254,7 +2348,7 @@ try {
                 // Debug: Log the SQL query
                 error_log("📦 get_group SQL: " . $sql);
                 
-                $result = $conn->query($sql);
+                $result = $conx->query($sql);
                 
                 if ($result) {
                     $categories = [];
@@ -2273,7 +2367,7 @@ try {
                 } else {
                     $response = [
                         'success' => false,
-                        'error' => 'فشل في جلب المجموعات: ' . $conn->error
+                        'error' => 'فشل في جلب المجموعات: ' . $conx->error
                     ];
                 }
             } catch (Exception $e) {
@@ -2288,13 +2382,13 @@ try {
         // تسجيل الدخول بالبريد الإلكتروني
         // =====================================
         case 'login_with_email':
-            $email = isset($_POST['email']) ? $conn->real_escape_string($_POST['email']) : '';
+            $email = isset($_POST['email']) ? $conx->real_escape_string($_POST['email']) : '';
             $password = isset($_POST['password']) ? $_POST['password'] : '';
             
             try {
                 // ← شيل OR Password IS NOT NULL دي غلط
                 $sql = "SELECT uid, oid, Fullname, Email, Password FROM Users WHERE Email = '$email'";
-                $result = $conn->query($sql);
+                $result = $conx->query($sql);
                 
                 if ($result && $result->num_rows > 0) {
                     $user = $result->fetch_assoc();
@@ -2307,7 +2401,7 @@ try {
                         ];
                     }
                     // السيناريو 2: حساب عادي
-                    elseif (password_verify($password, $user['Password'])) {
+                    elseif ($password === $user['Password'] || password_verify($password, $user['Password'])) {
                         $response = [
                             'success' => true,
                             'message' => 'تم تسجيل الدخول بنجاح',
@@ -2338,19 +2432,65 @@ try {
             break;
 
         // =====================================
+        // جلب مستخدم بالبريد (للتحقق قبل إنشاء حساب جديد)
+        // =====================================
+        case 'get_user_by_email':
+            $email = isset($_POST['email']) ? trim($_POST['email']) : '';
+            if ($email === '') {
+                $response = [
+                    'success' => false,
+                    'message' => 'البريد الإلكتروني مطلوب'
+                ];
+                break;
+            }
+            $email_esc = $conx->real_escape_string($email);
+            try {
+                $sql = "SELECT uid, oid, Fullname, Email FROM Users WHERE LOWER(TRIM(Email)) = LOWER(TRIM('$email_esc')) LIMIT 1";
+                $result = $conx->query($sql);
+                if ($result && $result->num_rows > 0) {
+                    $row = $result->fetch_assoc();
+                    $response = [
+                        'success' => true,
+                        'message' => 'المستخدم موجود',
+                        'data' => [
+                            'id' => (string)$row['uid'],
+                            'oid' => (string)$row['oid'],
+                            'name' => $row['Fullname'],
+                            'email' => $row['Email'],
+                        ]
+                    ];
+                } else {
+                    $response = [
+                        'success' => false,
+                        'message' => 'المستخدم غير موجود'
+                    ];
+                }
+            } catch (Exception $e) {
+                $response = [
+                    'success' => false,
+                    'error' => 'خطأ في البحث: ' . $e->getMessage()
+                ];
+            }
+            break;
+
+        // =====================================
         // إنشاء حساب بالبريد الإلكتروني
         // =====================================
         case 'create_email_account':
-            $name = isset($_POST['name']) ? $conn->real_escape_string($_POST['name']) : '';
-            $email = isset($_POST['email']) ? $conn->real_escape_string($_POST['email']) : '';
+            $name = isset($_POST['name']) ? $conx->real_escape_string($_POST['name']) : '';
+            $email = isset($_POST['email']) ? $conx->real_escape_string($_POST['email']) : '';
             $password = isset($_POST['password']) ? $_POST['password'] : '';
-            $player_id = isset($_POST['player_id']) ? $conn->real_escape_string($_POST['player_id']) : '';
-            $avatar_url = isset($_POST['avatar_url']) ? $conn->real_escape_string($_POST['avatar_url']) : '';
+            $player_id = isset($_POST['player_id']) ? $conx->real_escape_string($_POST['player_id']) : '';
+            $avatar_url = isset($_POST['avatar_url']) ? $conx->real_escape_string($_POST['avatar_url']) : '';
+            $store_id = isset($_POST['store_id']) ? $conx->real_escape_string($_POST['store_id']) : '2';
+            $login_type = isset($_POST['login_type']) ? $conx->real_escape_string($_POST['login_type']) : 'Email';
+            // GlobalFarm app — all new users belong to store 2
+            $store_id = '2';
             // $hashed_password = password_hash($password, PASSWORD_DEFAULT);
             
             try {
                 $check_sql = "SELECT uid FROM Users WHERE Email = '$email'";
-                $check_result = $conn->query($check_sql);
+                $check_result = $conx->query($check_sql);
                 
                 if ($check_result && $check_result->num_rows > 0) {
                     $response = [
@@ -2361,10 +2501,10 @@ try {
                     $uid = rand(1000, 9000);
                     $oid = rand(1000, 9000);
                     
-                    $sql = "INSERT INTO Users (uid, oid, Fullname, Email, Password, player_id, urlAvatar, Created_At) 
-                            VALUES ('$uid', '$oid', '$name', '$email', '$password', '$player_id', '$avatar_url', NOW())";
+                    $sql = "INSERT INTO Users (uid, oid, Fullname, Email, Password, player_id, urlAvatar, Created_At, store_id, login_type) 
+                            VALUES ('$uid', '$oid', '$name', '$email', '$password', '$player_id', '$avatar_url', NOW(), '$store_id', '$login_type')";
                     
-                    if ($conn->query($sql)) {
+                    if ($conx->query($sql)) {
                         $response = [
                             'success' => true,
                             'message' => 'تم إنشاء الحساب بنجاح',
@@ -2378,7 +2518,7 @@ try {
                     } else {
                         $response = [
                             'success' => false,
-                            'error' => 'فشل في إنشاء الحساب: ' . $conn->error
+                            'error' => 'فشل في إنشاء الحساب: ' . $conx->error
                         ];
                     }
                 }
@@ -2391,19 +2531,20 @@ try {
             }
             break;
         case 'create_social_account':
-            $name = isset($_POST['name']) ? $conn->real_escape_string($_POST['name']) : '';
-            $email = isset($_POST['email']) ? $conn->real_escape_string($_POST['email']) : '';
+            $name = isset($_POST['name']) ? $conx->real_escape_string($_POST['name']) : '';
+            $email = isset($_POST['email']) ? $conx->real_escape_string($_POST['email']) : '';
             $uid = rand(1000, 9000);
             $oid = rand(1000, 9000);
-            $avatar_url = isset($_POST['avatar_url']) ? $conn->real_escape_string($_POST['avatar_url']) : '';
-            $player_id = isset($_POST['player_id']) ? $conn->real_escape_string($_POST['player_id']) : '';
-            $login_type = isset($_POST['login_type']) ? $conn->real_escape_string($_POST['login_type']) : '';
+            $avatar_url = isset($_POST['avatar_url']) ? $conx->real_escape_string($_POST['avatar_url']) : '';
+            $player_id = isset($_POST['player_id']) ? $conx->real_escape_string($_POST['player_id']) : '';
+            $login_type = isset($_POST['login_type']) ? $conx->real_escape_string($_POST['login_type']) : 'Google';
+            $store_id = isset($_POST['store_id']) ? $conx->real_escape_string($_POST['store_id']) : '2';
             $date = date('Y-m-d');
             try {
-                    $sql = "INSERT INTO Users (uid, oid, Fullname, Email, player_id, login_type, urlAvatar, Created_At) 
-                            VALUES ('$uid', '$oid', '$name', '$email', '$player_id', '$login_type', '$avatar_url', '$date')";
+                    $sql = "INSERT INTO Users (uid, oid, Fullname, Email, player_id, login_type, urlAvatar, Created_At, store_id) 
+                            VALUES ('$uid', '$oid', '$name', '$email', '$player_id', '$login_type', '$avatar_url', '$date', '$store_id')";
                     
-                    if ($conn->query($sql)) {
+                    if ($conx->query($sql)) {
                         $response = [
                             'success' => true,
                             'message' => 'تم إنشاء الحساب بنجاح',
@@ -2417,7 +2558,7 @@ try {
                     } else {
                         $response = [
                             'success' => false,
-                            'error' => 'فشل في إنشاء الحساب: ' . $conn->error
+                            'error' => 'فشل في إنشاء الحساب: ' . $conx->error
                         ];
                     }
             } catch (Exception $e) {
@@ -2429,13 +2570,13 @@ try {
             }
             break;
         case 'get_social_account':
-            $name = isset($_POST['name']) ? $conn->real_escape_string($_POST['name']) : '';
-            $email = isset($_POST['email']) ? $conn->real_escape_string($_POST['email']) : '';
-            $avatar_url = isset($_POST['avatar_url']) ? $conn->real_escape_string($_POST['avatar_url']) : '';
+            $name = isset($_POST['name']) ? $conx->real_escape_string($_POST['name']) : '';
+            $email = isset($_POST['email']) ? $conx->real_escape_string($_POST['email']) : '';
+            $avatar_url = isset($_POST['avatar_url']) ? $conx->real_escape_string($_POST['avatar_url']) : '';
             try {
                     $sql = "SELECT uid, oid, Fullname, email, urlAvatar, player_id FROM Users WHERE Fullname = '$name' AND email = '$email' AND urlAvatar = '$avatar_url' ";
                     
-                    $user_social = $conn->query($sql)->fetch_array();
+                    $user_social = $conx->query($sql)->fetch_array();
                     $uid = $user_social[0];
                     $oid = $user_social[1];
                     $response = [
@@ -2459,16 +2600,51 @@ try {
             break;
 
         // =====================================
+        // تعيين store_id للمستخدم (GlobalFarm = 2)
+        // =====================================
+        case 'set_user_store_id':
+            $uid = isset($_POST['uid']) ? $conx->real_escape_string($_POST['uid']) : '';
+            $store_id = '2';
+            if ($uid === '') {
+                $response = [
+                    'success' => false,
+                    'message' => 'معرف المستخدم مطلوب'
+                ];
+                break;
+            }
+            try {
+                $sql = "UPDATE Users SET store_id = '$store_id' WHERE uid = '$uid'";
+                if ($conx->query($sql)) {
+                    $response = [
+                        'success' => true,
+                        'message' => 'تم تحديث المتجر بنجاح',
+                        'store_id' => $store_id
+                    ];
+                } else {
+                    $response = [
+                        'success' => false,
+                        'error' => 'فشل في تحديث المتجر: ' . $conx->error
+                    ];
+                }
+            } catch (Exception $e) {
+                $response = [
+                    'success' => false,
+                    'error' => 'خطأ في تحديث المتجر: ' . $e->getMessage()
+                ];
+            }
+            break;
+
+        // =====================================
         // تحديث FCM Token
         // =====================================
         case 'update_fcm_token':
-            $email = isset($_POST['email']) ? $conn->real_escape_string($_POST['email']) : '';
-            $fcm_token = isset($_POST['fcm_token']) ? $conn->real_escape_string($_POST['fcm_token']) : '';
+            $email = isset($_POST['email']) ? $conx->real_escape_string($_POST['email']) : '';
+            $fcm_token = isset($_POST['fcm_token']) ? $conx->real_escape_string($_POST['fcm_token']) : '';
             
             try {
-                $sql = "UPDATE Users SET player_id = '$fcm_token' WHERE Email = '$email'";
+                $sql = "UPDATE Users SET player_id = '$fcm_token', store_id = '2' WHERE Email = '$email'";
                 
-                if ($conn->query($sql)) {
+                if ($conx->query($sql)) {
                     $response = [
                         'success' => true,
                         'message' => 'تم تحديث التوكن بنجاح'
@@ -2476,7 +2652,7 @@ try {
                 } else {
                     $response = [
                         'success' => false,
-                        'error' => 'فشل في تحديث التوكن: ' . $conn->error
+                        'error' => 'فشل في تحديث التوكن: ' . $conx->error
                     ];
                 }
             } catch (Exception $e) {
@@ -2491,19 +2667,18 @@ try {
         // تحديث FCM Token
         // =====================================
         case 'add_new_transactions':
-            $oid = isset($_POST['oid']) ? $conn->real_escape_string($_POST['oid']) : '';
-            $name = isset($_POST['name']) ? $conn->real_escape_string($_POST['name']) : '';
-            $mobile = isset($_POST['mobile']) ? $conn->real_escape_string($_POST['mobile']) : '';
-            $trans_id = isset($_POST['trans_id']) ? $conn->real_escape_string($_POST['trans_id']) : '';
-            $status = isset($_POST['status']) ? $conn->real_escape_string($_POST['status']) : '';
-            $amount = isset($_POST['amount']) ? $conn->real_escape_string($_POST['amount']) : '';
-            $pay_mode = isset($_POST['pay_mode']) ? $conn->real_escape_string($_POST['pay_mode']) : '';
-            $store_id = isset($_POST['store_id']) ? $conn->real_escape_string($_POST['store_id']) : '';
+            $oid = isset($_POST['oid']) ? $conx->real_escape_string($_POST['oid']) : '';
+            $name = isset($_POST['name']) ? $conx->real_escape_string($_POST['name']) : '';
+            $mobile = isset($_POST['mobile']) ? $conx->real_escape_string($_POST['mobile']) : '';
+            $trans_id = isset($_POST['trans_id']) ? $conx->real_escape_string($_POST['trans_id']) : '';
+            $status = isset($_POST['status']) ? $conx->real_escape_string($_POST['status']) : '';
+            $amount = isset($_POST['amount']) ? $conx->real_escape_string($_POST['amount']) : '';
+            $pay_mode = isset($_POST['pay_mode']) ? $conx->real_escape_string($_POST['pay_mode']) : '';
             
             try {
-                $sql = "INSERT INTO Transactions VALUES(NULL, '$oid', '$name', '$mobile','$trans_id', '$status', '$amount', '$pay_mode', '$store_id')";
+                $sql = "INSERT INTO Transactions VALUES(NULL, '$oid', '$name', '$mobile','$trans_id', '$status', '$amount', '$pay_mode')";
                 
-                if ($conn->query($sql)) {
+                if ($conx->query($sql)) {
                     $response = [
                         'success' => true,
                         'message' => 'تم إضافة معاملة دفع جديدة'
@@ -2511,7 +2686,7 @@ try {
                 } else {
                     $response = [
                         'success' => false,
-                        'error' => 'فشل في إضافة المعاملة الجديدة: ' . $conn->error
+                        'error' => 'فشل في إضافة المعاملة الجديدة: ' . $conx->error
                     ];
                 }
             } catch (Exception $e) {
@@ -2550,7 +2725,6 @@ try {
         'error' => 'خطأ في قاعدة البيانات: ' . $e->getMessage()
     );
 }
-
 
 echo json_encode($response, true);
 ?>

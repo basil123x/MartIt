@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
+import '../../core/utils/product_image_url.dart';
 import '../home/tiktok_feed_screen.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -195,15 +196,17 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildSearchResultItem(dynamic item) {
-    String thumbnail = "";
-    print(item['idx']);
-    if (item['idx'] != null) {
-      thumbnail = "https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmx/${item['idx']}.png";
-    } else {
-      thumbnail = "https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmapp/${item['id']}/1.png";
-    }
+    final storeId = (item['store_id'] ?? item['storeid'] ?? '4').toString();
+    final itemId = item['id'].toString();
+    final itemIdx = (item['idx'] ?? '').toString();
+    final thumbnail = ProductImageUrl.isAlbadaaStore(storeId)
+        ? ProductImageUrl.albadaaImageUrl(idx: itemIdx, id: itemId)
+        : ProductImageUrl.build(
+            storeId: storeId,
+            itemId: itemId,
+            itemIdx: itemIdx,
+          );
 
-    
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       color: Color(0xFFB4D4F0).withAlpha(40),

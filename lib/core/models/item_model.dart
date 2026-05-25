@@ -1,3 +1,6 @@
+import '../constants/app_constants.dart';
+import '../utils/product_image_url.dart';
+
 class ItemModel {
   final String id;
   final String idx;
@@ -25,30 +28,62 @@ class ItemModel {
     required this.interactions,
   });
 
-  factory ItemModel.fromJson(Map<String, dynamic> json) {
-    // Parse media from database format (e.g., "1.jpg, 2.jpg, 3.mp4")
-    List<String> mediaList = [];
-    if (json['media'] != null && json['media'].toString().isNotEmpty) {
-      final mediaString = json['media'].toString();
-      final mediaFiles = mediaString
-          .split(', ')
-          .map((file) => file.trim())
-          .toList();
+  String get primaryImageUrl => ProductImageUrl.isAlbadaaStore(storeid)
+      ? ProductImageUrl.albadaaImageUrl(idx: idx, id: id)
+      : ProductImageUrl.build(
+          storeId: storeid.isNotEmpty ? storeid : '4',
+          itemId: id,
+          itemIdx: idx,
+        );
 
-      // Convert to full URLs
-      for (String file in mediaFiles) {
-        if (file.isNotEmpty) {
-          final itemId = json['id'].toString();
-          final fullUrl = 'https://globee.b-cdn.net/$itemId/$file';
-          mediaList.add(fullUrl);
-        }
+  /// URLs for feed (store_4: martit store_4/{idx}/N.png).
+  List<String> get feedMediaUrls => ProductImageUrl.feedMediaUrls(
+        storeId: storeid,
+        itemId: id,
+        itemIdx: idx,
+        apiMedia: media,
+      );
+
+  factory ItemModel.fromJson(Map<String, dynamic> json) {
+    final itemId = json['id'].toString();
+    final itemIdx = (json['idx'] ?? '').toString();
+    final storeId =
+        (json['storeid'] ?? json['store_id'] ?? AppConstants.albadaaStoreId)
+            .toString();
+    final mediaField = _mediaFieldFromJson(json['media']);
+
+    List<String> mediaList;
+    if (ProductImageUrl.isAlbadaaStore(storeId)) {
+      mediaList = ProductImageUrl.albadaaMediaUrls(
+        idx: itemIdx,
+        id: itemId,
+        mediaField: mediaField,
+      );
+    } else if (json['media'] is List) {
+      final raw = (json['media'] as List).map((e) => e.toString()).toList();
+      if (raw.isNotEmpty && raw.first.startsWith('http')) {
+        mediaList = raw;
+      } else {
+        mediaList = ProductImageUrl.mediaList(
+          storeId: storeId,
+          itemId: itemId,
+          itemIdx: itemIdx,
+          mediaField: mediaField,
+        );
       }
+    } else {
+      mediaList = ProductImageUrl.mediaList(
+        storeId: storeId,
+        itemId: itemId,
+        itemIdx: itemIdx,
+        mediaField: mediaField,
+      );
     }
 
     return ItemModel(
-      id: json['id'].toString(),
-      idx: json['idx'].toString(),
-      storeid: json['storeid'].toString(),
+      id: itemId,
+      idx: itemIdx,
+      storeid: storeId,
       name: json['name'] ?? '',
       price: json['price']?.toString() ?? '0',
       quantity: int.tryParse(json['quantity']?.toString() ?? '0') ?? 0,
@@ -64,6 +99,20 @@ class ItemModel {
       }),
       interactions: InteractionsModel.fromJson(json['interactions'] ?? {}),
     );
+  }
+
+  static String? _mediaFieldFromJson(dynamic media) {
+    if (media == null) return null;
+    if (media is List) {
+      final parts = media.map((e) => e.toString().trim()).toList();
+      if (parts.isEmpty) return null;
+      if (parts.first.startsWith('http')) {
+        return List<String>.generate(parts.length, (i) => '${i + 1}.png')
+            .join(', ');
+      }
+      return parts.join(', ');
+    }
+    return media.toString();
   }
 
   Map<String, dynamic> toJson() {

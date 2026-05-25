@@ -1,15 +1,9 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
 import 'package:Albadaa/core/services/apple_auth_service.dart';
 import 'package:Albadaa/core/services/google_auth_service.dart';
-import 'package:Albadaa/features/splash/splash_screen.dart';
-import 'package:dio/dio.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
@@ -28,68 +22,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _googleSignIn() async {
     try {
-      User? user = await GoogleAuthService().signInWithGoogle();
-      if (user != null) {
-        int uid = 1000 + Random().nextInt(9000);
-        int oid = 1000 + Random().nextInt(9000);
-        
-        await FlutterSecureStorage().write(key: "user_uid", value: uid.toString());
-        await FlutterSecureStorage().write(key: "user_oid", value: oid.toString());
-        await FlutterSecureStorage().write(key: 'social_name', value: user.displayName);
-        await FlutterSecureStorage().write(key: 'social_email', value: user.email);
-        await FlutterSecureStorage().write(key: 'social_avatar', value: user.photoURL);
-        
-        String? playerId = OneSignal.User.pushSubscription.id;
-        
-        var result = await Dio().post(
-          "https://www.globee-trading.com/app2026/sql.php?k=${DateTime.now().millisecond}",
-          data: FormData.fromMap({
-            "action": "create_account",
-            "uid": uid,
-            "oid": oid,
-            "name": user.displayName,
-            "email": user.email,
-            "phone": "",
-            "player_id": playerId,
-            "store_id": "4",
-            "login_type": "Google",
-          }),
-        );
-        
-        // ← أضف الـ print دي
-        print('🔥 API Response: ${result.data}');
-        
-        if (result.data['success'] == true) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => SplashScreen()),
-          );
-        } else {
-          
-          if (result.data['success'] == false) {
-            await FlutterSecureStorage().write(key: "user_uid", value: result.data['uid']['uid'].toString());
-            await FlutterSecureStorage().write(key: "user_oid", value: result.data['uid']['oid'].toString());
-            await FlutterSecureStorage().write(key: 'social_name', value: user.displayName);
-            await FlutterSecureStorage().write(key: 'social_email', value: user.email);
-            await FlutterSecureStorage().write(key: 'social_avatar', value: user.photoURL);
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => SplashScreen()),
-            );
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('API Error: ${result.data}')),
-            );
-          }
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('فشل تسجيل الدخول، حاول مرة تانية')),
-        );
-      }
+      await googleAuthService.signInWithGoogleAndComplete(context);
     } catch (e) {
       print('❌ Error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
     }
   } 
 

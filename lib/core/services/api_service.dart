@@ -8,6 +8,34 @@ import 'package:http/http.dart' as http;
 class ApiService {
   static const String baseUrl = 'https://www.Globee-Trading.com/app2026';
 
+  static dynamic _parseSqlJsonResponse(
+    dynamic responseData, {
+    String? label,
+  }) {
+    if (responseData is Map<String, dynamic>) {
+      return responseData;
+    }
+    if (responseData is Map) {
+      return Map<String, dynamic>.from(responseData);
+    }
+
+    final raw = responseData?.toString() ?? '';
+    final preview = raw.length > 200 ? raw.substring(0, 200) : raw;
+    print('🌐 Raw response${label != null ? ' ($label)' : ''}: $preview');
+
+    try {
+      final decoded = json.decode(raw);
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+      return decoded;
+    } catch (e) {
+      throw Exception(
+        'JSON parse failed${label != null ? ' ($label)' : ''}: $e\nRaw response: $preview',
+      );
+    }
+  }
+
   // Test server connection
   static Future<Map<String, dynamic>> testConnection() async {
     try {
@@ -71,7 +99,7 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = _parseSqlJsonResponse(response.body, label: 'fetch');
         print("SSSSS $data");
 
         if (data['success'] == true) {
@@ -81,7 +109,12 @@ class ApiService {
           throw Exception(data['error'] ?? 'فشل في جلب البيانات');
         }
       } else {
-        throw Exception('خطأ في الاتصال بالخادم: ${response.statusCode}');
+        final preview = response.body.length > 200
+            ? response.body.substring(0, 200)
+            : response.body;
+        throw Exception(
+          'خطأ في الاتصال بالخادم: ${response.statusCode}\nRaw response: $preview',
+        );
       }
     } catch (e) {
       print('Error fetching items: $e');
@@ -160,6 +193,10 @@ class ApiService {
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
+        final bodyPreview = response.body.length > 200
+            ? response.body.substring(0, 200)
+            : response.body;
+        print('📝 Comments HTTP ${response.statusCode}: $bodyPreview');
         throw Exception('Failed to load comments: ${response.statusCode}');
       }
     } catch (e) {
@@ -410,11 +447,17 @@ class ApiService {
       final response = await Dio().post(
         '$baseUrl/sql.php',
         data: FormData.fromMap(requestData),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        options: Options(
+          headers: {'Content-Type': 'application/json'},
+          responseType: ResponseType.plain,
+        ),
       );
 
       if (response.statusCode == 200) {
-        final data = response.data;
+        final data = _parseSqlJsonResponse(
+          response.data,
+          label: 'fetch_with_likes',
+        );
         if (data['success'] == true) {
           final List<dynamic> itemsData = data['data'] ?? [];
           return itemsData.map((item) {
@@ -434,8 +477,19 @@ class ApiService {
           throw Exception(data['error'] ?? 'Failed to fetch items');
         }
       } else {
-        throw Exception('Failed to fetch items: ${response.statusCode}');
+        final raw = response.data?.toString() ?? '';
+        final preview = raw.length > 200 ? raw.substring(0, 200) : raw;
+        throw Exception(
+          'Failed to fetch items: ${response.statusCode}\nRaw response: $preview',
+        );
       }
+    } on DioException catch (e) {
+      final raw = e.response?.data?.toString() ?? '';
+      final preview = raw.length > 200 ? raw.substring(0, 200) : raw;
+      print('🌐 Raw response (fetch_with_likes DioException): $preview');
+      throw Exception(
+        'Fetch error (Dio): ${e.message}\nRaw response: $preview',
+      );
     } catch (e) {
       throw Exception('Fetch error: $e');
     }

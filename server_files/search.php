@@ -1,8 +1,10 @@
 <?php
 include 'xtras/config.php';
+require_once __DIR__ . '/media_helper.php';
 
 // Get search query parameter
 $searchQuery = isset($_GET['q']) ? trim($_GET['q']) : '';
+$storeId = isset($_GET['store_id']) ? preg_replace('/[^0-9]/', '', $_GET['store_id']) : '';
 
 try {
     if (empty($searchQuery)) {
@@ -13,43 +15,47 @@ try {
         exit;
     }
     
-    // SQL query to search items by name
-    $searchQuery = $conn->real_escape_string($searchQuery);
+    $searchQuery = $conx->real_escape_string($searchQuery);
+    $storeClause = $storeId !== '' ? " AND Items.store_id = '$storeId'" : '';
+
     $sql = "SELECT
         Items.id,
+        Items.idx,
         Items.`name`,
         Items.price,
         Items.media,
+        Items.store_id AS storeid,
         Users.Fullname,
         Users.id AS user_id
     FROM
         Items
     LEFT JOIN Users
         ON Items.uid = Users.uid
-    WHERE Items.Visibility = 'Public' 
+    WHERE Items.Visibility = 'Public'
+        AND Items.status = 1
         AND Items.`name` LIKE '%$searchQuery%'
+        $storeClause
     ORDER BY Items.`name` ASC
     LIMIT 20";
 
-    $result = $conn->query($sql);
+    $result = $conx->query($sql);
     
-    if ($result->num_rows > 0) {
+    if ($result && $result->num_rows > 0) {
         $items = array();
         
         while($row = $result->fetch_assoc()) {
-            // Get first media file for thumbnail
-            $thumbnail = '';
-            if (!empty($row['media'])) {
-                $mediaArray = explode(',', $row['media']);
-                $firstMedia = trim($mediaArray[0]);
-                if (!empty($firstMedia)) {
-                    $thumbnail = "https://globee.b-cdn.net/" . $row['id'] . "/" . $firstMedia;
-                }
-            }
+            $storeid = !empty($row['storeid']) ? (string)$row['storeid'] : '4';
+            $itemId = (string)$row['id'];
+            $itemIdx = (string)($row['idx'] ?? '');
+            $thumbnail = ($storeid === '4')
+                ? albadaa_thumbnail_url($itemId, $itemIdx)
+                : "https://globee.b-cdn.net/{$itemId}/1.png";
             
-            // Build search result object
             $item = array(
                 'id' => $row['id'],
+                'idx' => $itemIdx,
+                'store_id' => $storeid,
+                'storeid' => $storeid,
                 'name' => $row['name'],
                 'price' => $row['price'],
                 'thumbnail' => $thumbnail,
@@ -81,5 +87,5 @@ try {
     ));
 }
 
-$conn->close();
+$conx->close();
 ?>

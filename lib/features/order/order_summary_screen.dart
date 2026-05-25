@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/models/cart_model.dart';
+import '../../core/utils/product_image_url.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
 import '../shipping/shipping_address_screen.dart';
@@ -118,12 +119,8 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
 
   Widget _buildOrderItem(CartItemModel cartItem) {
     final itemTotal = double.parse(cartItem.item.price) * cartItem.cartQuantity;
-    String thumbnail = "";
-      if (cartItem.item.idx != '') {
-        thumbnail = "https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmx/${cartItem.item.idx}.png";
-      } else {
-        thumbnail = "https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmapp/${cartItem.item.id}/1.png";
-      }
+    final thumbnail =
+        "https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmx/${cartItem.item.idx}.png";
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -158,19 +155,19 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(11),
               child: Image.network(
-                      thumbnail,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: Colors.grey[800],
-                          child: const Icon(
-                            Iconsax.image,
-                            color: Colors.grey,
-                            size: 30,
-                          ),
-                        );
-                      },
+                thumbnail,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    color: Colors.grey[800],
+                    child: const Icon(
+                      Iconsax.image,
+                      color: Colors.grey,
+                      size: 30,
                     ),
+                  );
+                },
+              ),
             ),
           ),
 

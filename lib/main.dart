@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-
-import 'package:Albadaa/core/services/google_auth_service.dart';
 import 'package:Albadaa/features/chat/chat_screen.dart';
 import 'package:Albadaa/firebase_options.dart';
 import 'package:Albadaa/shared/providers/app_provider.dart';
@@ -22,9 +20,7 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -40,8 +36,6 @@ void main() async {
 
   OneSignal.Notifications.addClickListener((event) {
     print('OneSignal: notification clicked: ${event.notification.title}');
-
-    // استخرج البيانات من الـ notification
     final additionalData = event.notification.additionalData;
 
     if (additionalData != null) {

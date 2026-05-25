@@ -76,16 +76,14 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <?php if ($items && is_array($items)): ?>
-                            <?php foreach ($items as $item): ?>
-                                <tr>
-                                    <td><?php echo htmlspecialchars($item['name']); ?></td>
-                                    <td><?php echo number_format($item['price'], 2); ?> ريال</td>
-                                    <td><?php echo $item['quantity']; ?></td>
-                                    <td><?php echo number_format($item['price'] * $item['quantity'], 2); ?> ريال</td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
+                        <?for ($i=0;$i<30;$i++) {?>
+                        <tr>
+                            <td><?=$i?></td>
+                            <td><?=$i?></td>
+                            <td><?=$i?></td>
+                            <td><?=$i?></td>
+                        </tr>
+                        <?}?>
                     </tbody>
                 </table>
             </div>

@@ -3,6 +3,7 @@ import 'package:iconsax/iconsax.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/models/cart_model.dart';
+import '../../core/utils/product_image_url.dart';
 import '../order/order_summary_screen.dart';
 
 class ShoppingCartScreen extends StatefulWidget {
@@ -262,13 +263,23 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
   }
 
   Widget _buildCartItem(CartItemModel cartItem) {
+    // final thumbnail = ProductImageUrl.isAlbadaaStore(cartItem.item.store_id)
+    //     ? ProductImageUrl.albadaaImageUrl(
+    //         idx: cartItem.item.idx,
+    //         id: cartItem.item.id,
+    //       )
+    //     : (cartItem.item.thumbnail.isNotEmpty
+    //         ? cartItem.item.thumbnail
+    //         : ProductImageUrl.build(
+    //             storeId: cartItem.item.store_id.isNotEmpty
+    //                 ? cartItem.item.store_id
+    //                 : '4',
+    //             itemId: cartItem.item.id,
+    //             itemIdx: cartItem.item.idx,
+    //           ));
 
-     String thumbnail = "";
-      if (cartItem.item.idx != '') {
-        thumbnail = "https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmx/${cartItem.item.idx}.png";
-      } else {
-        thumbnail = "https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmapp/${cartItem.item.id}/1.png";
-      }
+    final thumbnail =
+        "https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmx/${cartItem.item.idx}.png";
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -304,19 +315,19 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(13),
                 child: Image.network(
-                        thumbnail,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            color: Colors.grey[800],
-                            child: const Icon(
-                              Iconsax.image,
-                              color: Colors.grey,
-                              size: 30,
-                            ),
-                          );
-                        },
-                      )
+                  thumbnail,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: Colors.grey[800],
+                      child: const Icon(
+                        Iconsax.image,
+                        color: Colors.grey,
+                        size: 30,
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
 

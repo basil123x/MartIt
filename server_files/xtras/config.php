@@ -1,20 +1,19 @@
-<?php
-// Database configuration
-$servername = "localhost"; // Change this to your server name
-$username = "your_username"; // Change this to your database username
-$password = "your_password"; // Change this to your database password
-$dbname = "your_database_name"; // Change this to your database name
+<?
+
 
 // Create connection
-$conn = new mysqli($servername, $username, $password, $dbname);
+$conx = mysqli_connect("localhost", "cdagvlmy_Globee", "A122%133z.", "cdagvlmy_Globee");
 
 // Check connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+if ($conx->connect_error) {
+    die("Connection failed: " . $conx->connect_error);
 }
 
 // Set charset to utf8 for Arabic support
-$conn->set_charset("utf8");
+$conx->set_charset("utf8");
+
+// Backward compatibility for endpoints still using $conn
+$conn = $conx;
 
 // CORS headers for Flutter app
 header("Access-Control-Allow-Origin: *");

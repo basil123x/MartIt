@@ -6,6 +6,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/models/item_model.dart';
+import '../../core/utils/product_image_url.dart';
 import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -616,32 +617,23 @@ class _ProfileItemCardState extends State<ProfileItemCard> {
   int _currentIndex = 0;
   late Future<List<String>> _mediaFuture;
 
-  static Future<List<String>> _fetchMedia(String itemId, String foldId) async {
-    try {
-      final response = await Dio().get(
-        'https://ges.qa/gesqatar/sys2026/attx/get_items_media.php',
-        queryParameters: {
-          'item_id': itemId,
-          'folderId': foldId,
-          'secret': "GES_UPLOAD_SECRET_2026",
-        },
-      );
-      if (response.statusCode == 200 && response.data['success'] == true) {
-        final media = response.data['media'] as List;
-        return media.map((e) => e['url'] as String).toList();
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
-  }
-
   @override
   void initState() {
     super.initState();
-    final itemIdx = widget.item['idx'].toString();
     final itemId = widget.item['id'].toString();
-    _mediaFuture = _mediaCache.putIfAbsent(itemIdx != '' ? itemIdx : itemId, () => _fetchMedia(itemIdx != '' ? itemIdx : itemId, itemIdx != '' ? 'itmy' : 'itmapp'));
+    final itemIdx = (widget.item['idx'] ?? '').toString();
+    final storeId =
+        (widget.item['storeid'] ?? widget.item['store_id'] ?? '4').toString();
+    final mediaField = widget.item['media']?.toString();
+    _mediaFuture = _mediaCache.putIfAbsent(
+      '${storeId}_${itemIdx}_$itemId',
+      () async => ProductImageUrl.mediaList(
+        storeId: storeId,
+        itemId: itemId,
+        itemIdx: itemIdx,
+        mediaField: mediaField,
+      ),
+    );
   }
 
   @override

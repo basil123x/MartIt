@@ -1,3 +1,5 @@
+import '../utils/product_image_url.dart';
+
 class CartItemModel {
   final String cartId;
   final String orderId;
@@ -54,20 +56,34 @@ class CartItem {
   });
 
   factory CartItem.fromJson(Map<String, dynamic> json) {
+    final id = json['id']?.toString() ?? '';
+    final idx = (json['idx'] ?? '').toString();
+    final storeId = json['store_id']?.toString() ?? '4';
+    final thumb = json['thumbnail']?.toString() ?? '';
+    final thumbnail = ProductImageUrl.isAlbadaaStore(storeId)
+        ? ProductImageUrl.albadaaImageUrl(idx: idx, id: id)
+        : (thumb.isNotEmpty
+            ? thumb
+            : ProductImageUrl.build(
+                storeId: storeId,
+                itemId: id,
+                itemIdx: idx,
+              ));
     return CartItem(
-      id: json['id']?.toString() ?? '',
-      idx: json['idx']?.toString() ?? '',
+      id: id,
+      idx: idx,
       name: json['name']?.toString() ?? '',
       price: json['price']?.toString() ?? '0',
       availableQuantity: json['available_quantity'] ?? 0,
-      thumbnail: json['thumbnail']?.toString() ?? '',
-      store_id: json['store_id']?.toString() ?? '',
+      thumbnail: thumbnail,
+      store_id: storeId,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'idx': idx,
       'name': name,
       'price': price,
       'available_quantity': availableQuantity,
