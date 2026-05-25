@@ -1,7 +1,6 @@
 import 'package:GES/features/orders/invoice_webview.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
@@ -33,7 +32,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     try {
       final uid = await AuthService.getCurrentUID();
       print('🔍 DEBUG MyOrders - UID from AuthService: $uid');
-      
+
       if (uid == null) {
         print('❌ DEBUG MyOrders - UID is null, user not logged in');
         throw Exception('User not logged in');
@@ -51,7 +50,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
           _isLoading = false;
         });
       } else {
-        print('❌ DEBUG MyOrders - API returned success=false: ${result['error']}');
+        print(
+          '❌ DEBUG MyOrders - API returned success=false: ${result['error']}',
+        );
         setState(() {
           _hasError = true;
           _isLoading = false;
@@ -68,15 +69,13 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
 
   Future<void> _openInvoice(String orderId) async {
     final url =
-        'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&store_id=3&k=${DateTime.now().millisecondsSinceEpoch}';
+        'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&view=customer&store_id=3&k=${DateTime.now().millisecondsSinceEpoch}';
 
     if (!context.mounted) return;
 
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => InvoiceWebView(url: url),
-      ),
+      MaterialPageRoute(builder: (_) => InvoiceWebView(url: url)),
     );
   }
 

@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class DatabaseService {
   static const String _baseUrl = 'https://www.Globee-Trading.com/app2026';
@@ -33,26 +32,41 @@ class DatabaseService {
     required String visibility,
     required String comments,
     required String media,
+    int? idx,
+    int? clientId,
+    int? clientIdGes,
+    String storeId = '3',
   }) async {
     try {
+      final Map<String, dynamic> payload = {
+        'action': 'insert',
+        'item_id': itemId,
+        'uid': uid,
+        'barcode': barcode,
+        'name': name,
+        'eng': eng,
+        'description': description,
+        'description_arb': description_arb,
+        'category': category,
+        'price': price,
+        'qtt': quantity,
+        'visibility': visibility,
+        'comments': comments,
+        'media': media,
+        'store_id': storeId,
+      };
+      if (idx != null && idx > 0) {
+        payload['idx'] = idx.toString();
+      }
+      if (clientId != null && clientId > 0) {
+        payload['client_id'] = clientId.toString();
+      }
+      if (clientIdGes != null && clientIdGes > 0) {
+        payload['client_id_ges'] = clientIdGes.toString();
+      }
       final response = await _dio.post(
         '$_baseUrl/sql.php',
-        data: FormData.fromMap({
-          'action': 'insert',
-          'item_id': itemId,
-          'uid': uid,
-          'barcode': barcode,
-          'name': name,
-          'eng': eng,
-          'description': description,
-          'description_arb': description_arb,
-          'category': category,
-          'price': price,
-          'qtt': quantity,
-          'visibility': visibility,
-          'comments': comments,
-          'media': media,
-        }),
+        data: FormData.fromMap(payload),
       );
 
       return response.data;

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/models/cart_model.dart';
-import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
 import '../shipping/shipping_address_screen.dart';
 
@@ -118,13 +117,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
 
   Widget _buildOrderItem(CartItemModel cartItem) {
     final itemTotal = double.parse(cartItem.item.price) * cartItem.cartQuantity;
-    String thumbnail = "";
-      if (cartItem.item.idx != '') {
-        thumbnail = "https://ges.qa/gesqatar/sys2026/attx/itmx/${cartItem.item.idx}.png";
-      } else {
-        thumbnail = "https://ges.qa/gesqatar/sys2026/attx/itmapp/${cartItem.item.id}/1.jpg";
-      }
-
+    String thumbnail = "https://martit.s3.ap-south-1.amazonaws.com/store_3/${cartItem.item.idx}/1.png";
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),

@@ -7,12 +7,12 @@ class GoogleAuthService {
       await GoogleSignIn.instance.initialize();
       await GoogleSignIn.instance.signOut().catchError((_) {});
 
-      final GoogleSignInAccount? googleUser =
+      final GoogleSignInAccount googleUser =
           await GoogleSignIn.instance.authenticate();
       if (googleUser == null) return null;
 
       final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+          googleUser.authentication;
 
       final credential = GoogleAuthProvider.credential(
         idToken: googleAuth.idToken,

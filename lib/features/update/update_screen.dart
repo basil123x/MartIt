@@ -1,10 +1,6 @@
-import 'dart:io';
 import 'package:GES/core/constants/app_colors.dart';
-import 'package:GES/features/splash/splash_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ForceUpdateScreen extends StatefulWidget {

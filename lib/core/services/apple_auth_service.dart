@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:math';
-import 'package:GES/features/auth/create_account_screen.dart';
 import 'package:GES/features/splash/splash_screen.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
