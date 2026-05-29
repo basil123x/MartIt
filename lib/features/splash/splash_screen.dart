@@ -171,10 +171,6 @@ class _SplashScreenState extends State<SplashScreen>
         child: SafeArea(
           child: Column(
             children: [
-              ElevatedButton(
-                onPressed: () {},
-                child: Text('🆕 Test Update From Github Remote Python is Updated!!!!'),
-              ),
               Expanded(
                 flex: 3,
                 child: Center(
