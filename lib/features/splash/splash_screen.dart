@@ -171,6 +171,10 @@ class _SplashScreenState extends State<SplashScreen>
         child: SafeArea(
           child: Column(
             children: [
+              ElevatedButton(
+                onPressed: () {},
+                child: Text('🆕 Test Update'),
+              ),
               Expanded(
                 flex: 3,
                 child: Center(
