@@ -19,9 +19,13 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.2.5</string>
+	<string>1.2.6</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
+	<key>com.apple.developer.applesignin</key>
+	<array>
+	  <string>Default</string>
+	</array>
 	
 	<key>CFBundleURLTypes</key>
 	<array>

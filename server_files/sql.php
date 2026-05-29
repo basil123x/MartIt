@@ -250,30 +250,20 @@ try {
                 $orderBy = "id ASC";
             }
             
-            $sql = "SELECT id, `name`, price, Views, media, created_at, idx FROM Items WHERE uid = '$uid' ORDER BY $orderBy LIMIT $limit OFFSET $offset";
+            $sql = "SELECT id, `name`, price, Views, media, created_at, idx, store_id FROM Items WHERE uid = '$uid' ORDER BY $orderBy LIMIT $limit OFFSET $offset";
             $result = $conn->query($sql);
             $items = array();
             
             if ($result && $result->num_rows > 0) {
                 while($row = $result->fetch_assoc()) {
-                    $mediaFiles = array();
-                    if (!empty($row['media'])) {
-                        $mediaArray = explode(',', $row['media']);
-                        foreach ($mediaArray as $media) {
-                            $media = trim($media);
-                            if (!empty($media)) {
-                                $mediaFiles[] = "https://globee.b-cdn.net/" . $row['id'] . "/" . $media;
-                            }
-                        }
-                    }
-                    
                     $item = array(
                         'id' => (string)$row['id'],
                         'idx' => (string)$row['idx'],
+                        'storeid' => (string)($row['store_id'] ?? '1'),
                         'name' => (string)$row['name'],
                         'price' => (string)$row['price'],
                         'views' => (int)$row['Views'],
-                        'media' => $mediaFiles,
+                        'media' => array(),
                         'created_at' => $row['created_at'] ?? '',
                     );
                     
@@ -377,10 +367,16 @@ try {
         // جلب التصنيفات (Get Categories)
         // =====================================
         case 'get_categories':
+            $store_id = isset($_POST['store_id']) ? $conn->real_escape_string($_POST['store_id']) : '1';
+            $get_store = "";
+            
+            if ($store_id) {
+                $get_store = "AND store_id = '$store_id'";
+            }
             $sql = "SELECT DISTINCT category 
                     FROM Items 
                     WHERE category IS NOT NULL 
-                    AND category != '' 
+                    AND category != '' $get_store
                     ORDER BY category ASC";
             
             $result = $conn->query($sql);
@@ -2330,6 +2326,18 @@ try {
             }
             break;
         
+        case 'get_user_by_email':
+            $email = $conn->real_escape_string($_POST['email']);
+            $sql = "SELECT uid, oid, Fullname, Email, login_type FROM Users WHERE Email = '$email' LIMIT 1";
+            $result = $conn->query($sql);
+            if ($result && $result->num_rows > 0) {
+                $row = $result->fetch_assoc();
+                $response = ['success' => true, 'exists' => true, 'data' => $row];
+            } else {
+                $response = ['success' => true, 'exists' => false];
+            }
+            break;
+
         // =====================================
         // تسجيل الدخول بالبريد الإلكتروني
         // =====================================
@@ -2392,7 +2400,7 @@ try {
             $password = isset($_POST['password']) ? $_POST['password'] : '';
             $player_id = isset($_POST['player_id']) ? $conn->real_escape_string($_POST['player_id']) : '';
             $avatar_url = isset($_POST['avatar_url']) ? $conn->real_escape_string($_POST['avatar_url']) : '';
-            // $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+            $login_type = isset($_POST['login_type']) ? $conn->real_escape_string($_POST['login_type']) : 'Email';
             
             try {
                 $check_sql = "SELECT uid FROM Users WHERE Email = '$email'";
@@ -2407,8 +2415,8 @@ try {
                     $uid = rand(1000, 9000);
                     $oid = rand(1000, 9000);
                     
-                    $sql = "INSERT INTO Users (uid, oid, Fullname, Email, Password, player_id, urlAvatar, Created_At) 
-                            VALUES ('$uid', '$oid', '$name', '$email', '$password', '$player_id', '$avatar_url', NOW())";
+                    $sql = "INSERT INTO Users (uid, oid, Fullname, Email, Password, player_id, urlAvatar, Created_At, login_type) 
+                            VALUES ('$uid', '$oid', '$name', '$email', '$password', '$player_id', '$avatar_url', NOW(), '$login_type')";
                     
                     if ($conn->query($sql)) {
                         $response = [

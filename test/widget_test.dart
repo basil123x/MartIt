@@ -11,7 +11,6 @@ import 'package:MartIt/main.dart';
 
 void main() {
   testWidgets('App starts with splash screen', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
     await tester.pumpWidget(const MartItApp());
 
     // Verify that splash screen is displayed

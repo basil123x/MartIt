@@ -77,83 +77,60 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
 
     if (_enteredOTP == _generatedOTP) {
       try {
-        final response = await Dio().post(
-          'https://www.Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        final cacheBust =
+            "https://www.Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}";
+
+        final checkResponse = await Dio().post(
+          cacheBust,
           data: FormData.fromMap({
-            "action": "login_with_email",
+            "action": "get_user_by_email",
             "email": widget.email,
-            "password": widget.password,
           }),
         );
 
-        print(response);
-
-        if (response.data['success'] == true) {
-          String? userId = OneSignal.User.pushSubscription.id;
-
-          final updateResponse = await Dio().post(
-            'https://www.Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
-            data: FormData.fromMap({
-              "action": "update_fcm_token",
-              "email": widget.email,
-              "fcm_token": userId,
-            }),
-          );
-
-          await FlutterSecureStorage().write(
-            key: "user_uid",
-            value: response.data['data']['id'],
-          );
-          await FlutterSecureStorage().write(
-            key: "user_oid",
-            value: response.data['data']['oid'],
-          );
-          await FlutterSecureStorage().write(
-            key: "user_email",
-            value: response.data['data']['email'],
-          );
-          await FlutterSecureStorage().write(
-            key: "user_name",
-            value: response.data['data']['name'],
-          );
-
-          if (mounted) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => SplashScreen()),
-            );
-          }
-        } else {
+        if (checkResponse.data["success"] != true) {
           setState(() {
             _isLoading = false;
           });
+          _showError("حدث خطأ أثناء التحقق، يرجى المحاولة مرة أخرى");
+          return;
+        }
 
-          if (response.data['message'] == 'هذا الحساب مسجل بجوجل، يرجى تسجيل الدخول عبر جوجل') {
-            _showError(response.data['message']);
-            if (mounted) {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (context) => LoginScreen(),
-                ),
-              );
-            }
-          } else {
-            if (mounted) {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (context) => EmailSignupScreen(
-                    email: widget.email,
-                    password: widget.password,
-                  ),
-                ),
-              );
-            }
+        if (checkResponse.data["exists"] == true) {
+          final userData = checkResponse.data["data"] as Map<String, dynamic>;
+          await _saveUserSession(
+            uid: userData["uid"]?.toString() ?? "",
+            oid: userData["oid"]?.toString() ?? "",
+            email: userData["Email"]?.toString() ?? widget.email,
+            name: userData["Fullname"]?.toString() ?? "",
+          );
+          await _updateFcmToken();
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (context) => const SplashScreen()),
+            );
           }
+          return;
+        }
+
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => EmailSignupScreen(
+                email: widget.email,
+                password: widget.password,
+              ),
+            ),
+          );
         }
       } catch (e) {
         setState(() {
           _isLoading = false;
         });
-        _showError('حدث خطأ أثناء التحقق، يرجى المحاولة مرة أخرى');
+        _showError("حدث خطأ أثناء التحقق، يرجى المحاولة مرة أخرى");
       }
     } else {
       setState(() {
@@ -162,6 +139,31 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
       _showError('كود التحقق غير صحيح، يرجى المحاولة مرة أخرى');
       _clearOTP();
     }
+  }
+
+  Future<void> _saveUserSession({
+    required String uid,
+    required String oid,
+    required String email,
+    required String name,
+  }) async {
+    const storage = FlutterSecureStorage();
+    await storage.write(key: "user_uid", value: uid);
+    await storage.write(key: "user_oid", value: oid);
+    await storage.write(key: "user_email", value: email);
+    await storage.write(key: "user_name", value: name);
+  }
+
+  Future<void> _updateFcmToken() async {
+    String? userId = OneSignal.User.pushSubscription.id;
+    await Dio().post(
+      "https://www.Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}",
+      data: FormData.fromMap({
+        "action": "update_fcm_token",
+        "email": widget.email,
+        "fcm_token": userId,
+      }),
+    );
   }
 
   void _clearOTP() {
@@ -193,12 +195,10 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
 
   sendOTPEmail() async {
     var result = await Dio().post(
-      "http://globee-trading.com/app2026/send_email.php?k=${DateTime.now().millisecondsSinceEpoch}",
-      data: FormData.fromMap({
-        "email": widget.email,
-        "otp": _generatedOTP,
-      }),
+      "https://globee-trading.com/app2026/send_email.php?k=${DateTime.now().millisecondsSinceEpoch}",
+      data: FormData.fromMap({"email": widget.email, "otp": _generatedOTP}),
     );
+    print(result);
   }
 
   // 666402

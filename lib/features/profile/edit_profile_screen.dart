@@ -5,7 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/api_service.dart';
-import '../../core/services/bunny_upload_service.dart';
+import '../../core/services/s3_upload_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final String currentName;
@@ -212,7 +212,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final remotePath = 'users/${widget.currentUid}/avatar.jpg';
       
-      final urls = await BunnyUploadService.uploadMediaFiles(
+      final urls = await S3UploadService.uploadMediaFiles(
         filePaths: [imageFile.path],
         itemId: 'users/${widget.currentUid}',
         onProgress: (current, total, progress) {
@@ -222,7 +222,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       if (urls.isNotEmpty) {
         setState(() {
-          _uploadedImageUrl = 'https://globee.b-cdn.net/users/${widget.currentUid}/avatar.jpg?t=$timestamp';
+          _uploadedImageUrl = "${urls.first}?t=$timestamp";
           _isUploadingImage = false;
         });
         

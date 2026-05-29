@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
+import 'package:MartIt/core/services/apple_auth_service.dart';
 import 'package:MartIt/core/services/google_auth_service.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:MartIt/features/home/tiktok_feed_screen.dart';
 import 'package:MartIt/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
@@ -25,6 +27,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final GoogleAuthService googleAuthService = GoogleAuthService();
+  bool _isAppleLoading = false;
 
   Future<void> _googleSignIn() async {
     try {
@@ -87,7 +90,48 @@ class _LoginScreenState extends State<LoginScreen> {
         SnackBar(content: Text("Error: $e")),
       );
     }
-  } 
+  }
+
+  Future<void> _appleSignIn() async {
+    if (_isAppleLoading) return;
+
+    setState(() {
+      _isAppleLoading = true;
+    });
+
+    try {
+      final result = await AppleAuthService.signIn();
+      if (result == null) {
+        return;
+      }
+
+      await AppleAuthService.saveSession(result);
+
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const SplashScreen()),
+        );
+      }
+    } on SignInWithAppleAuthorizationException catch (e) {
+      if (e.code != AuthorizationErrorCode.canceled && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAppleLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -189,23 +233,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 16),
 
-                Opacity(
-                  opacity: 0.4,
-                  child: Visibility(
-                    visible: Platform.isIOS ? true : false,
-                    child: _buildLoginOptionButton(
-                      context: context,
-                      imageTxt: "assets/images/social/apple.png",
-                      isimg: true,
-                      title: 'سجل بواسطة أبل',
-                      subtitle: 'قريباً',
-                      gradient: LinearGradient(
-                        colors: [
-                          AppColors.primary,
-                          AppColors.primary.withValues(alpha: 0.8),
-                        ],
-                      ),
+                Visibility(
+                  visible: Platform.isIOS,
+                  child: _buildLoginOptionButton(
+                    context: context,
+                    imageTxt: "assets/images/social/apple.png",
+                    isimg: true,
+                    title: _isAppleLoading
+                        ? "جاري تسجيل الدخول..."
+                        : "سجل بواسطة أبل",
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.primary,
+                        AppColors.primary.withValues(alpha: 0.8),
+                      ],
                     ),
+                    onTap: _isAppleLoading ? null : _appleSignIn,
                   ),
                 ),
 

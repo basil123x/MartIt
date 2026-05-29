@@ -7,7 +7,7 @@ import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import '../../core/constants/app_colors.dart';
-import '../../core/services/bunny_upload_service.dart';
+import '../../core/services/s3_upload_service.dart';
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
 
@@ -217,7 +217,7 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
       String? avatarUrl;
       if (_selectedImage != null) {
         final tempUserId = DateTime.now().millisecondsSinceEpoch.toString();
-        final uploadedUrls = await BunnyUploadService.uploadMediaFiles(
+        final uploadedUrls = await S3UploadService.uploadMediaFiles(
           filePaths: [_selectedImage!.path],
           itemId: 'users/$tempUserId',
         );
@@ -234,7 +234,8 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
           "email": _emailController.text,
           "password": _passwordController.text,
           "player_id": userId,
-          "avatar_url": avatarUrl ?? '',
+          "avatar_url": avatarUrl ?? "",
+          "login_type": "Email",
         }),
       );
 

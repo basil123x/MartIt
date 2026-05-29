@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'dart:ui';
 import 'package:MartIt/core/services/onesignal_service.dart';
 import 'package:MartIt/core/services/onesignal_service_web.dart';
-import 'package:MartIt/core/services/upload_notification_service.dart';
 import 'package:MartIt/features/home/tiktok_feed_screen.dart';
 import 'package:MartIt/shared/providers/app_provider.dart';
 import 'package:dio/dio.dart';
@@ -12,20 +11,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:geocoding/geocoding.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import 'package:sim_country_code_plus/sim_country_code_plus.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/utils/country_code_util.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/widgets/video_player_widget.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/database_service.dart';
-import '../../core/services/bunny_upload_service.dart';
+import '../../core/services/s3_upload_service.dart';
 import '../camera/camera_screen.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -136,33 +133,15 @@ class _AddProductScreenState extends State<AddProductScreen>
   final Map<String, FocusNode> _focusNodes = {};
   final Map<String, bool> _fieldFocused = {};
   
-  Future<String> getUserCountry() async {
-    try {
-      // 1. اطلب permission
-      LocationPermission permission = await Geolocator.requestPermission();
-      
-      // 2. جيب الموقع
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      
-      // 3. حوّل لاسم دولة
-      List<Placemark> placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
-      
-      return placemarks.first.country ?? 'Unknown'; // "EG"
-    } catch (e) {
-      return 'Unknown';
-    }
-  }
-
   Future insertOneRecord() async {
-    String? simCountry = await SimCountryCodePlus.simCountryCode;
+    final country = getCountryCode();
     var request = await Dio().post(
       'https://Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
-      data: FormData.fromMap({'action': 'insertNewOne', 'country': simCountry, 'store_id': '1'}),
+      data: FormData.fromMap({
+        "action": "insertNewOne",
+        "country": country,
+        "store_id": "1",
+      }),
     );
     setState(() {
       _currentItemId = request.data['item_id'].toString();
@@ -1352,55 +1331,26 @@ class _AddProductScreenState extends State<AddProductScreen>
   void _startBackgroundUpload(Map<String, dynamic> data) async {
     try {
       final appProvider = Provider.of<AppProvider>(context, listen: false);
-      final notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-
-      // Initialize notification service
-      await UploadNotificationService.initialize();
-
-      // Show initial notification
-      await UploadNotificationService.showUploadProgress(
-        id: notificationId,
-        title: 'جاري رفع المنتج',
-        body: 'جاري تحضير الملفات...',
-        progress: 0,
-        maxProgress: 100,
-      );
-
-      // Start background upload without isolate
-      _runBackgroundUploadWithNotification(data, notificationId);
+      _runBackgroundUpload(data);
       appProvider.allMedia.clear();
     } catch (e) {
-      print('Error starting background upload: $e');
+      print("Error starting background upload: $e");
     }
   }
 
-  void _runBackgroundUploadWithNotification(
-    Map<String, dynamic> data,
-    int notificationId,
-  ) async {
+  void _runBackgroundUpload(Map<String, dynamic> data) async {
     try {
       print("🚀 Starting product upload: ${data['name']}");
 
       final itemId = data['itemId'];
       final mediaFiles = List<String>.from(data['mediaFiles']);
 
-      // Step 1: Upload media files to Bunny.net
+      // Step 1: Upload media files to S3
       print("📤 Uploading ${mediaFiles.length} media files...");
 
-      final uploadedUrls = await BunnyUploadService.uploadMediaFiles(
+      final uploadedUrls = await S3UploadService.uploadMediaFiles(
         filePaths: mediaFiles,
         itemId: itemId,
-        onProgress: (current, total, progress) async {
-          final overallProgress =
-              ((current - 1) / total * 100 + progress * 100 / total).toInt();
-          await UploadNotificationService.showUploadProgress(
-            id: notificationId,
-            title: 'جاري رفع المنتج',
-            body: 'رفع الملف $current من $total - ${overallProgress}%',
-            progress: overallProgress,
-            maxProgress: 100,
-          );
-        },
       );
 
       if (uploadedUrls.isEmpty) {
@@ -1438,12 +1388,6 @@ class _AddProductScreenState extends State<AddProductScreen>
       if (updateResult['success'] == true) {
         print("✅ Product uploaded successfully: ${data['name']}");
 
-        // Show success notification
-        await UploadNotificationService.showUploadComplete(
-          id: notificationId,
-          title: 'تم رفع المنتج بنجاح',
-          body: 'تم رفع منتج ${data['name']} بنجاح',
-        );
         final request = await Dio().post(
           "https://www.Globee-Trading.com/app2026/sql.php",
           data: FormData.fromMap({"action": "get_tokens"}),
@@ -1462,31 +1406,13 @@ class _AddProductScreenState extends State<AddProductScreen>
       } else {
         print("❌ Failed to update database: ${updateResult['error']}");
 
-        // Show error notification
-        await UploadNotificationService.showUploadError(
-          id: notificationId,
-          title: 'فشل رفع المنتج',
-          body: 'حدث خطأ أثناء رفع المنتج',
-        );
       }
 
       data.clear();
       mediaFiles.clear();
     } catch (e) {
       print("❌ Error uploading product: $e");
-
-      // Show error notification
-      await UploadNotificationService.showUploadError(
-        id: notificationId,
-        title: 'فشل رفع المنتج',
-        body: 'حدث خطأ: ${e.toString()}',
-      );
     }
-  }
-
-  // Keep old method for compatibility
-  static void _runBackgroundUpload(Map<String, dynamic> data) async {
-    // This method is kept for backward compatibility but not used
   }
 
   void _showError(String message) {

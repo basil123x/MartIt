@@ -62,29 +62,28 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
   bool _isLoadingCategories = false;
   String? _currentStoreId; // ✅ المتجر الحالي للمنتج المعروض
 
-
   Future<String> getUserCountry() async {
-  try {
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied || 
-        permission == LocationPermission.deniedForever) {
-      return 'Qatar'; // default
-    }
-    
-    Position position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.low, // ✅ low بدل high أسرع
-      timeLimit: Duration(seconds: 5), // ✅ timeout
-    );
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return 'Qatar'; // default
+      }
 
-    List<Placemark> placemarks = await placemarkFromCoordinates(
-      position.latitude,
-      position.longitude,
-    );
-    return placemarks.first.country ?? 'Unknown';
-  } catch (e) {
-    return 'Qatar'; // ✅ default بدل Unknown
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.low, // ✅ low بدل high أسرع
+        timeLimit: Duration(seconds: 5), // ✅ timeout
+      );
+
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      return placemarks.first.country ?? 'Unknown';
+    } catch (e) {
+      return 'Qatar'; // ✅ default بدل Unknown
+    }
   }
-}
 
   @override
   void initState() {
@@ -97,12 +96,12 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
     final page = _pageController.page?.round() ?? 0;
     if (page != _currentIndex && page < _items.length) {
       final newStoreId = _items[page].storeid;
-      
+
       setState(() {
         _currentIndex = page;
         _currentItemId = _items[page].id;
       });
-      
+
       // ✅ تحديث التصنيفات إذا تغير المتجر
       if (newStoreId != _currentStoreId) {
         _loadCategoriesForStore(newStoreId);
@@ -118,7 +117,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
       _isLoggedIn = isLoggedIn;
       _currentUserId = _currentUserIdx;
     });
-    
+
     // ✅ تحميل المنتجات أولاً، ثم التصنيفات ستُحمّل تلقائياً
     _loadItems(uid: _currentUserId, isRefresh: true);
   }
@@ -138,13 +137,14 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
         _categories = categories;
         _currentStoreId = storeId;
         _isLoadingCategories = false;
-        
+
         // ✅ إذا التصنيف المختار غير موجود في المتجر الجديد، نرجع لـ "الكل"
-        if (_selectedCategory != null && !categories.contains(_selectedCategory)) {
+        if (_selectedCategory != null &&
+            !categories.contains(_selectedCategory)) {
           _selectedCategory = null;
         }
       });
-      
+
       print('📦 Loaded ${categories.length} categories for store: $storeId');
     } catch (e) {
       print('Error loading categories for store $storeId: $e');
@@ -183,7 +183,6 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
       String? simCountry = await SimCountryCodePlus.simCountryCode ?? "QA";
       if (_isLoggedIn && currentUserId != null) {
-        
         // ✅ لو مسجل دخول، نستخدم fetchItemsWithLikes
         items = await ApiService.fetchItemsWithLikes(
           userId: currentUserId,
@@ -191,7 +190,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           offset: isRefresh ? 0 : _items.length,
           initialItemId: initiItem == "" ? initiItem : widget.initialItemId,
           category: category,
-          country: simCountry
+          country: simCountry,
         );
       } else {
         // ✅ لو مش مسجل، نستخدم fetchItems عادي (بدون user_id)
@@ -200,7 +199,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           userId: uid,
           initialItemId: initiItem == "" ? initiItem : widget.initialItemId,
           category: category,
-          country: simCountry
+          country: simCountry,
         );
       }
 
@@ -213,7 +212,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
         _isLoading = false;
         _currentPage++;
       });
-      
+
       // ✅ تحميل التصنيفات للمتجر الأول بعد تحميل المنتجات
       if (items.isNotEmpty && isRefresh) {
         _loadCategoriesForStore(items[0].storeid);
@@ -245,7 +244,6 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    
     return WillPopScope(
       onWillPop: () async {
         // تعرض Dialog لتأكيد الخروج
@@ -332,37 +330,39 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                   // Bottom Info
                   _buildBottomInfo(),
                   if (_items.isEmpty)
-                  Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Iconsax.box, size: 64, color: Colors.white),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'لا توجد منتجات',
-                          style: TextStyle(
+                    Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Iconsax.box,
+                            size: 64,
                             color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w500,
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () => _loadItems(
-                            isRefresh: true,
-                            category: _selectedCategory,
+                          const SizedBox(height: 16),
+                          const Text(
+                            'لا توجد منتجات',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: () => _loadItems(
+                              isRefresh: true,
+                              category: _selectedCategory,
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Text('إعادة المحاولة'),
                           ),
-                          child: const Text('إعادة المحاولة'),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  
-                  
                 ],
               ),
       ),
@@ -492,7 +492,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
     // ✅ حساب المسافة من أعلى مع مراعاة شريط الحالة
     final statusBarHeight = MediaQuery.of(context).padding.top;
     final topPosition = statusBarHeight + 60; // تحت الأيقونات العلوية مع مسافة
-    
+
     // ✅ إظهار مؤشر تحميل أثناء جلب التصنيفات
     if (_isLoadingCategories) {
       return Positioned(
@@ -513,7 +513,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
         ),
       );
     }
-    
+
     if (_categories.isEmpty) return const SizedBox();
 
     return Positioned(
@@ -1883,10 +1883,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           const SizedBox(height: 8),
           Text(
             title,
-            style: const TextStyle(
-              color: Color(0xFF1A1A2E),
-              fontSize: 12,
-            ),
+            style: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 12),
           ),
           const SizedBox(height: 4),
           Text(
@@ -2465,15 +2462,6 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
       print('Error loading cart quantity: $e');
     }
 
-    String imgStore = "";
-
-    switch (item.storeid) {
-      case '3':
-        imgStore = 'https://ges.qa/gesqatar/sys2025/attx/itmx/${item.idx}.png';
-        break;
-      default:
-    }
-
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -2560,36 +2548,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                             borderRadius: BorderRadius.circular(13),
                             child: item.idx.isNotEmpty
                                 ? Image.network(
-                                    imgStore,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
-                                        color: Colors.grey[300],
-                                        child: const Icon(
-                                          Iconsax.image,
-                                          color: Colors.grey,
-                                          size: 40,
-                                        ),
-                                      );
-                                    },
-                                    loadingBuilder:
-                                        (context, child, loadingProgress) {
-                                          if (loadingProgress == null)
-                                            return child;
-                                          return Container(
-                                            color: Colors.grey[300],
-                                            child: const Center(
-                                              child: CircularProgressIndicator(
-                                                color: AppColors.primary,
-                                                strokeWidth: 2,
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                  )
-                                : item.media.isNotEmpty
-                                ? Image.network(
-                                    imgStore,
+                                    "https://martit.s3.ap-south-1.amazonaws.com/store_${item.storeid}/${item.idx != '' ? item.idx : item.id}/1.png",
                                     fit: BoxFit.cover,
                                     errorBuilder: (context, error, stackTrace) {
                                       return Container(
