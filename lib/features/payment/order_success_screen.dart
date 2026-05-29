@@ -1,5 +1,5 @@
 import 'dart:math';
-import 'package:Albadaa/features/home/tiktok_feed_screen.dart';
+import 'package:BML/features/home/tiktok_feed_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -198,23 +198,35 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                                   width: 100,
                                   height: 100,
                                   decoration: BoxDecoration(
-                                    color: widget.transStatus != '3' ? Colors.red : Colors.green,
+                                    color: widget.transStatus != '3'
+                                        ? Colors.red
+                                        : Colors.green,
                                     shape: BoxShape.circle,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: widget.transStatus != '3' ? Colors.red :Colors.green.withOpacity(0.35),
+                                        color: widget.transStatus != '3'
+                                            ? Colors.red
+                                            : Colors.green.withOpacity(0.35),
                                         blurRadius: 40,
-                                        spreadRadius: widget.transStatus != '3' ? 1 : 15,
+                                        spreadRadius: widget.transStatus != '3'
+                                            ? 1
+                                            : 15,
                                       ),
                                       BoxShadow(
-                                        color: widget.transStatus != '3' ? Colors.red : Colors.green.withOpacity(0.15),
+                                        color: widget.transStatus != '3'
+                                            ? Colors.red
+                                            : Colors.green.withOpacity(0.15),
                                         blurRadius: 70,
-                                        spreadRadius: widget.transStatus != '3' ? 1 : 30,
+                                        spreadRadius: widget.transStatus != '3'
+                                            ? 1
+                                            : 30,
                                       ),
                                     ],
                                   ),
                                   child: Icon(
-                                    widget.transStatus != '3' ? Icons.close_rounded : Icons.check_rounded,
+                                    widget.transStatus != '3'
+                                        ? Icons.close_rounded
+                                        : Icons.check_rounded,
                                     color: Colors.white,
                                     size: 55,
                                   ),
@@ -233,7 +245,9 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                         child: Column(
                           children: [
                             Text(
-                              widget.transStatus != '3' ? 'لقد فشلت العملية!' : 'تم الدفع بنجاح!',
+                              widget.transStatus != '3'
+                                  ? 'لقد فشلت العملية!'
+                                  : 'تم الدفع بنجاح!',
                               style: TextStyle(
                                 color: Color(0xFF1A1A2E),
                                 fontSize: 28,
@@ -242,7 +256,9 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                             ),
                             const SizedBox(height: 12),
                             Text(
-                              widget.transStatus != '3' ? 'للاسف, لم تنجح العملية حاول مرة أخرى' : 'شكراً لك، تم تأكيد طلبك بنجاح',
+                              widget.transStatus != '3'
+                                  ? 'للاسف, لم تنجح العملية حاول مرة أخرى'
+                                  : 'شكراً لك، تم تأكيد طلبك بنجاح',
                               style: TextStyle(
                                 color: const Color(0xFF1A1A2E).withOpacity(0.7),
                                 fontSize: 16,
@@ -306,14 +322,14 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                                 '${widget.cartItems.length} عنصر',
                               ),
                               const SizedBox(height: 12),
-                              
+
                               // Total Amount
                               _buildSummaryRow(
                                 'المبلغ الإجمالي',
                                 '${widget.totalAmount.toStringAsFixed(2)} ريال',
                               ),
                               const SizedBox(height: 12),
-                              
+
                               // Address
                               _buildSummaryRow(
                                 'العنوان',
@@ -321,8 +337,10 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                               ),
 
                               // Info Box
-                                Visibility(
-                                  visible: widget.transStatus != '3' ? false : true,
+                              Visibility(
+                                visible: widget.transStatus != '3'
+                                    ? false
+                                    : true,
                                 child: Container(
                                   width: double.infinity,
                                   padding: const EdgeInsets.all(16),
@@ -378,8 +396,9 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) =>
-                                      SellersContactScreen(userId: widget.userId),
+                                  builder: (context) => SellersContactScreen(
+                                    userId: widget.userId,
+                                  ),
                                 ),
                               );
                             },
@@ -425,9 +444,13 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: const Color(0xFF1A1A2E),
                                 side: BorderSide(
-                                  color: const Color(0xFF1A1A2E).withOpacity(0.3),
+                                  color: const Color(
+                                    0xFF1A1A2E,
+                                  ).withOpacity(0.3),
                                 ),
-                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(25),
                                 ),
@@ -443,37 +466,41 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                             ),
                           ),
                           if (widget.transStatus == '3')
-                          const SizedBox(width: 16),
+                            const SizedBox(width: 16),
                           if (widget.transStatus == '3')
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () {
-                                String orderId = "";
-                                for (var carto in widget.cartItems) {
-                                  orderId = carto.orderId;
-                                }
-                                _openInvoice(orderId);
-                              },
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFF1A1A2E),
-                                side: BorderSide(
-                                  color: const Color(0xFF1A1A2E).withOpacity(0.3),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  String orderId = "";
+                                  for (var carto in widget.cartItems) {
+                                    orderId = carto.orderId;
+                                  }
+                                  _openInvoice(orderId);
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF1A1A2E),
+                                  side: BorderSide(
+                                    color: const Color(
+                                      0xFF1A1A2E,
+                                    ).withOpacity(0.3),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(25),
+                                  ),
                                 ),
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(25),
-                                ),
-                              ),
-                              icon: const Icon(Iconsax.bill),
-                              label: const Text(
-                                'عرض فاتورتك',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
+                                icon: const Icon(Iconsax.bill),
+                                label: const Text(
+                                  'عرض فاتورتك',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
                         ],
                       ),
                     ],
@@ -501,10 +528,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
         const SizedBox(width: 8),
         const Text(
           '→',
-          style: TextStyle(
-            color: Color(0xFF1A1A2E),
-            fontSize: 14,
-          ),
+          style: TextStyle(color: Color(0xFF1A1A2E), fontSize: 14),
         ),
         const SizedBox(width: 8),
         Expanded(

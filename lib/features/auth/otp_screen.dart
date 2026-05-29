@@ -1,5 +1,5 @@
-import 'package:Albadaa/features/auth/login.dart';
-import 'package:Albadaa/features/splash/splash_screen.dart';
+import 'package:BML/features/auth/login.dart';
+import 'package:BML/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

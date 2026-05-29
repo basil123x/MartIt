@@ -1,4 +1,4 @@
-import 'package:Albadaa/features/auth/login.dart';
+import 'package:BML/features/auth/login.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:iconsax/iconsax.dart';
@@ -225,14 +225,25 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               ClipRRect(
-                                                borderRadius: BorderRadius.circular(3),
+                                                borderRadius:
+                                                    BorderRadius.circular(3),
                                                 child: Image.network(
                                                   'https://flagcdn.com/w40/${_selectedCountry.countryCode.toLowerCase()}.png',
                                                   width: 30,
                                                   height: 20,
                                                   fit: BoxFit.cover,
-                                                  errorBuilder: (context, error, stackTrace) =>
-                                                      Text(_selectedCountry.dialCode, style: TextStyle(fontSize: 11)),
+                                                  errorBuilder:
+                                                      (
+                                                        context,
+                                                        error,
+                                                        stackTrace,
+                                                      ) => Text(
+                                                        _selectedCountry
+                                                            .dialCode,
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                        ),
+                                                      ),
                                                 ),
                                               ),
                                               const SizedBox(width: 8),

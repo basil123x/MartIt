@@ -1,5 +1,5 @@
-import 'package:Albadaa/features/auth/login.dart';
-import 'package:Albadaa/features/splash/splash_screen.dart';
+import 'package:BML/features/auth/login.dart';
+import 'package:BML/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -127,13 +127,12 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
             _isLoading = false;
           });
 
-          if (response.data['message'] == 'هذا الحساب مسجل بجوجل، يرجى تسجيل الدخول عبر جوجل') {
+          if (response.data['message'] ==
+              'هذا الحساب مسجل بجوجل، يرجى تسجيل الدخول عبر جوجل') {
             _showError(response.data['message']);
             if (mounted) {
               Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (context) => LoginScreen(),
-                ),
+                MaterialPageRoute(builder: (context) => LoginScreen()),
               );
             }
           } else {
@@ -197,7 +196,7 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
       data: FormData.fromMap({
         "email": widget.email,
         "otp": _generatedOTP,
-        "store_id": "4"
+        "store_id": "4",
       }),
     );
   }

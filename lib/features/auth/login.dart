@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:Albadaa/core/services/apple_auth_service.dart';
-import 'package:Albadaa/core/services/google_auth_service.dart';
+import 'package:BML/core/services/apple_auth_service.dart';
+import 'package:BML/core/services/google_auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -26,12 +26,12 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       print('❌ Error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
-  } 
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -91,8 +91,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 30),
 
-                
-
                 const SizedBox(height: 16),
 
                 // Phone Login Button
@@ -116,8 +114,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     );
                   },
                 ),
-
-                
 
                 const SizedBox(height: 16),
 
@@ -149,7 +145,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: SignInWithAppleButtonStyle.black,
                     height: 50,
                     borderRadius: BorderRadius.circular(12),
-                  )
+                  ),
                 ),
 
                 const SizedBox(height: 30),

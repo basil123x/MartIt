@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:Albadaa/core/services/onesignal_service.dart';
+import 'package:BML/core/services/onesignal_service.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:geolocator/geolocator.dart';
@@ -97,23 +97,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _currentUserName = await AuthService.getCurrentName();
     _currentUserAvatar = await AuthService.getCurrentProfileImage();
     _currentConversationId = widget.conversationId;
-    
+
     // ✅ إذا لم يكن هناك صورة محفوظة، نستخدم رابط CDN
-    if ((_currentUserAvatar == null || _currentUserAvatar!.isEmpty) && _currentUserId != null) {
-      _currentUserAvatar = 'https://globee.b-cdn.net/users/$_currentUserId/avatar.jpg';
+    if ((_currentUserAvatar == null || _currentUserAvatar!.isEmpty) &&
+        _currentUserId != null) {
+      _currentUserAvatar =
+          'https://globee.b-cdn.net/users/$_currentUserId/avatar.jpg';
     }
-    
+
     if (_currentUserId != null) {
       // Update own status immediately
       await ApiService.updateOnlineStatus(userId: _currentUserId!);
       await _loadMessages();
       await _checkUserStatus();
-      
+
       // ✅ بدء polling للرسائل كل 3 ثواني
       _startMessagePolling();
     }
   }
-  
+
   // ✅ Polling للرسائل الجديدة
   void _startMessagePolling() {
     _messagePollingTimer = Timer.periodic(const Duration(seconds: 3), (_) {
@@ -152,17 +154,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       if (result['success'] == true) {
         final List<dynamic> data = result['data'] ?? [];
-        final newMessages = data.map((item) => ChatMessage.fromJson(item)).toList();
-        
+        final newMessages = data
+            .map((item) => ChatMessage.fromJson(item))
+            .toList();
+
         // ✅ تحقق إذا وصلت رسائل جديدة
         final hadNewMessages = newMessages.length > _messages.length;
-        
+
         setState(() {
           _messages = newMessages;
           _isLoading = false;
           _isFirstLoad = false;
         });
-        
+
         // ✅ scroll للأسفل فقط إذا وصلت رسائل جديدة أو كان التحميل الأول
         if (hadNewMessages || !isPolling) {
           _scrollToBottom();
@@ -637,7 +641,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Widget _buildSenderAvatar() {
     final avatarUrl = _currentUserAvatar;
     final hasValidUrl = avatarUrl != null && avatarUrl.isNotEmpty;
-    
+
     return CircleAvatar(
       radius: 16,
       backgroundColor: AppColors.primary,

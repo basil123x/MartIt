@@ -1,6 +1,6 @@
 class AppStrings {
   // App General
-  static const String appName = 'Albadaa Veterinary';
+  static const String appName = 'Blue Marine Life';
   static const String loading = 'جاري التحميل...';
   static const String error = 'حدث خطأ';
   static const String retry = 'إعادة المحاولة';
@@ -10,7 +10,7 @@ class AppStrings {
   static const String delete = 'حذف';
   static const String edit = 'تعديل';
   static const String share = 'مشاركة';
-  
+
   // Authentication
   static const String login = 'تسجيل الدخول';
   static const String register = 'إنشاء حساب';
@@ -21,14 +21,14 @@ class AppStrings {
   static const String forgotPassword = 'نسيت كلمة المرور؟';
   static const String name = 'الاسم';
   static const String phone = 'رقم الهاتف';
-  
+
   // Navigation
   static const String home = 'الرئيسية';
   static const String explore = 'استكشاف';
   static const String cart = 'السلة';
   static const String profile = 'الملف الشخصي';
   static const String favorites = 'المفضلة';
-  
+
   // Product
   static const String products = 'المنتجات';
   static const String price = 'السعر';
@@ -42,7 +42,7 @@ class AppStrings {
   static const String condition = 'الحالة';
   static const String newCondition = 'جديد';
   static const String usedCondition = 'مستعمل';
-  
+
   // Cart & Checkout
   static const String emptyCart = 'السلة فارغة';
   static const String checkout = 'إتمام الشراء';
@@ -50,7 +50,7 @@ class AppStrings {
   static const String subtotal = 'المجموع الفرعي';
   static const String shipping = 'الشحن';
   static const String tax = 'الضريبة';
-  
+
   // Video & Content
   static const String like = 'إعجاب';
   static const String comment = 'تعليق';
@@ -59,7 +59,7 @@ class AppStrings {
   static const String views = 'مشاهدة';
   static const String followers = 'متابع';
   static const String following = 'يتابع';
-  
+
   // Error Messages
   static const String networkError = 'خطأ في الاتصال بالإنترنت';
   static const String serverError = 'خطأ في الخادم';

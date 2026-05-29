@@ -7,7 +7,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
-import 'package:Albadaa/core/constants/app_constants.dart';
+import 'package:BML/core/constants/app_constants.dart';
 import 'package:path/path.dart' as path;
 
 Uint8List resizeAndEncodePng(Uint8List bytes) {
@@ -256,9 +256,7 @@ class S3UploadService {
       final resized = img.copyResize(decoded, width: 800);
       var payload = img.encodePng(resized);
 
-      final uri = Uri.parse(
-        '$_albadaaSyncUploadUrl?id=$albadaaClientId',
-      );
+      final uri = Uri.parse('$_albadaaSyncUploadUrl?id=$albadaaClientId');
       print(
         '📤 Albadaa VPS sync upload client_id_badaa=$albadaaClientId → itmx/$albadaaClientId.png',
       );

@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:Albadaa/core/models/item_model.dart';
+import 'package:BML/core/models/item_model.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -8,10 +8,7 @@ import 'package:http/http.dart' as http;
 class ApiService {
   static const String baseUrl = 'https://www.Globee-Trading.com/app2026';
 
-  static dynamic _parseSqlJsonResponse(
-    dynamic responseData, {
-    String? label,
-  }) {
+  static dynamic _parseSqlJsonResponse(dynamic responseData, {String? label}) {
     if (responseData is Map<String, dynamic>) {
       return responseData;
     }
@@ -72,7 +69,7 @@ class ApiService {
         'page': page.toString(),
         'limit': '10',
         'country': country,
-        'store_id': '4'
+        'store_id': '4',
       };
 
       // ✅ لو في user_id، نضيفه للـ body
@@ -158,7 +155,12 @@ class ApiService {
     }
   }
 
-  static Future getUserProfileItems(int userId, {int limit = 20, int offset = 0, String sort = 'views'}) async {
+  static Future getUserProfileItems(
+    int userId, {
+    int limit = 20,
+    int offset = 0,
+    String sort = 'views',
+  }) async {
     try {
       final response = await Dio().post(
         '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
@@ -186,7 +188,9 @@ class ApiService {
   static Future getComments(int itemId) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/comments.php?item_id=$itemId&k=${DateTime.now().millisecondsSinceEpoch}'),
+        Uri.parse(
+          '$baseUrl/comments.php?item_id=$itemId&k=${DateTime.now().millisecondsSinceEpoch}',
+        ),
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -429,7 +433,7 @@ class ApiService {
         "limit": limit.toString(),
         "offset": offset.toString(),
         'country': country,
-        'store_id': '4'
+        'store_id': '4',
       };
 
       // ✅ لو في category، نضيفه للـ request
@@ -502,7 +506,11 @@ class ApiService {
     try {
       final response = await Dio().post(
         '$baseUrl/sql.php',
-        data: FormData.fromMap({"action": "get_from_cart", "user_id": userId, 'store_id': '4'}),
+        data: FormData.fromMap({
+          "action": "get_from_cart",
+          "user_id": userId,
+          'store_id': '4',
+        }),
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
 
@@ -700,10 +708,7 @@ class ApiService {
     try {
       final response = await Dio().post(
         '$baseUrl/sql.php',
-        data: FormData.fromMap({
-          "action": "delete_account",
-          "uid": uid,
-        }),
+        data: FormData.fromMap({"action": "delete_account", "uid": uid}),
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
 
@@ -967,7 +972,7 @@ class ApiService {
   }) async {
     try {
       print('🔍 API getMyOrders - Sending request with cust_id: $custId');
-      
+
       final response = await Dio().post(
         '$baseUrl/sql.php',
         data: FormData.fromMap({"action": "get_my_orders", "cust_id": custId}),
@@ -1042,10 +1047,8 @@ class ApiService {
   // Get categories/groups by store_id
   static Future<List<String>> getCategories({String? storeId}) async {
     try {
-      final data = <String, dynamic>{
-        "action": "get_group",
-      };
-      
+      final data = <String, dynamic>{"action": "get_group"};
+
       // إضافة store_id إذا كان محدداً
       if (storeId != null && storeId.isNotEmpty) {
         data["store_id"] = storeId;

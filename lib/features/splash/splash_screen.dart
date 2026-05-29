@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:Albadaa/features/update/update_screen.dart';
+import 'package:BML/features/update/update_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -132,9 +132,10 @@ class _SplashScreenState extends State<SplashScreen>
         );
 
     // Slogan Fade Animation
-    _sloganAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _sloganController, curve: Curves.easeIn),
-    );
+    _sloganAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _sloganController, curve: Curves.easeIn));
 
     // Start animations
     _logoController.forward();
@@ -280,28 +281,27 @@ class _SplashScreenState extends State<SplashScreen>
                           children: [
                             Text(
                               _appVersion.isNotEmpty ? 'v$_appVersion' : '',
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.copyWith(
-                                color: AppColors.white.withValues(alpha: 0.65),
-                                fontWeight: FontWeight.w500,
-                                letterSpacing: 0.8,
-                              ),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: AppColors.white.withValues(
+                                      alpha: 0.65,
+                                    ),
+                                    fontWeight: FontWeight.w500,
+                                    letterSpacing: 0.8,
+                                  ),
                             ),
                             if (_patchNumber != null) ...[
-
-
-
                               const SizedBox(height: 4),
                               Text(
                                 'Patch: #$_patchNumber',
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color: AppColors.white.withValues(alpha: 0.50),
-                                  fontWeight: FontWeight.w400,
-                                  letterSpacing: 0.5,
-                                ),
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: AppColors.white.withValues(
+                                        alpha: 0.50,
+                                      ),
+                                      fontWeight: FontWeight.w400,
+                                      letterSpacing: 0.5,
+                                    ),
                               ),
                             ],
                           ],

@@ -7,12 +7,12 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:Albadaa/main.dart';
+import 'package:BML/main.dart';
 
 void main() {
   testWidgets('App starts with splash screen', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const BadaApp());
+    await tester.pumpWidget(const BMLApp());
 
     // Verify that splash screen is displayed
     expect(find.text('Globee'), findsOneWidget);

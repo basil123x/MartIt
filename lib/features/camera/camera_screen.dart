@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'dart:async';
-import 'package:Albadaa/shared/providers/app_provider.dart';
+import 'package:BML/shared/providers/app_provider.dart';
 import 'package:camerawesome/pigeon.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';

@@ -1,5 +1,5 @@
-import 'package:Albadaa/core/services/social_auth_service.dart';
-import 'package:Albadaa/features/splash/splash_screen.dart';
+import 'package:BML/core/services/social_auth_service.dart';
+import 'package:BML/features/splash/splash_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -11,8 +11,8 @@ class GoogleAuthService {
       await GoogleSignIn.instance.initialize();
       await GoogleSignIn.instance.signOut().catchError((_) {});
 
-      final GoogleSignInAccount? googleUser =
-          await GoogleSignIn.instance.authenticate();
+      final GoogleSignInAccount? googleUser = await GoogleSignIn.instance
+          .authenticate();
       if (googleUser == null) return null;
 
       final GoogleSignInAuthentication googleAuth =
@@ -22,8 +22,8 @@ class GoogleAuthService {
         idToken: googleAuth.idToken,
       );
 
-      final UserCredential userCredential =
-          await FirebaseAuth.instance.signInWithCredential(credential);
+      final UserCredential userCredential = await FirebaseAuth.instance
+          .signInWithCredential(credential);
 
       final User? user = userCredential.user;
       print('✅ Name: ${user?.displayName}');

@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:Albadaa/core/services/social_auth_service.dart';
-import 'package:Albadaa/features/splash/splash_screen.dart';
+import 'package:BML/core/services/social_auth_service.dart';
+import 'package:BML/features/splash/splash_screen.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -50,17 +50,18 @@ Future<void> signInWithApple(BuildContext context) async {
       await socialAuthStorage.write(key: 'social_email', value: emailFromApple);
     }
     if (fullNameFromApple.isNotEmpty) {
-      await socialAuthStorage.write(key: 'social_name', value: fullNameFromApple);
+      await socialAuthStorage.write(
+        key: 'social_name',
+        value: fullNameFromApple,
+      );
     }
 
-    final email =
-        emailFromApple.isNotEmpty
-            ? emailFromApple
-            : (await socialAuthStorage.read(key: 'social_email') ?? '');
-    final fullName =
-        fullNameFromApple.isNotEmpty
-            ? fullNameFromApple
-            : (await socialAuthStorage.read(key: 'social_name') ?? 'Apple User');
+    final email = emailFromApple.isNotEmpty
+        ? emailFromApple
+        : (await socialAuthStorage.read(key: 'social_email') ?? '');
+    final fullName = fullNameFromApple.isNotEmpty
+        ? fullNameFromApple
+        : (await socialAuthStorage.read(key: 'social_name') ?? 'Apple User');
 
     if (email.isEmpty) {
       throw Exception(
@@ -96,9 +97,9 @@ Future<void> signInWithApple(BuildContext context) async {
     }
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Apple sign in error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Apple sign in error: $e')));
     }
   }
 }

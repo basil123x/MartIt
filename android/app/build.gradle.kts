@@ -18,7 +18,7 @@ val keystoreProperties = Properties().apply {
 }
 
 android {
-    namespace = "com.badaa.vets"
+    namespace = "com.marine.life"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
 
@@ -33,7 +33,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.badaa.vets"
+        applicationId = "com.marine.life"
         minSdk = 24
         targetSdk = 36
         multiDexEnabled = true

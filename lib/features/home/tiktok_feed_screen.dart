@@ -1,11 +1,11 @@
 import 'dart:io';
 import 'dart:math';
 
-import 'package:Albadaa/core/services/onesignal_service.dart';
-import 'package:Albadaa/core/services/onesignal_service_web.dart';
-import 'package:Albadaa/features/add_product/add_product_screen.dart';
-import 'package:Albadaa/features/auth/login.dart';
-import 'package:Albadaa/shared/providers/app_provider.dart';
+import 'package:BML/core/services/onesignal_service.dart';
+import 'package:BML/core/services/onesignal_service_web.dart';
+import 'package:BML/features/add_product/add_product_screen.dart';
+import 'package:BML/features/auth/login.dart';
+import 'package:BML/shared/providers/app_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

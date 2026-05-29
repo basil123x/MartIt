@@ -1,5 +1,5 @@
-import 'package:Albadaa/core/services/api_service.dart';
-import 'package:Albadaa/core/services/auth_service.dart';
+import 'package:BML/core/services/api_service.dart';
+import 'package:BML/core/services/auth_service.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
@@ -34,15 +34,17 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   String mobile = "";
 
   Future loadProfile() async {
-    String? uid =await AuthService.getCurrentUID();
-    var result = await Dio().post("https://www.globee-trading.com/app2026/profile.php?user_id=$uid&k=${DateTime.now().millisecondsSinceEpoch}");
+    String? uid = await AuthService.getCurrentUID();
+    var result = await Dio().post(
+      "https://www.globee-trading.com/app2026/profile.php?user_id=$uid&k=${DateTime.now().millisecondsSinceEpoch}",
+    );
     setState(() {
       name = result.data['data']['name'];
       mobile = result.data['data']['phone'];
     });
   }
 
-  @override 
+  @override
   void initState() {
     loadProfile();
     super.initState();
@@ -75,7 +77,6 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              
               // Sadad Payment Option
               // _buildPaymentOptionCard(
               //   index: 0,
@@ -89,8 +90,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
               //     });
               //   },
               // ),
-              
-              
+
               // Cash on Delivery Option
               _buildPaymentOptionCard(
                 index: 1,
@@ -104,10 +104,10 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                   });
                 },
               ),
-              
+
               const Spacer(),
-              
-                _buildContinueButton(),
+
+              _buildContinueButton(),
             ],
           ),
         ),
@@ -124,7 +124,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
     required VoidCallback onTap,
   }) {
     final isSelected = _selectedPaymentMethod == index;
-    
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -138,10 +138,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                     AppColors.primary.withOpacity(0.15),
                     AppColors.primary.withOpacity(0.05),
                   ]
-                : [
-                    const Color(0xFFD4D4F0),
-                    const Color(0xFFC8D4F5),
-                  ],
+                : [const Color(0xFFD4D4F0), const Color(0xFFC8D4F5)],
           ),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
@@ -159,7 +156,9 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
               height: 56,
               decoration: BoxDecoration(
                 color: isEnabled
-                    ? (isSelected ? AppColors.primary : AppColors.primary.withOpacity(0.1))
+                    ? (isSelected
+                          ? AppColors.primary
+                          : AppColors.primary.withOpacity(0.1))
                     : Colors.grey.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(14),
               ),
@@ -171,9 +170,9 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                 size: 28,
               ),
             ),
-            
+
             const SizedBox(width: 16),
-            
+
             // Title and Subtitle
             Expanded(
               child: Column(
@@ -182,9 +181,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                   Text(
                     title,
                     style: TextStyle(
-                      color: isEnabled
-                          ? const Color(0xFF1A1A2E)
-                          : Colors.grey,
+                      color: isEnabled ? const Color(0xFF1A1A2E) : Colors.grey,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -202,7 +199,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                 ],
               ),
             ),
-            
+
             // Radio indicator or arrow on the left (RTL)
             if (isEnabled)
               Container(
@@ -211,17 +208,15 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: isSelected ? AppColors.primary : Colors.grey.withOpacity(0.4),
+                    color: isSelected
+                        ? AppColors.primary
+                        : Colors.grey.withOpacity(0.4),
                     width: 2,
                   ),
                   color: isSelected ? AppColors.primary : Colors.transparent,
                 ),
                 child: isSelected
-                    ? const Icon(
-                        Icons.check,
-                        color: Colors.white,
-                        size: 16,
-                      )
+                    ? const Icon(Icons.check, color: Colors.white, size: 16)
                     : null,
               )
             else
@@ -244,44 +239,54 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
           width: double.infinity,
           child: ElevatedButton(
             onPressed: () async {
-             
               if (_selectedPaymentMethod == 0) {
-                String? oid =await AuthService.getCurrentOID();
+                String? oid = await AuthService.getCurrentOID();
                 String transOid = "";
                 String transId = "";
                 String transStatus = "";
                 String transAmount = "";
                 String transPaymentMode = "";
-                 // TODO: قبل الـ production - انقل الـ secret key للسيرفر
-                var result = await Dio().post("https://api.sadadqatar.com/api-v5/userbusinesses/getsdktoken", data: {
-                  "sadadId": "9818636",
-                  "secretKey": "CfGxIE+7LZlWLVJg",
-                  "domain": "www.ges.qa",
-                  "isTest": true
-                });
-                
-                  Navigator.push(context, MaterialPageRoute(
+                // TODO: قبل الـ production - انقل الـ secret key للسيرفر
+                var result = await Dio().post(
+                  "https://api.sadadqatar.com/api-v5/userbusinesses/getsdktoken",
+                  data: {
+                    "sadadId": "9818636",
+                    "secretKey": "CfGxIE+7LZlWLVJg",
+                    "domain": "www.ges.qa",
+                    "isTest": true,
+                  },
+                );
+
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
                     builder: (context) {
-                        return PaymentScreen(
-                            orderId: oid ?? "",
-                            productDetail: [],
-                            customerName: name,
-                            amount: widget.totalAmount,
-                            email: "info@ges.qa",
-                            mobile: mobile,
-                            token: result.data['accessToken'],
-                            packageMode: PackageMode.debug,
-                            isWalletEnabled: true,
-                            paymentTypes: [PaymentType.creditCard, PaymentType.debitCard, PaymentType.sadadPay],
-                            image: Image.asset("assets/images/Logo-Sadad.png"),
-                            titleText: "Golden Eagle Stores",
-                            paymentButtonColor: AppColors.accent,
-                            paymentButtonTextColor: Colors.white,
-                            themeColor: AppColors.primary,
-                            googleMerchantID: 'BCR2DN6TR6Y7Z2CJ',
-                            googleMerchantName: 'Sadad Payment Solutions');
+                      return PaymentScreen(
+                        orderId: oid ?? "",
+                        productDetail: [],
+                        customerName: name,
+                        amount: widget.totalAmount,
+                        email: "info@ges.qa",
+                        mobile: mobile,
+                        token: result.data['accessToken'],
+                        packageMode: PackageMode.debug,
+                        isWalletEnabled: true,
+                        paymentTypes: [
+                          PaymentType.creditCard,
+                          PaymentType.debitCard,
+                          PaymentType.sadadPay,
+                        ],
+                        image: Image.asset("assets/images/Logo-Sadad.png"),
+                        titleText: "Golden Eagle Stores",
+                        paymentButtonColor: AppColors.accent,
+                        paymentButtonTextColor: Colors.white,
+                        themeColor: AppColors.primary,
+                        googleMerchantID: 'BCR2DN6TR6Y7Z2CJ',
+                        googleMerchantName: 'Sadad Payment Solutions',
+                      );
                     },
-                )).then((value) async {
+                  ),
+                ).then((value) async {
                   setState(() {
                     transOid = value['orderid'].toString();
                     transId = value['transaction_id'].toString();
@@ -289,17 +294,20 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                     transAmount = value['amount'].toString();
                     transPaymentMode = value['payment_mode'].toString();
                   });
-                  await Dio().post("https://www.globee-trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}", data: FormData.fromMap({
-                    "action": "add_new_transactions",
-                    "oid": transOid,
-                    "name": name,
-                    "mobile": mobile,
-                    "trans_id": transId,
-                    "status": transStatus,
-                    "amount": transAmount,
-                    "pay_mode": transPaymentMode,
-                    "store_id": "4"
-                  }));
+                  await Dio().post(
+                    "https://www.globee-trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}",
+                    data: FormData.fromMap({
+                      "action": "add_new_transactions",
+                      "oid": transOid,
+                      "name": name,
+                      "mobile": mobile,
+                      "trans_id": transId,
+                      "status": transStatus,
+                      "amount": transAmount,
+                      "pay_mode": transPaymentMode,
+                      "store_id": "4",
+                    }),
+                  );
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -308,12 +316,11 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                         cartItems: widget.cartItems,
                         totalAmount: widget.totalAmount,
                         shippingAddress: widget.shippingAddress,
-                        transStatus: transStatus
+                        transStatus: transStatus,
                       ),
                     ),
                   );
                 });
-                
               } else {
                 Navigator.push(
                   context,
@@ -323,12 +330,11 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                       cartItems: widget.cartItems,
                       totalAmount: widget.totalAmount,
                       shippingAddress: widget.shippingAddress,
-                      transStatus: "3"
+                      transStatus: "3",
                     ),
                   ),
                 );
               }
-              
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,

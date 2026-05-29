@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:Albadaa/features/chat/chat_screen.dart';
-import 'package:Albadaa/firebase_options.dart';
-import 'package:Albadaa/shared/providers/app_provider.dart';
+import 'package:BML/features/chat/chat_screen.dart';
+import 'package:BML/firebase_options.dart';
+import 'package:BML/shared/providers/app_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -67,17 +67,17 @@ void main() async {
     event.notification.display();
   });
 
-  runApp(const BadaApp());
+  runApp(const BMLApp());
 }
 
-class BadaApp extends StatefulWidget {
-  const BadaApp({super.key});
+class BMLApp extends StatefulWidget {
+  const BMLApp({super.key});
 
   @override
-  State<BadaApp> createState() => _BadaAppState();
+  State<BMLApp> createState() => _BMLAppState();
 }
 
-class _BadaAppState extends State<BadaApp> {
+class _BMLAppState extends State<BMLApp> {
   final updater = ShorebirdUpdater();
   Timer? _timer;
   static const _lastPatchKey = "last_applied_patch";

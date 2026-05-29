@@ -1,7 +1,7 @@
 import 'dart:io';
-import 'package:Albadaa/core/services/onesignal_service.dart';
-import 'package:Albadaa/core/services/onesignal_service_web.dart';
-import 'package:Albadaa/features/splash/splash_screen.dart';
+import 'package:BML/core/services/onesignal_service.dart';
+import 'package:BML/core/services/onesignal_service_web.dart';
+import 'package:BML/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
@@ -432,7 +432,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                   const SizedBox(width: 8),
                                   Text(
                                     '+974 ${widget.phoneNumber}',
-                                    style: Theme.of(context).textTheme.bodyMedium
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
                                         ?.copyWith(
                                           color: AppColors.textSecondary,
                                           fontWeight: FontWeight.w500,

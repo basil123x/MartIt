@@ -1,5 +1,5 @@
-import 'package:Albadaa/core/services/onesignal_service.dart';
-import 'package:Albadaa/features/orders/invoice_webview.dart';
+import 'package:BML/core/services/onesignal_service.dart';
+import 'package:BML/features/orders/invoice_webview.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -68,9 +68,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
 
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => InvoiceWebView(url: url),
-      ),
+      MaterialPageRoute(builder: (_) => InvoiceWebView(url: url)),
     );
   }
 
