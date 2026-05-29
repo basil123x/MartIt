@@ -1,0 +1,27 @@
+From ee58f8ab931eeb9cda776af1464ff39173c7731e Mon Sep 17 00:00:00 2001
+From: basil123x <basilcoding01@gmail.com>
+Date: Fri, 29 May 2026 17:22:58 +0300
+Subject: [PATCH] test: add test button for cherry-pick demo
+
+---
+ lib/features/splash/splash_screen.dart | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/lib/features/splash/splash_screen.dart b/lib/features/splash/splash_screen.dart
+index 3efc5fe..92c23e1 100644
+--- a/lib/features/splash/splash_screen.dart
++++ b/lib/features/splash/splash_screen.dart
+@@ -171,6 +171,10 @@ class _SplashScreenState extends State<SplashScreen>
+         child: SafeArea(
+           child: Column(
+             children: [
++              ElevatedButton(
++                onPressed: () {},
++                child: Text('🆕 Test Update'),
++              ),
+               Expanded(
+                 flex: 3,
+                 child: Center(
+-- 
+2.50.1 (Apple Git-155)
+
