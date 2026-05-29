@@ -173,7 +173,7 @@ class _SplashScreenState extends State<SplashScreen>
             children: [
               ElevatedButton(
                 onPressed: () {},
-                child: Text('🆕 Test Update'),
+                child: Text('🆕 Test Update From Github Remote Python is Updated!!!!'),
               ),
               Expanded(
                 flex: 3,
