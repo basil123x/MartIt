@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:async';
 import 'package:GES/shared/providers/app_provider.dart';
 import 'package:camerawesome/pigeon.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:camerawesome/camerawesome_plugin.dart';
 import 'package:google_fonts/google_fonts.dart';

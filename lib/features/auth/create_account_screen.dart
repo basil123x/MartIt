@@ -1,16 +1,13 @@
 import 'dart:io';
 import 'package:GES/core/services/onesignal_service.dart';
-import 'package:GES/core/services/onesignal_service_web.dart';
 import 'package:GES/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:onesignal_flutter/onesignal_flutter.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/services/auth_service.dart';
-import '../home/tiktok_feed_screen.dart';
 
 class CreateAccountScreen extends StatefulWidget {
   final String? phoneNumber;
