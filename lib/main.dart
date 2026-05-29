@@ -67,17 +67,17 @@ void main() async {
     event.notification.display();
   });
 
-  runApp(const GESApp());
+  runApp(const BadaApp());
 }
 
-class GESApp extends StatefulWidget {
-  const GESApp({super.key});
+class BadaApp extends StatefulWidget {
+  const BadaApp({super.key});
 
   @override
-  State<GESApp> createState() => _GESAppState();
+  State<BadaApp> createState() => _BadaAppState();
 }
 
-class _GESAppState extends State<GESApp> {
+class _BadaAppState extends State<BadaApp> {
   final updater = ShorebirdUpdater();
   Timer? _timer;
   static const _lastPatchKey = "last_applied_patch";
