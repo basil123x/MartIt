@@ -4,6 +4,7 @@ import 'package:GES/features/update/update_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shorebird_code_push/shorebird_code_push.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';
@@ -57,7 +58,7 @@ class _SplashScreenState extends State<SplashScreen>
       }
 
       final response = await dio.get(
-        'https://www.Globee-Trading.com/app2026/get_update_info.php?platform=$platform&store_id=3&k=${DateTime.now().millisecondsSinceEpoch}',
+        'https://www.Globee-Trading.com/app2026/get_update_info.php?platform=$platform&k=${DateTime.now().millisecondsSinceEpoch}',
       );
 
       if (response.statusCode == 200) {
@@ -170,6 +171,10 @@ class _SplashScreenState extends State<SplashScreen>
         child: SafeArea(
           child: Column(
             children: [
+              ElevatedButton(
+                onPressed: () {},
+                child: Text('🆕 Test Update'),
+              ),
               Expanded(
                 flex: 3,
                 child: Center(
@@ -258,7 +263,7 @@ class _SplashScreenState extends State<SplashScreen>
                       FadeTransition(
                         opacity: _sloganAnimation,
                         child: Text(
-                          'Creating Beautiful Memories, Together — Anywhere.',
+                          'Swipe, love it, and MartIt',
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
                                 color: AppColors.white.withValues(alpha: 0.70),
