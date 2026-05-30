@@ -1,4 +1,4 @@
-package com.marine.life
+package com.blue.life
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -4,7 +4,7 @@ header('Content-Type: application/json');
 $receivedKey = $_SERVER['HTTP_X_SYNC_KEY'] ?? '';
 
 // ✅ قبول الاتنين
-$validKeys = ['GlobalFarm_Secret_2026', 'GES_Secret_2026', 'Albadaa_Secret_2026'];
+$validKeys = ['GlobalFarm_Secret_2026', 'GES_Secret_2026', 'BML_Secret_2026'];
 if (!in_array($receivedKey, $validKeys)) {
     echo json_encode(['success' => false, 'error' => 'Unauthorized']);
     exit;

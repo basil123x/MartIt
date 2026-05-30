@@ -47,7 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Container(
                   width: 100,
                   decoration: BoxDecoration(
-                    color: AppColors.white,
+                    color: Color(0xFF020B21),
                     borderRadius: BorderRadius.circular(25),
                     boxShadow: [
                       BoxShadow(
@@ -60,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(17),
                     child: Image.asset(
-                      "assets/images/Logo.png",
+                      "assets/images/app_light.png",
                       fit: BoxFit.cover,
                     ),
                   ),

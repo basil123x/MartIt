@@ -2,17 +2,13 @@ import '../constants/app_constants.dart';
 
 /// Product image URLs. Albadaa (store 4) uses martit store_4/{idx}/N.png (idx = S3 folder).
 class ProductImageUrl {
-  static const String baseUrl =
-      'https://martit.s3.ap-south-1.amazonaws.com';
+  static const String baseUrl = 'https://martit.s3.ap-south-1.amazonaws.com';
 
   static bool isAlbadaaStore(String storeId) =>
       storeId == AppConstants.albadaaStoreId;
 
   /// S3 folder for store_4: idx when set, otherwise fallback to Globee id.
-  static String albadaaS3FolderId({
-    required String idx,
-    required String id,
-  }) {
+  static String albadaaS3FolderId({required String idx, required String id}) {
     final folder = idx.trim();
     if (folder.isNotEmpty && folder != '0') {
       return folder;
@@ -27,7 +23,7 @@ class ProductImageUrl {
     int index = 1,
   }) {
     final folder = albadaaS3FolderId(idx: idx, id: id);
-    return '$baseUrl/store_4/$folder/$index.png';
+    return '$baseUrl/store_5/$folder/$index.png';
   }
 
   static int albadaaImageCountFromField(String? mediaField) {
@@ -68,14 +64,7 @@ class ProductImageUrl {
     }
 
     final file = mediaFilename ?? '$index.png';
-    switch (storeId) {
-      case '2':
-        return 'https://globalfarmnursery.s3.ap-south-1.amazonaws.com/items/$itemId.jpg';
-      case '3':
-        return 'https://globee.b-cdn.net/GES/$itemId/$file';
-      default:
-        return 'https://globee.b-cdn.net/$itemId/$file';
-    }
+    return 'https://martit.s3.ap-south-1.amazonaws.com/store_5/$itemIdx/1.png';
   }
 
   static List<String> mediaList({
@@ -85,11 +74,7 @@ class ProductImageUrl {
     String? mediaField,
   }) {
     if (isAlbadaaStore(storeId)) {
-      return albadaaMediaUrls(
-        idx: itemIdx,
-        id: itemId,
-        mediaField: mediaField,
-      );
+      return albadaaMediaUrls(idx: itemIdx, id: itemId, mediaField: mediaField);
     }
 
     if (mediaField == null || mediaField.trim().isEmpty) {

@@ -199,13 +199,8 @@ class _SearchScreenState extends State<SearchScreen> {
     final storeId = (item['store_id'] ?? item['storeid'] ?? '4').toString();
     final itemId = item['id'].toString();
     final itemIdx = (item['idx'] ?? '').toString();
-    final thumbnail = ProductImageUrl.isAlbadaaStore(storeId)
-        ? ProductImageUrl.albadaaImageUrl(idx: itemIdx, id: itemId)
-        : ProductImageUrl.build(
-            storeId: storeId,
-            itemId: itemId,
-            itemIdx: itemIdx,
-          );
+    final thumbnail =
+        "https://martit.s3.ap-south-1.amazonaws.com/store_5/${itemIdx != '' ? itemIdx : itemId}/1.png";
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),

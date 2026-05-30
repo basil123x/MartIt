@@ -121,7 +121,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
     if (isLoggedIn && _currentUserIdx != null) {
       try {
         var result = await Dio().get(
-          'http://globee-trading.com/app2026/profile.php?user_id=$_currentUserIdx&k=${DateTime.now().millisecondsSinceEpoch}',
+          'https://globee-trading.com/app2026/profile.php?user_id=$_currentUserIdx&k=${DateTime.now().millisecondsSinceEpoch}',
           options: Options(headers: {'Content-Type': 'application/json'}),
         );
 

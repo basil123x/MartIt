@@ -32,8 +32,8 @@ $clients = [
     ],
     '4' => [
         'name'       => 'Albadaa',
-        'sync_url'   => 'https://albadaa-qatar.com/2026/sync_receive.php',
-        'secret_key' => 'Albadaa_Secret_2026',
+        'sync_url'   => 'https:/bluemarinelife.com/sys2024/sync_receive.php',
+        'secret_key' => 'BML_Secret_2026',
         'mapping'    => [
             'barcode'         => 'a1',
             'eng'             => 'a3',

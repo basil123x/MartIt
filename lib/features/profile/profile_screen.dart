@@ -49,7 +49,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
       if (!_isLoadingMore && _hasMore) {
         _loadMoreItems();
       }
@@ -151,7 +152,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
 
       if (response['success'] == true) {
-        final newItems = List<Map<String, dynamic>>.from(response['data'] ?? []);
+        final newItems = List<Map<String, dynamic>>.from(
+          response['data'] ?? [],
+        );
         setState(() {
           _items.addAll(newItems);
           _hasMore = response['hasMore'] ?? false;
@@ -262,7 +265,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               avatar: result['avatar'] ?? _profile!.avatar,
                               type: _profile!.type,
                               itemsCount: _profile!.itemsCount,
-                              role: _profile!.role
+                              role: _profile!.role,
                             );
                           }
                         });
@@ -303,9 +306,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
 
         // Filter Buttons
-        if (_profile?.role != '')
         SliverToBoxAdapter(child: _buildFilterButtons()),
-        if (_profile?.role != '')
         SliverToBoxAdapter(child: _buildItemsSection()),
       ],
     );
@@ -484,9 +485,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       highlightColor: Colors.grey[100]!,
       child: Card(
         elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -544,11 +543,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Iconsax.box_1,
-              size: 80,
-              color: Colors.grey[400],
-            ),
+            Icon(Iconsax.box_1, size: 80, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
               'لا توجد منتجات بعد',
@@ -561,10 +556,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 8),
             Text(
               'ابدأ بإضافة منتجاتك الآن',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[500],
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
             ),
           ],
         ),
@@ -579,11 +571,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Iconsax.warning_2,
-              size: 48,
-              color: Colors.red[300],
-            ),
+            Icon(Iconsax.warning_2, size: 48, color: Colors.red[300]),
             const SizedBox(height: 16),
             const Text(
               'فشل في تحميل المنتجات',
@@ -622,8 +610,8 @@ class _ProfileItemCardState extends State<ProfileItemCard> {
     super.initState();
     final itemId = widget.item['id'].toString();
     final itemIdx = (widget.item['idx'] ?? '').toString();
-    final storeId =
-        (widget.item['storeid'] ?? widget.item['store_id'] ?? '4').toString();
+    final storeId = (widget.item['storeid'] ?? widget.item['store_id'] ?? '5')
+        .toString();
     final mediaField = widget.item['media']?.toString();
     _mediaFuture = _mediaCache.putIfAbsent(
       '${storeId}_${itemIdx}_$itemId',
@@ -721,8 +709,10 @@ class _ProfileItemCardState extends State<ProfileItemCard> {
                               );
                             },
                             errorBuilder: (context, error, stackTrace) =>
-                                const Icon(Icons.broken_image,
-                                    color: Colors.grey),
+                                const Icon(
+                                  Icons.broken_image,
+                                  color: Colors.grey,
+                                ),
                           );
                         },
                       ),
@@ -739,8 +729,7 @@ class _ProfileItemCardState extends State<ProfileItemCard> {
                             return Container(
                               width: 6,
                               height: 6,
-                              margin:
-                                  const EdgeInsets.symmetric(horizontal: 3),
+                              margin: const EdgeInsets.symmetric(horizontal: 3),
                               decoration: BoxDecoration(
                                 color: _currentIndex == index
                                     ? AppColors.primary

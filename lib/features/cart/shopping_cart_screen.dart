@@ -279,7 +279,7 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
     //           ));
 
     final thumbnail =
-        "https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmx/${cartItem.item.idx}.png";
+        "https://martit.s3.ap-south-1.amazonaws.com/store_5/${cartItem.item.idx}/1.png";
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),

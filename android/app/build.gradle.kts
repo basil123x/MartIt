@@ -18,7 +18,7 @@ val keystoreProperties = Properties().apply {
 }
 
 android {
-    namespace = "com.marine.life"
+    namespace = "com.blue.life"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
 
@@ -33,7 +33,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.marine.life"
+        applicationId = "com.blue.life"
         minSdk = 24
         targetSdk = 36
         multiDexEnabled = true

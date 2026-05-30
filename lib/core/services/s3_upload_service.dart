@@ -32,9 +32,9 @@ class S3UploadResult {
 
 class S3UploadService {
   static const String _defaultStoreId = AppConstants.albadaaStoreId;
-  static const String _albadaaSyncKey = 'Albadaa_Secret_2026';
+  static const String _albadaaSyncKey = 'BML_Secret_2026';
   static const String _albadaaSyncUploadUrl =
-      'https://albadaa-qatar.com/2026/sync_upload.php';
+      'https://bluemarinelife.com/sys2024/sync_upload.php';
   static const String _accessKey = 'AKIARVJRTCELH4VUZZ73';
   static const String _secretKey = '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';
   static const String _region = 'ap-south-1';

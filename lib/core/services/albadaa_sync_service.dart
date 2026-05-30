@@ -4,8 +4,8 @@ import 'package:dio/dio.dart';
 
 class AlbadaaSyncService {
   static const String _syncUrl =
-      'https://albadaa-qatar.com/2026/sync_receive.php';
-  static const String _syncKey = 'Albadaa_Secret_2026';
+      'https://bluemarinelife.com/sys2024/sync_receive.php?k=42654868';
+  static const String _syncKey = 'BML_Secret_2026';
 
   static const _syncHeaders = {
     'X-Sync-Key': _syncKey,
@@ -38,7 +38,10 @@ class AlbadaaSyncService {
       final response = await _dio.post(
         _syncUrl,
         data: jsonEncode({'action': 'insert_empty'}),
-        options: Options(headers: _syncHeaders),
+        options: Options(
+          headers: _syncHeaders,
+          contentType: 'application/json',
+        ),
       );
       final body = _parseResponse(response.data);
       if (body?['success'] == true) {

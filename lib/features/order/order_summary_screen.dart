@@ -120,7 +120,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
   Widget _buildOrderItem(CartItemModel cartItem) {
     final itemTotal = double.parse(cartItem.item.price) * cartItem.cartQuantity;
     final thumbnail =
-        "https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmx/${cartItem.item.idx}.png";
+        "https://martit.s3.ap-south-1.amazonaws.com/store_5/${cartItem.item.idx}/1.png";
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),

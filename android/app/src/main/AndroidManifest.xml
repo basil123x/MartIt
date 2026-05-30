@@ -25,7 +25,7 @@
     </queries>
     
     <application
-        android:label="Albadaa"
+        android:label="BML"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
         android:allowBackup="true"

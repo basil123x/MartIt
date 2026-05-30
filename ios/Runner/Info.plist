@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Albadaa</string>
+	<string>BML</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Albadaa</string>
+	<string>BML</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -27,7 +27,7 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.679018249453-vefkapie3517r9rvqfvp9c1l8a7bgc9l</string>
+				<string>com.googleusercontent.apps.879547345866-9n584v0vp20oc4mb7fi4pdqcggcjg6kp</string>
 			</array>
 		</dict>
 	</array>

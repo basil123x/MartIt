@@ -175,18 +175,19 @@ class _AddProductScreenState extends State<AddProductScreen>
     final data = request.data;
     final clientIdBadaa = (data['client_id_badaa'] ?? data['idx'] ?? '')
         .toString();
+    final albadaaResult = await AlbadaaSyncService.insertEmpty();
+    final bmlId = albadaaResult?['id']?.toString() ?? '';
     if (mounted) {
       setState(() {
         _currentItemId = data['item_id'].toString();
-        _currentClientIdBadaa = clientIdBadaa;
+        _currentClientIdBadaa = bmlId.isNotEmpty ? bmlId : clientIdBadaa;
       });
     } else {
       _currentItemId = data['item_id'].toString();
-      _currentClientIdBadaa = clientIdBadaa;
+      _currentClientIdBadaa = bmlId.isNotEmpty ? bmlId : clientIdBadaa;
     }
     print(
-      '📦 insertNewOne item_id=$_currentItemId client_id_badaa=$_currentClientIdBadaa '
-      '(single Albadaa id for S3 / VPS / sync)',
+      '📦 insertNewOne item_id=$_currentItemId globee_client_id=$clientIdBadaa bml_insert_empty_id=$bmlId',
     );
     if (clientIdBadaa.isEmpty ||
         S3UploadService.parseApiInt(clientIdBadaa) <= 0) {
@@ -1823,15 +1824,20 @@ class _AddProductScreenState extends State<AddProductScreen>
     try {
       print("🚀 Starting product upload: ${data['name']}");
 
-      final storeId =
-          data['storeId']?.toString() ?? AppConstants.albadaaStoreId;
       final globeeItemId = data['itemId'].toString();
       final clientIdBadaa = S3UploadService.parseApiInt(
         data['clientIdBadaa'] ?? data['client_id_badaa'] ?? data['idx'],
       );
+      final storeId = data['storeId']?.toString() ?? '';
+      final isAlbadaa =
+          clientIdBadaa >
+          0; // always sync if we have a valid clientIdBadaa, regardless of storeId
+      print(
+        '🔍 storeId=$storeId | clientIdBadaa=$clientIdBadaa | isAlbadaa=$isAlbadaa',
+      );
       final mediaFiles = List<String>.from(data['mediaFiles']);
 
-      if (storeId == AppConstants.albadaaStoreId && clientIdBadaa <= 0) {
+      if (isAlbadaa && clientIdBadaa <= 0) {
         print(
           '❌ Missing client_id_badaa from insertNewOne — cannot upload to S3',
         );
@@ -1872,7 +1878,7 @@ class _AddProductScreenState extends State<AddProductScreen>
 
       print("📝 Media string: $mediaString");
 
-      if (storeId == AppConstants.albadaaStoreId && clientIdBadaa > 0) {
+      if (isAlbadaa && clientIdBadaa > 0) {
         await AlbadaaSyncService.syncItemData(
           id: clientIdBadaa,
           barcode: data['barcode']?.toString() ?? '',

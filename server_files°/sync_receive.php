@@ -20,7 +20,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_last_id') {
     exit;
 }
 
-$secretKey = 'Albadaa_Secret_2026';
+$secretKey = 'BML_Secret_2026';
 $receivedKey = isset($_SERVER['HTTP_X_SYNC_KEY']) ? $_SERVER['HTTP_X_SYNC_KEY'] : '';
 
 if ($receivedKey !== $secretKey) {

@@ -69,7 +69,7 @@ class ApiService {
         'page': page.toString(),
         'limit': '10',
         'country': country,
-        'store_id': '4',
+        'store_id': '5',
       };
 
       // ✅ لو في user_id، نضيفه للـ body
@@ -123,7 +123,7 @@ class ApiService {
   static Future<Map<String, dynamic>> searchItems(String query) async {
     try {
       final response = await Dio().get(
-        '$baseUrl/search.php?q=$query&store_id=4',
+        '$baseUrl/search.php?q=$query&store_id=5',
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
 
@@ -433,7 +433,7 @@ class ApiService {
         "limit": limit.toString(),
         "offset": offset.toString(),
         'country': country,
-        'store_id': '4',
+        'store_id': '5',
       };
 
       // ✅ لو في category، نضيفه للـ request
@@ -509,7 +509,7 @@ class ApiService {
         data: FormData.fromMap({
           "action": "get_from_cart",
           "user_id": userId,
-          'store_id': '4',
+          'store_id': '5',
         }),
         options: Options(headers: {'Content-Type': 'application/json'}),
       );
@@ -918,6 +918,7 @@ class ApiService {
         data: FormData.fromMap({
           "action": "get_chat_conversations",
           "user_id": userId,
+          "store_id": "5",
         }),
         options: Options(headers: {'Content-Type': 'application/json'}),
       );

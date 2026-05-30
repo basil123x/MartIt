@@ -196,7 +196,7 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
       data: FormData.fromMap({
         "email": widget.email,
         "otp": _generatedOTP,
-        "store_id": "4",
+        "store_id": "5",
       }),
     );
   }

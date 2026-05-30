@@ -189,7 +189,7 @@ class _SplashScreenState extends State<SplashScreen>
                               width: 150, // كان 200
                               height: 150, // كان 200
                               decoration: BoxDecoration(
-                                color: AppColors.white,
+                                color: Color(0xFF020B21),
                                 borderRadius: BorderRadius.circular(
                                   30,
                                 ), // كان 40
@@ -206,9 +206,9 @@ class _SplashScreenState extends State<SplashScreen>
                                   30,
                                 ), // كان 40
                                 child: Padding(
-                                  padding: const EdgeInsets.all(30),
+                                  padding: const EdgeInsets.all(20),
                                   child: Image.asset(
-                                    "assets/images/Logo.png",
+                                    "assets/images/app_light.png",
                                     fit: BoxFit.contain,
                                   ),
                                 ),
@@ -260,7 +260,7 @@ class _SplashScreenState extends State<SplashScreen>
                       FadeTransition(
                         opacity: _sloganAnimation,
                         child: Text(
-                          'Swipe, love it, and MartIt',
+                          'Your World of Aquatic Beauty',
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
                                 color: AppColors.white.withValues(alpha: 0.70),

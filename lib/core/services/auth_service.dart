@@ -71,7 +71,8 @@ class AuthService {
   // Login with phone number
   static Future<void> createWithPhone(
     String phone,
-    String name,String? loginType,{
+    String name,
+    String? loginType, {
     String? profileImage,
   }) async {
     final uid = 1000 + Random().nextInt(9000);
@@ -83,9 +84,8 @@ class AuthService {
       "oid": oid,
       "name": name,
       "player_id": userId,
-      "store_id": "4"
+      "store_id": "5",
     };
-    
 
     if (phone.isNotEmpty) {
       requestData['phone'] = phone;

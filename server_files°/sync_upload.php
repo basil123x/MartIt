@@ -1,7 +1,7 @@
 <?php
 header('Content-Type: application/json');
 
-$secretKey   = 'Albadaa_Secret_2026';
+$secretKey   = 'BML_Secret_2026';
 $receivedKey = isset($_SERVER['HTTP_X_SYNC_KEY']) ? $_SERVER['HTTP_X_SYNC_KEY'] : '';
 
 if ($receivedKey !== $secretKey) {
@@ -67,7 +67,7 @@ if (move_uploaded_file($tmpName, $filePath)) {
 
     echo json_encode([
         'success' => true,
-        'url' => 'https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmx/' . $filename,
+        'url' => 'https:/bluemarinelife.com/sys2024/works/stores/invoices/imgup/itmx/' . $filename,
         'saved_to' => $filePath,
         'filename' => $filename,
         'albadaa_item_id' => $id,

@@ -5,10 +5,10 @@ import 'package:path/path.dart' as path;
 class AlbadaaUploadService {
   // ─── Config ──────────────────────────────────────────────────────────────
   static const String _uploadUrl =
-      'https://albadaa-qatar.com/2026/works/stores/invoices/imgup/upload_item_media.php';
+      'https:/bluemarinelife.com/sys2024/works/stores/invoices/imgup/upload_item_media.php';
 
   static const String _cdnBase =
-      'https://albadaa-qatar.com/2026/works/stores/invoices/imgup/itmapp';
+      'https:/bluemarinelife.com/sys2024/works/stores/invoices/imgup/itmapp';
 
   /// نفس الـ SECRET_KEY في ملف الـ PHP
   static const String _secretKey = 'AlBadaa_UPLOAD_SECRET_2026';
@@ -21,53 +21,55 @@ class AlbadaaUploadService {
   /// ارفع قائمة ملفات لـ item معين
   /// بترجع قائمة الـ URLs المرفوعة
   static Future<List<String>> uploadMediaFiles({
-  required List<String> filePaths,
-  required String itemId,
-  Function(int current, int total, double progress)? onProgress,
-}) async {
-  List<String> uploadedUrls = [];
+    required List<String> filePaths,
+    required String itemId,
+    Function(int current, int total, double progress)? onProgress,
+  }) async {
+    List<String> uploadedUrls = [];
 
-  for (int i = 0; i < filePaths.length; i++) {
-    final formData = FormData();
-    formData.fields.add(MapEntry('secret', _secretKey));
-    formData.fields.add(MapEntry('item_id', itemId));
-    formData.fields.add(MapEntry('file_index', (i + 1).toString()));
+    for (int i = 0; i < filePaths.length; i++) {
+      final formData = FormData();
+      formData.fields.add(MapEntry('secret', _secretKey));
+      formData.fields.add(MapEntry('item_id', itemId));
+      formData.fields.add(MapEntry('file_index', (i + 1).toString()));
 
-    final file = File(filePaths[i]);
-    if (!file.existsSync()) continue;
+      final file = File(filePaths[i]);
+      if (!file.existsSync()) continue;
 
-    final ext = path.extension(filePaths[i]);
-    formData.files.add(MapEntry(
-      'files[]',
-      await MultipartFile.fromFile(
-        filePaths[i],
-        filename: '${i + 1}$ext',
-        contentType: _getDioContentType(filePaths[i]),
-      ),
-    ));
-
-    try {
-      final response = await _dio.post(
-        _uploadUrl,
-        data: formData,
-        onSendProgress: (sent, total) {
-          if (total <= 0 || onProgress == null) return;
-          onProgress(i + 1, filePaths.length, sent / total);
-        },
+      final ext = path.extension(filePaths[i]);
+      formData.files.add(
+        MapEntry(
+          'files[]',
+          await MultipartFile.fromFile(
+            filePaths[i],
+            filename: '${i + 1}$ext',
+            contentType: _getDioContentType(filePaths[i]),
+          ),
+        ),
       );
 
-      if (response.statusCode == 200 && response.data['success'] == true) {
-        final uploaded = List<String>.from(response.data['uploaded'] ?? []);
-        uploadedUrls.addAll(uploaded);
-        print('✅ Uploaded file ${i + 1}/${filePaths.length}');
-      }
-    } catch (e) {
-      print('❌ Error uploading file ${i + 1}: $e');
-    }
-  }
+      try {
+        final response = await _dio.post(
+          _uploadUrl,
+          data: formData,
+          onSendProgress: (sent, total) {
+            if (total <= 0 || onProgress == null) return;
+            onProgress(i + 1, filePaths.length, sent / total);
+          },
+        );
 
-  return uploadedUrls;
-}
+        if (response.statusCode == 200 && response.data['success'] == true) {
+          final uploaded = List<String>.from(response.data['uploaded'] ?? []);
+          uploadedUrls.addAll(uploaded);
+          print('✅ Uploaded file ${i + 1}/${filePaths.length}');
+        }
+      } catch (e) {
+        print('❌ Error uploading file ${i + 1}: $e');
+      }
+    }
+
+    return uploadedUrls;
+  }
 
   /// ارفع صورة واحدة بس
   static Future<String?> uploadSingleFile({
@@ -79,10 +81,9 @@ class AlbadaaUploadService {
     final urls = await uploadMediaFiles(
       filePaths: [filePath],
       itemId: itemId,
-      onProgress:
-          onProgress != null
-              ? (current, total, progress) => onProgress(progress)
-              : null,
+      onProgress: onProgress != null
+          ? (current, total, progress) => onProgress(progress)
+          : null,
     );
     return urls.isNotEmpty ? urls.first : null;
   }

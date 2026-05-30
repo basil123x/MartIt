@@ -18,10 +18,11 @@ class _InvoiceWebViewState extends State<InvoiceWebView> {
     super.initState();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(NavigationDelegate(
-        onPageFinished: (_) {
-          // ✅ هذا هو المفتاح - يضبط الـ viewport عشان الصفحة تجي كاملة
-          _controller.runJavaScript('''
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageFinished: (_) {
+            // ✅ هذا هو المفتاح - يضبط الـ viewport عشان الصفحة تجي كاملة
+            _controller.runJavaScript('''
             var meta = document.querySelector('meta[name="viewport"]');
             if (!meta) {
               meta = document.createElement('meta');
@@ -30,9 +31,10 @@ class _InvoiceWebViewState extends State<InvoiceWebView> {
             }
             meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes';
           ''');
-          setState(() => _isLoading = false);
-        },
-      ))
+            setState(() => _isLoading = false);
+          },
+        ),
+      )
       ..loadRequest(Uri.parse(widget.url));
   }
 
@@ -41,9 +43,12 @@ class _InvoiceWebViewState extends State<InvoiceWebView> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('الفاتورة'),
-        backgroundColor: const Color(0xFF1A6BB5),
+        backgroundColor: const Color(0xFF1B1C6E),
         foregroundColor: Colors.white,
-        bottom: PreferredSize(preferredSize: Size(double.maxFinite, 2), child: Divider(color: Color(0xFF0D4A8A),)),
+        bottom: PreferredSize(
+          preferredSize: Size(double.maxFinite, 2),
+          child: Divider(color: Color(0xFF0D4A8A)),
+        ),
         actions: [
           // زر ريفريش
           IconButton(
@@ -55,8 +60,7 @@ class _InvoiceWebViewState extends State<InvoiceWebView> {
       body: Stack(
         children: [
           WebViewWidget(controller: _controller),
-          if (_isLoading)
-            const Center(child: CircularProgressIndicator()),
+          if (_isLoading) const Center(child: CircularProgressIndicator()),
         ],
       ),
     );

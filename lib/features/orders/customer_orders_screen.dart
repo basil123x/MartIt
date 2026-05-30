@@ -62,7 +62,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
 
   Future<void> _openInvoice(String orderId) async {
     final url =
-        'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&view=customer&store_id=4&k=${DateTime.now().millisecondsSinceEpoch}';
+        'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&view=customer&store_id=5&k=${DateTime.now().millisecondsSinceEpoch}';
 
     if (!context.mounted) return;
 

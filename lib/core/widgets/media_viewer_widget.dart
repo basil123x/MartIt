@@ -46,10 +46,7 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
       return resolved;
     }
     return [
-      ProductImageUrl.albadaaImageUrl(
-        idx: widget.itmIdx,
-        id: widget.itmId,
-      ),
+      ProductImageUrl.albadaaImageUrl(idx: widget.itmIdx, id: widget.itmId),
     ];
   }
 
@@ -126,8 +123,7 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
       );
     }
 
-    final isVideo =
-        imageUrl.contains('.mp4') || imageUrl.contains('.mov');
+    final isVideo = imageUrl.contains('.mp4') || imageUrl.contains('.mov');
 
     if (isVideo) {
       return SizedBox.expand(
@@ -149,36 +145,22 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
     return SizedBox.expand(
       child: CachedNetworkImage(
         imageUrl: imageUrl,
-        fit: imageFit,
+        fit: BoxFit.contain,
         width: double.infinity,
         height: double.infinity,
         placeholder: (context, url) => Container(
           color: Colors.black,
           alignment: Alignment.center,
-          child: const CircularProgressIndicator(
-            color: Colors.white54,
-          ),
+          child: const CircularProgressIndicator(color: Colors.white54),
         ),
         errorWidget: (context, url, error) {
           debugPrint('❌ Image load error: $error for $url');
           return Container(
-            color: Colors.red,
             alignment: Alignment.center,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Icon(Iconsax.image, color: Colors.white, size: 40),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    url,
-                    style: const TextStyle(color: Colors.white, fontSize: 10),
-                    textAlign: TextAlign.center,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
               ],
             ),
           );
