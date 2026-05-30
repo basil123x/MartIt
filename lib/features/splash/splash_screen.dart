@@ -4,7 +4,6 @@ import 'package:Albadaa/features/update/update_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shorebird_code_push/shorebird_code_push.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';

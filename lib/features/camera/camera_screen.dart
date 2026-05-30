@@ -442,7 +442,7 @@ class _CameraScreenState extends State<CameraScreen> {
                       ),
                     ),
                   ),
-                  onPreparingCamera: (_) => Container(
+                  onPreparingCamera: (_) => SizedBox(
                     width: 80,
                     height: 80,
                     child: CircularProgressIndicator(color: Colors.white),

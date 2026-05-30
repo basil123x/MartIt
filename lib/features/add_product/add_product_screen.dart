@@ -1047,7 +1047,7 @@ class _AddProductScreenState extends State<AddProductScreen>
                 final current = int.tryParse(_quantityController.text) ?? 1;
                 if (current > 1) { _quantityController.text = (current - 1).toString(); setState(() {}); }
               }),
-              Container(
+              SizedBox(
                 width: 40,
                 height: 40,
                 child: Center(
@@ -1128,7 +1128,7 @@ class _AddProductScreenState extends State<AddProductScreen>
             child: Switch(
               value: value,
               onChanged: onChanged,
-              activeColor: _LuxuryColors.orangePrimary,
+              activeThumbColor: _LuxuryColors.orangePrimary,
               activeTrackColor: _LuxuryColors.orangePrimary.withOpacity(0.4),
               inactiveThumbColor: Colors.white,
               inactiveTrackColor: _LuxuryColors.toggleTrackOff,
@@ -1488,9 +1488,9 @@ class _AddProductScreenState extends State<AddProductScreen>
           "https://www.Globee-Trading.com/app2026/sql.php",
           data: FormData.fromMap({"action": "get_tokens"}),
         );
-        List player_ids = request.data['player_ids'];
+        List playerIds = request.data['player_ids'];
         List<String> setPlayers = [];
-        for (var player_id in player_ids) {
+        for (var player_id in playerIds) {
           setPlayers.add(player_id['player_id'].toString());
           await OneSignalService.sendNotificationToMultipleUsers(
             playerIds: setPlayers,

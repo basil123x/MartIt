@@ -3,7 +3,6 @@ import 'package:iconsax/iconsax.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/models/cart_model.dart';
-import '../../core/utils/product_image_url.dart';
 import '../order/order_summary_screen.dart';
 
 class ShoppingCartScreen extends StatefulWidget {

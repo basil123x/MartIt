@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class DatabaseService {
   static const String _baseUrl = 'https://www.Globee-Trading.com/app2026';

@@ -1,10 +1,8 @@
-import 'package:Albadaa/core/services/api_service.dart';
 import 'package:Albadaa/core/services/auth_service.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:sadad_qa_payments/sadad_qa_payments.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/models/cart_model.dart';
 import '../../core/models/shipping_address_model.dart';

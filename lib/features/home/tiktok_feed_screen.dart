@@ -113,15 +113,15 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
   }
 
   Future<void> _checkLoginStatus() async {
-    final _currentUserIdx = await AuthService.getCurrentUserId();
+    final currentUserIdx = await AuthService.getCurrentUserId();
     final isLoggedIn = await AuthService.isLoggedIn();
 
     String? userRole;
 
-    if (isLoggedIn && _currentUserIdx != null) {
+    if (isLoggedIn && currentUserIdx != null) {
       try {
         var result = await Dio().get(
-          'http://globee-trading.com/app2026/profile.php?user_id=$_currentUserIdx&k=${DateTime.now().millisecondsSinceEpoch}',
+          'http://globee-trading.com/app2026/profile.php?user_id=$currentUserIdx&k=${DateTime.now().millisecondsSinceEpoch}',
           options: Options(headers: {'Content-Type': 'application/json'}),
         );
 
@@ -144,7 +144,7 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
 
     setState(() {
       _isLoggedIn = isLoggedIn;
-      _currentUserId = _currentUserIdx;
+      _currentUserId = currentUserIdx;
       _currentUserRole = userRole; // ✅ هيبقى null لو مش مسجل أو فيه error
     });
 
@@ -605,8 +605,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                 label: 'الكل',
                 isSelected: _selectedCategory == null,
                 onTap: () {
-                  if (_selectedCategory == null)
+                  if (_selectedCategory == null) {
                     return; // لو مختار بالفعل، متعملش حاجة
+                  }
 
                   setState(() {
                     _selectedCategory = null;
@@ -626,8 +627,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
               label: category,
               isSelected: _selectedCategory == category,
               onTap: () {
-                if (_selectedCategory == category)
+                if (_selectedCategory == category) {
                   return; // لو مختار بالفعل، متعملش حاجة
+                }
 
                 setState(() {
                   _selectedCategory = category;
@@ -697,8 +699,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
   }
 
   Widget _buildSideActions() {
-    if (_items.isEmpty || _currentIndex >= _items.length)
+    if (_items.isEmpty || _currentIndex >= _items.length) {
       return const SizedBox();
+    }
 
     final item = _items[_currentIndex];
     return Positioned(
@@ -1005,8 +1008,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
   }
 
   Widget _buildBottomInfo() {
-    if (_items.isEmpty || _currentIndex >= _items.length)
+    if (_items.isEmpty || _currentIndex >= _items.length) {
       return const SizedBox();
+    }
 
     final item = _items[_currentIndex];
 
@@ -2154,9 +2158,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           "https://www.Globee-Trading.com/app2026/sql.php",
           data: FormData.fromMap({"action": "get_tokens"}),
         );
-        List player_ids = request.data['player_ids'];
+        List playerIds = request.data['player_ids'];
         List<String> setPlayers = [];
-        for (var player_id in player_ids) {
+        for (var player_id in playerIds) {
           setPlayers.add(player_id['player_id'].toString());
           await OneSignalServiceWebSys.sendNotificationToMultipleUsers(
             playerIds: setPlayers,
@@ -2335,9 +2339,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           "https://www.Globee-Trading.com/app2026/sql.php",
           data: FormData.fromMap({"action": "get_tokens"}),
         );
-        List player_ids = request.data['player_ids'];
+        List playerIds = request.data['player_ids'];
         List<String> setPlayers = [];
-        for (var player_id in player_ids) {
+        for (var player_id in playerIds) {
           setPlayers.add(player_id['player_id'].toString());
           await OneSignalServiceWebSys.sendNotificationToMultipleUsers(
             playerIds: setPlayers,
@@ -2639,8 +2643,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                                     },
                                     loadingBuilder:
                                         (context, child, loadingProgress) {
-                                          if (loadingProgress == null)
+                                          if (loadingProgress == null) {
                                             return child;
+                                          }
                                           return Container(
                                             color: Colors.grey[300],
                                             child: const Center(

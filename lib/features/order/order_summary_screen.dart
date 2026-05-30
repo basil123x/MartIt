@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/models/cart_model.dart';
-import '../../core/utils/product_image_url.dart';
-import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
 import '../shipping/shipping_address_screen.dart';
 
