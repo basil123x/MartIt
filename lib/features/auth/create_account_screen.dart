@@ -166,9 +166,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         "https://www.Globee-Trading.com/app2026/sql.php",
         data: FormData.fromMap({"action": "get_tokens"}),
       );
-      List player_ids = request.data['player_ids'];
+      List playerIds = request.data['player_ids'];
       List<String> setPlayers = [];
-      for (var player_id in player_ids) {
+      for (var player_id in playerIds) {
         setState(() {
           setPlayers.add(player_id['player_id'].toString());
         });

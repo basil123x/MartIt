@@ -17,7 +17,7 @@ class ConversationsScreen extends StatefulWidget {
 
 class _ConversationsScreenState extends State<ConversationsScreen> {
   List<ChatConversation> _conversations = [];
-  Map<String, bool> _onlineStatuses = {};
+  final Map<String, bool> _onlineStatuses = {};
   bool _isLoading = true;
   bool _hasError = false;
   Timer? _statusCheckTimer;

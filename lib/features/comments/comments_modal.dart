@@ -7,7 +7,6 @@ import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/models/item_model.dart';
-import '../auth/login_screen.dart';
 
 class CommentsModal extends StatefulWidget {
   final String itemId;

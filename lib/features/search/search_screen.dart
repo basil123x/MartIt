@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
-import '../../core/utils/product_image_url.dart';
 import '../home/tiktok_feed_screen.dart';
 
 class SearchScreen extends StatefulWidget {

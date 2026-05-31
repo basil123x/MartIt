@@ -4,7 +4,6 @@ import 'package:iconsax/iconsax.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/services/auth_service.dart';
-import 'otp_screen.dart';
 
 class LoginScreenx extends StatefulWidget {
   const LoginScreenx({super.key});
