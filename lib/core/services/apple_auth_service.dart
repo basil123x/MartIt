@@ -25,7 +25,7 @@ class AppleAuthService {
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
 
   static String _cacheKey(String userIdentifier, String field) {
-    return "apple_${userIdentifier}_${field}";
+    return "apple_${userIdentifier}_$field";
   }
 
   static Future<AppleAuthResult?> signIn() async {
@@ -59,7 +59,7 @@ class AppleAuthService {
     final givenName = credential.givenName ?? "";
     final familyName = credential.familyName ?? "";
     if (givenName.isNotEmpty || familyName.isNotEmpty) {
-      fullName = "${givenName} ${familyName}".trim();
+      fullName = "$givenName $familyName".trim();
       await _storage.write(
         key: _cacheKey(userIdentifier, "name"),
         value: fullName,
@@ -74,7 +74,7 @@ class AppleAuthService {
     }
 
     final cacheBust =
-        "${_apiUrl}?k=${DateTime.now().millisecondsSinceEpoch}";
+        "$_apiUrl?k=${DateTime.now().millisecondsSinceEpoch}";
     final checkResponse = await Dio().post(
       cacheBust,
       data: FormData.fromMap({
@@ -143,7 +143,7 @@ class AppleAuthService {
   static Future<void> _updateFcmToken(String email) async {
     String? playerId = OneSignal.User.pushSubscription.id;
     await Dio().post(
-      "${_apiUrl}?k=${DateTime.now().millisecondsSinceEpoch}",
+      "$_apiUrl?k=${DateTime.now().millisecondsSinceEpoch}",
       data: FormData.fromMap({
         "action": "update_fcm_token",
         "email": email,

@@ -173,7 +173,7 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                               receiverToken: seller.token,
                               conversationId: seller.convId,
                               isOnline:
-                                  false, // TODO: Implement real-time online status
+                                  false, 
                             ),
                           ),
                         );
@@ -188,7 +188,6 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                       subtitle: 'اتصل بالبائع مباشرة',
                       onTap: () {
                         Navigator.pop(context);
-                        // TODO: Make phone call
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('ميزة المكالمات ستكون متاحة قريباً'),
@@ -206,7 +205,6 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                       subtitle: 'اطلع على منتجات البائع الأخرى',
                       onTap: () {
                         Navigator.pop(context);
-                        // TODO: Navigate to seller profile
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('سيتم فتح ملف البائع الشخصي'),

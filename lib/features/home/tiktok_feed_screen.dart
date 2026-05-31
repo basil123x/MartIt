@@ -19,14 +19,11 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:sim_country_code_plus/sim_country_code_plus.dart';
 import '../../core/constants/app_colors.dart';
-import '../../core/constants/app_strings.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/database_service.dart';
 import '../../core/models/item_model.dart';
-import '../../core/widgets/video_player_widget.dart';
 import '../../core/widgets/media_viewer_widget.dart';
-import '../auth/login_screen.dart';
 import '../search/search_screen.dart';
 import '../profile/profile_screen.dart';
 import '../comments/comments_modal.dart';
@@ -110,12 +107,12 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
   }
 
   Future<void> _checkLoginStatus() async {
-    final _currentUserIdx = await AuthService.getCurrentUserId();
+    final currentUserIdx = await AuthService.getCurrentUserId();
 
     final isLoggedIn = await AuthService.isLoggedIn();
     setState(() {
       _isLoggedIn = isLoggedIn;
-      _currentUserId = _currentUserIdx;
+      _currentUserId = currentUserIdx;
     });
 
     // ✅ تحميل المنتجات أولاً، ثم التصنيفات ستُحمّل تلقائياً
@@ -534,8 +531,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                 label: 'الكل',
                 isSelected: _selectedCategory == null,
                 onTap: () {
-                  if (_selectedCategory == null)
+                  if (_selectedCategory == null) {
                     return; // لو مختار بالفعل، متعملش حاجة
+                  }
 
                   setState(() {
                     _selectedCategory = null;
@@ -555,8 +553,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
               label: category,
               isSelected: _selectedCategory == category,
               onTap: () {
-                if (_selectedCategory == category)
+                if (_selectedCategory == category) {
                   return; // لو مختار بالفعل، متعملش حاجة
+                }
 
                 setState(() {
                   _selectedCategory = category;
@@ -626,8 +625,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
   }
 
   Widget _buildSideActions() {
-    if (_items.isEmpty || _currentIndex >= _items.length)
+    if (_items.isEmpty || _currentIndex >= _items.length) {
       return const SizedBox();
+    }
 
     final item = _items[_currentIndex];
     return Positioned(
@@ -934,8 +934,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
   }
 
   Widget _buildBottomInfo() {
-    if (_items.isEmpty || _currentIndex >= _items.length)
+    if (_items.isEmpty || _currentIndex >= _items.length) {
       return const SizedBox();
+    }
 
     final item = _items[_currentIndex];
 
@@ -2077,9 +2078,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           "https://www.Globee-Trading.com/app2026/sql.php",
           data: FormData.fromMap({"action": "get_tokens"}),
         );
-        List player_ids = request.data['player_ids'];
+        List playerIds = request.data['player_ids'];
         List<String> setPlayers = [];
-        for (var player_id in player_ids) {
+        for (var player_id in playerIds) {
           setPlayers.add(player_id['player_id'].toString());
           await OneSignalServiceWebSys.sendNotificationToMultipleUsers(
             playerIds: setPlayers,
@@ -2258,9 +2259,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
           "https://www.Globee-Trading.com/app2026/sql.php",
           data: FormData.fromMap({"action": "get_tokens"}),
         );
-        List player_ids = request.data['player_ids'];
+        List playerIds = request.data['player_ids'];
         List<String> setPlayers = [];
-        for (var player_id in player_ids) {
+        for (var player_id in playerIds) {
           setPlayers.add(player_id['player_id'].toString());
           await OneSignalServiceWebSys.sendNotificationToMultipleUsers(
             playerIds: setPlayers,
@@ -2562,8 +2563,9 @@ class _TikTokFeedScreenState extends State<TikTokFeedScreen> {
                                     },
                                     loadingBuilder:
                                         (context, child, loadingProgress) {
-                                          if (loadingProgress == null)
+                                          if (loadingProgress == null) {
                                             return child;
+                                          }
                                           return Container(
                                             color: Colors.grey[300],
                                             child: const Center(

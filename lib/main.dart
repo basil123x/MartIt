@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:MartIt/core/services/google_auth_service.dart';
 import 'package:MartIt/features/chat/chat_screen.dart';
 import 'package:MartIt/firebase_options.dart';
 import 'package:MartIt/shared/providers/app_provider.dart';

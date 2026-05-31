@@ -1,9 +1,6 @@
 import 'dart:io';
-import 'dart:isolate';
 import 'dart:math' as math;
-import 'dart:ui';
 import 'package:MartIt/core/services/onesignal_service.dart';
-import 'package:MartIt/core/services/onesignal_service_web.dart';
 import 'package:MartIt/features/home/tiktok_feed_screen.dart';
 import 'package:MartIt/shared/providers/app_provider.dart';
 import 'package:dio/dio.dart';
@@ -13,12 +10,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/utils/country_code_util.dart';
-import '../../core/constants/app_strings.dart';
 import '../../core/widgets/video_player_widget.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/database_service.dart';
@@ -994,7 +989,7 @@ class _AddProductScreenState extends State<AddProductScreen>
                 final current = int.tryParse(_quantityController.text) ?? 1;
                 if (current > 1) { _quantityController.text = (current - 1).toString(); setState(() {}); }
               }),
-              Container(
+              SizedBox(
                 width: 40,
                 height: 40,
                 child: Center(
@@ -1075,7 +1070,7 @@ class _AddProductScreenState extends State<AddProductScreen>
             child: Switch(
               value: value,
               onChanged: onChanged,
-              activeColor: _LuxuryColors.orangePrimary,
+              activeThumbColor: _LuxuryColors.orangePrimary,
               activeTrackColor: _LuxuryColors.orangePrimary.withOpacity(0.4),
               inactiveThumbColor: Colors.white,
               inactiveTrackColor: _LuxuryColors.toggleTrackOff,
@@ -1392,9 +1387,9 @@ class _AddProductScreenState extends State<AddProductScreen>
           "https://www.Globee-Trading.com/app2026/sql.php",
           data: FormData.fromMap({"action": "get_tokens"}),
         );
-        List player_ids = request.data['player_ids'];
+        List playerIds = request.data['player_ids'];
         List<String> setPlayers = [];
-        for (var player_id in player_ids) {
+        for (var player_id in playerIds) {
           setPlayers.add(player_id['player_id'].toString());
           await OneSignalService.sendNotificationToMultipleUsers(
             playerIds: setPlayers,

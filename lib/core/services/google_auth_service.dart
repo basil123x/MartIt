@@ -7,12 +7,11 @@ class GoogleAuthService {
     try {
       await GoogleSignIn.instance.initialize();
       
-      final GoogleSignInAccount? googleUser = await GoogleSignIn.instance.authenticate();
-      if (googleUser == null) return null;
+      final GoogleSignInAccount googleUser = await GoogleSignIn.instance.authenticate();
 
       // 2. جيب الـ credentials
       final GoogleSignInAuthentication googleAuth = 
-          await googleUser.authentication;
+          googleUser.authentication;
 
       // 3. ربط مع Firebase
       final credential = GoogleAuthProvider.credential(

@@ -363,7 +363,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           actions: [
             IconButton(
               onPressed: () {
-                // TODO: Voice call functionality
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('ميزة المكالمات الصوتية ستكون متاحة قريباً'),
@@ -371,7 +370,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   ),
                 );
               },
-              // icon: const Icon(Iconsax.call, color: Colors.white),
               icon: const Icon(Iconsax.call, color: Color(0xFF1A1A2E)),
             ),
           ],

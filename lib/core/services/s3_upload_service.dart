@@ -1,6 +1,5 @@
 import "dart:convert";
 import "dart:io";
-import "dart:typed_data";
 
 import "package:crypto/crypto.dart";
 import "package:dio/dio.dart";
@@ -73,7 +72,7 @@ class S3UploadService {
           }
         }
 
-        final objectKey = "${_storeFolder}/${itemId}/${fileName}";
+        final objectKey = "$_storeFolder/$itemId/$fileName";
         final uploadUrl = await _uploadBytes(
           payload,
           objectKey,
@@ -108,7 +107,7 @@ class S3UploadService {
       );
 
       final response = await _dio.put(
-        "${_baseUrl}/${objectKey}",
+        "$_baseUrl/$objectKey",
         data: bytes,
         options: Options(headers: headers),
         onSendProgress: (sent, total) {
@@ -121,7 +120,7 @@ class S3UploadService {
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final url = "${_baseUrl}/${objectKey}";
+        final url = "$_baseUrl/$objectKey";
         print("Uploaded: $url");
         return url;
       }
@@ -136,9 +135,9 @@ class S3UploadService {
 
   static Future<bool> deleteFile(String remotePath) async {
     try {
-      final objectKey = remotePath.startsWith("${_storeFolder}/")
+      final objectKey = remotePath.startsWith("$_storeFolder/")
           ? remotePath
-          : "${_storeFolder}/${remotePath}";
+          : "$_storeFolder/$remotePath";
       final headers = _signedHeaders(
         method: "DELETE",
         objectKey: objectKey,
@@ -147,7 +146,7 @@ class S3UploadService {
       );
 
       final response = await _dio.delete(
-        "${_baseUrl}/${objectKey}",
+        "$_baseUrl/$objectKey",
         options: Options(headers: headers),
       );
 
@@ -173,25 +172,25 @@ class S3UploadService {
     final canonicalUri = _canonicalUri(objectKey);
 
     final canonicalHeaders =
-        "content-type:${contentType}\n"
-        "host:${_host}\n"
-        "x-amz-content-sha256:${payloadHash}\n"
-        "x-amz-date:${amzDate}\n";
+        "content-type:$contentType\n"
+        "host:$_host\n"
+        "x-amz-content-sha256:$payloadHash\n"
+        "x-amz-date:$amzDate\n";
     const signedHeaders = "content-type;host;x-amz-content-sha256;x-amz-date";
 
     final canonicalRequest =
-        "${method}\n"
-        "${canonicalUri}\n"
+        "$method\n"
+        "$canonicalUri\n"
         "\n"
-        "${canonicalHeaders}\n"
-        "${signedHeaders}\n"
-        "${payloadHash}";
+        "$canonicalHeaders\n"
+        "$signedHeaders\n"
+        "$payloadHash";
 
-    final credentialScope = "${dateStamp}/${_region}/s3/aws4_request";
+    final credentialScope = "$dateStamp/$_region/s3/aws4_request";
     final stringToSign =
         "AWS4-HMAC-SHA256\n"
-        "${amzDate}\n"
-        "${credentialScope}\n"
+        "$amzDate\n"
+        "$credentialScope\n"
         "${sha256.convert(utf8.encode(canonicalRequest))}";
 
     final signingKey = _getSignatureKey(_secretKey, dateStamp, _region, "s3");
@@ -202,9 +201,9 @@ class S3UploadService {
 
     final authorization =
         "AWS4-HMAC-SHA256 "
-        "Credential=${_accessKey}/${credentialScope}, "
-        "SignedHeaders=${signedHeaders}, "
-        "Signature=${signature}";
+        "Credential=$_accessKey/$credentialScope, "
+        "SignedHeaders=$signedHeaders, "
+        "Signature=$signature";
 
     return {
       "Authorization": authorization,
@@ -223,7 +222,7 @@ class S3UploadService {
   ) {
     final kDate = Hmac(
       sha256,
-      utf8.encode("AWS4${secretKey}"),
+      utf8.encode("AWS4$secretKey"),
     ).convert(utf8.encode(dateStamp)).bytes;
     final kRegion = Hmac(sha256, kDate).convert(utf8.encode(region)).bytes;
     final kService = Hmac(sha256, kRegion).convert(utf8.encode(service)).bytes;

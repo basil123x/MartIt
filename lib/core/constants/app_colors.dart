@@ -2,24 +2,24 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // ── Primary (Deep Purple من الخلفية)
-  static const Color primary      = Color(0xFF2D2870);
-  static const Color primaryDark   = Color(0xFF1E1A52);
-  static const Color primaryLight  = Color(0xFF4A40A8);
+  // ── Primary (Blue من الشعار)
+  static const Color primary      = Color.fromARGB(255, 13, 72, 161);
+  static const Color primaryDark  = Color.fromARGB(255, 11, 59, 131);
+  static const Color primaryLight = Color(0xFF5568C8);
 
-  // ── Secondary (Orange Gradient من الـ M)
-  static const Color secondary      = Color(0xFFF97316);
-  static const Color secondaryDark  = Color(0xFFFF8C00);
-  static const Color secondaryLight = Color(0xFFFFB347);
+  // ── Secondary (Orange من الـ M)
+  static const Color secondary      = Color(0xFFD4863C);
+  static const Color secondaryDark  = Color(0xFFB8702A);
+  static const Color secondaryLight = Color(0xFFE8A05A);
 
-  // ── Gradient (نفس تدرج الـ M في الشعار)
+  // ── Gradient
   static const LinearGradient brandGradient = LinearGradient(
-    colors: [Color(0xFFFFD580), Color(0xFFF97316)],
+    colors: [Color(0xFFE8A05A), Color(0xFFD4863C)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
   static const LinearGradient bgGradient = LinearGradient(
-    colors: [Color(0xFF2D2870), Color(0xFF1E1A52)],
+    colors: [Color(0xFF3346B0), Color(0xFF2438A0)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
@@ -49,6 +49,6 @@ class AppColors {
 
   // ── Shopping
   static const Color priceColor    = Color(0xFF4CAF50);
-  static const Color discountColor = Color(0xFFF97316);
-  static const Color cartColor     = Color(0xFFFFB347);
+  static const Color discountColor = Color(0xFFD4863C);
+  static const Color cartColor     = Color(0xFFE8A05A);
 }

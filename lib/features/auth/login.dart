@@ -4,13 +4,11 @@ import 'dart:math';
 import 'package:MartIt/core/services/apple_auth_service.dart';
 import 'package:MartIt/core/services/google_auth_service.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
-import 'package:MartIt/features/home/tiktok_feed_screen.dart';
 import 'package:MartIt/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import '../../core/constants/app_colors.dart';
@@ -148,22 +146,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   width: 100,
                   height: 100,
                   decoration: BoxDecoration(
-                    color: AppColors.white,
+                    color: AppColors.primary,
                     borderRadius: BorderRadius.circular(25),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.3),
-                        blurRadius: 30,
-                        offset: const Offset(0, 15),
-                      ),
-                    ],
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(25),
-                    child: Image.asset(
-                      "assets/images/Logo.png",
-                      fit: BoxFit.cover,
-                    ),
+                  child: Image.asset(
+                    "assets/images/app-icon2.png",
+                    fit: BoxFit.cover,
                   ),
                 ),
 

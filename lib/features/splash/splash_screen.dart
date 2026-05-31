@@ -4,7 +4,6 @@ import 'package:MartIt/features/update/update_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shorebird_code_push/shorebird_code_push.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';
@@ -116,12 +115,12 @@ class _SplashScreenState extends State<SplashScreen>
     );
 
     // Logo Scale Animation
-    _logoAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+    _logoAnimation = Tween<double>(begin: 0.0, end: 1).animate(
       CurvedAnimation(parent: _logoController, curve: Curves.elasticOut),
     );
 
     // Text Fade Animation
-    _textAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+    _textAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
       CurvedAnimation(parent: _textController, curve: Curves.easeInOut),
     );
 
@@ -188,17 +187,10 @@ class _SplashScreenState extends State<SplashScreen>
                               width: 150, // كان 200
                               height: 150, // كان 200
                               decoration: BoxDecoration(
-                                color: AppColors.white,
+                                color: AppColors.primaryDark,
                                 borderRadius: BorderRadius.circular(
                                   30,
                                 ), // كان 40
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.1),
-                                    blurRadius: 30,
-                                    offset: const Offset(0, 15),
-                                  ),
-                                ],
                               ),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(
@@ -207,7 +199,7 @@ class _SplashScreenState extends State<SplashScreen>
                                 child: Padding(
                                   padding: const EdgeInsets.all(30),
                                   child: Image.asset(
-                                    "assets/images/Logo.png",
+                                    "assets/images/Logo-trans.png",
                                     fit: BoxFit.contain,
                                   ),
                                 ),
@@ -232,7 +224,7 @@ class _SplashScreenState extends State<SplashScreen>
                                     .textTheme
                                     .headlineMedium
                                     ?.copyWith(
-                                      color: AppColors.white,
+                                      color: Color(0xFFF08D39),
                                       fontWeight: FontWeight.bold,
                                       letterSpacing: 1.2,
                                     ),
@@ -259,13 +251,13 @@ class _SplashScreenState extends State<SplashScreen>
                       FadeTransition(
                         opacity: _sloganAnimation,
                         child: Text(
-                          'Swipe, love it, and MartIt',
+                          'Swipe it, love it, and MartIt',
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
                                 color: AppColors.white.withValues(alpha: 0.70),
-                                fontStyle: FontStyle.italic,
-                                fontWeight: FontWeight.w300,
-                                letterSpacing: 0.4,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.6,
+                                fontSize: 16
                               ),
                           textAlign: TextAlign.center,
                         ),
@@ -273,40 +265,7 @@ class _SplashScreenState extends State<SplashScreen>
 
                       const SizedBox(height: 14),
 
-                      // Dynamic version + patch
-                      FadeTransition(
-                        opacity: _sloganAnimation,
-                        child: Column(
-                          children: [
-                            Text(
-                              _appVersion.isNotEmpty ? 'v$_appVersion' : '',
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.copyWith(
-                                color: AppColors.white.withValues(alpha: 0.65),
-                                fontWeight: FontWeight.w500,
-                                letterSpacing: 0.8,
-                              ),
-                            ),
-                            if (_patchNumber != null) ...[
-
-
-
-                              const SizedBox(height: 4),
-                              Text(
-                                'Patch: #$_patchNumber',
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color: AppColors.white.withValues(alpha: 0.50),
-                                  fontWeight: FontWeight.w400,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
+                      
                     ],
                   ),
                 ),
@@ -324,19 +283,12 @@ class _SplashScreenState extends State<SplashScreen>
                         valueColor: AlwaysStoppedAnimation<Color>(
                           AppColors.white,
                         ),
-                        strokeWidth: 2,
+                        strokeWidth: 3,
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    FadeTransition(
-                      opacity: _textAnimation,
-                      child: Text(
-                        AppStrings.loading,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.white.withValues(alpha: 0.8),
-                        ),
-                      ),
-                    ),
+
+                    
+                    
                   ],
                 ),
               ),
@@ -344,16 +296,41 @@ class _SplashScreenState extends State<SplashScreen>
               // Version Info
               Padding(
                 padding: const EdgeInsets.only(bottom: 30),
-                child: FadeTransition(
-                  opacity: _textAnimation,
-                  child: Text(
-                    _appVersion.isNotEmpty
-                        ? 'الإصدار $_appVersion'
-                        : 'الإصدار ${AppConstants.appVersion}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.white.withValues(alpha: 0.6),
+                child: Column(
+                  children: [
+                    FadeTransition(
+                      opacity: _textAnimation,
+                      child: Text(
+                        _appVersion.isNotEmpty
+                            ? '$_appVersion v'
+                            : '${AppConstants.appVersion} v',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.white.withValues(alpha: 0.6),
+                        ),
+                      ),
                     ),
-                  ),
+                    // Dynamic version + patch
+                      FadeTransition(
+                        opacity: _sloganAnimation,
+                        child: Column(
+                          children: [
+                            if (_patchNumber != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Patch: #$_patchNumber',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color: AppColors.white.withValues(alpha: 0.50),
+                                  fontWeight: FontWeight.w400,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ],

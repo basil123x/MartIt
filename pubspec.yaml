@@ -50,6 +50,8 @@ dependencies:
   video_player: ^2.8.1
   webview_flutter: ^4.13.1
 
+  path: any
+  http: any
 dev_dependencies:
   build_runner: ^2.4.7
   flutter_lints: ^5.0.0
