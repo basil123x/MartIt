@@ -3,6 +3,8 @@ import 'package:iconsax/iconsax.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/models/cart_model.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/utils/item_media_url_util.dart';
+import '../../core/utils/theme_extensions.dart';
 import '../shipping/shipping_address_screen.dart';
 
 class OrderSummaryScreen extends StatefulWidget {
@@ -28,7 +30,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         // backgroundColor: const Color(0xFF0A0E27),
-        backgroundColor: const Color(0xFFF5F7FB),
+        backgroundColor: context.appBackground,
         appBar: AppBar(
           forceMaterialTransparency: true,
           backgroundColor: Colors.transparent,
@@ -36,13 +38,13 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
           leading: IconButton(
             onPressed: () => Navigator.pop(context),
             // icon: const Icon(Iconsax.arrow_right_3, color: Colors.white),
-            icon: const Icon(Iconsax.arrow_right, color: Color(0xFF1A1A2E)),
+            icon: Icon(Iconsax.arrow_right, color: context.appTextPrimary),
           ),
-          title: const Text(
+          title: Text(
             'ملخص الطلب',
             style: TextStyle(
               // color: Colors.white,
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
@@ -103,9 +105,9 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
           const SizedBox(width: 12),
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               // color: Colors.white,
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
@@ -122,18 +124,9 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            // const Color(0xFF1A1A2E).withOpacity(0.6),
-            // const Color(0xFF16213E).withOpacity(0.4),
-            Color(0xFFD4D4F0),
-            Color(0xFFC8D4F5),
-          ],
-        ),
+        gradient: context.surfaceGradient(),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+        border: Border.all(color: context.appBorder, width: 1),
       ),
       child: Row(
         children: [
@@ -150,9 +143,12 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(11),
-              child: cartItem.item.idx.isNotEmpty
-                  ? Image.network(
-                      "https://martit.s3.ap-south-1.amazonaws.com/store_${cartItem.item.store_id}/${cartItem.item.idx != '' ? cartItem.item.idx : cartItem.item.id}/1.png",
+              child: Image.network(
+                      ItemMediaUrlUtil.thumbnail(
+                        storeId: cartItem.item.store_id,
+                        itemId: cartItem.item.id,
+                        itemIdx: cartItem.item.idx,
+                      ),
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
@@ -164,14 +160,6 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                           ),
                         );
                       },
-                    )
-                  : Container(
-                      color: Colors.grey[800],
-                      child: const Icon(
-                        Iconsax.image,
-                        color: Colors.grey,
-                        size: 24,
-                      ),
                     ),
             ),
           ),
@@ -185,9 +173,9 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
               children: [
                 Text(
                   cartItem.item.name,
-                  style: const TextStyle(
+                  style: TextStyle(
                     // color: Colors.white,
-                    color: Color(0xFF1A1A2E),
+                    color: context.appTextPrimary,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
@@ -199,7 +187,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                   'البائع: ${cartItem.seller.name}',
                   style: TextStyle(
                     // color: Colors.white.withOpacity(0.6),
-                    color: const Color(0xFF1A1A2E).withOpacity(0.6),
+                    color: context.appTextSecondary,
                     fontSize: 12,
                   ),
                 ),
@@ -212,14 +200,16 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
+                        color: context.isDarkMode
+                            ? AppColors.darkElevated.withOpacity(0.5)
+                            : Colors.white.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         'الكمية: ${cartItem.cartQuantity}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           // color: Colors.white,
-                          color: Color(0xFF1A1A2E),
+                          color: context.appTextPrimary,
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
@@ -253,18 +243,12 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
+        gradient: context.surfaceGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            // const Color(0xFF1A1A2E).withOpacity(0.8),
-            // const Color(0xFF0F3460).withOpacity(0.6),
-            Color(0xFFD4D4F0),
-            Color(0xFFC8D4F5),
-          ],
         ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+        border: Border.all(color: context.appBorder, width: 1),
       ),
       child: Column(
         children: [
@@ -303,11 +287,11 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'المجموع الكلي:',
                 style: TextStyle(
                   // color: Colors.white,
-                  color: Color(0xFF1A1A2E),
+                  color: context.appTextPrimary,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -349,15 +333,15 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
           label,
           style: TextStyle(
             // color: Colors.white.withOpacity(0.8),
-            color: const Color(0xFF1A1A2E).withOpacity(0.7),
+            color: context.appTextSecondary,
             fontSize: 14,
           ),
         ),
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             // color: Colors.white,
-            color: Color(0xFF1A1A2E),
+            color: context.appTextPrimary,
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -370,19 +354,9 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            // const Color(0xFF1A1A2E).withOpacity(0.9),
-            // const Color(0xFF0F3460),
-            Color(0xFFD4D4F0),
-            Color(0xFFC8D4F5),
-            Color(0xFFB4D4F0),
-          ],
-        ),
+        gradient: context.bottomBarGradient(),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+        border: Border.all(color: context.appBorder, width: 1),
       ),
       child: SafeArea(
         child: SizedBox(

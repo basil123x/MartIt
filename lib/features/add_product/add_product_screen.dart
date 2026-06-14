@@ -1,8 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'package:MartIt/core/services/onesignal_service.dart';
-import 'package:MartIt/features/home/tiktok_feed_screen.dart';
 import 'package:MartIt/shared/providers/app_provider.dart';
+import 'package:awesome_dialog/awesome_dialog.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,46 +15,49 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/utils/country_code_util.dart';
 import '../../core/widgets/video_player_widget.dart';
-import '../../core/services/auth_service.dart';
+import '../../core/services/api_service.dart';
 import '../../core/services/database_service.dart';
+import '../../core/services/localization_service.dart';
+import '../../core/utils/snackbar_helper.dart';
 import '../../core/services/s3_upload_service.dart';
 import '../camera/camera_screen.dart';
+import '../../core/utils/theme_extensions.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
-// LOGO THEME COLORS - MATCHING APP LOGO
+// THEME COLORS - MATCHING ONBOARDING BLUE
 // ══════════════════════════════════════════════════════════════════════════════
 class _LuxuryColors {
   // Light theme backgrounds
   static const Color bgLight = Color(0xFFF5F5F5);
   static const Color bgCard = Color(0xFFFFFFFF);
   static const Color cardBorder = Color(0xFFE0E0E0);
-  
-  // Deep Navy/Indigo (from logo)
-  static const Color navyPrimary = Color(0xFF2D2B6B);
-  static const Color navyDark = Color(0xFF1E1B5E);
-  
-  // Orange accents (from logo)
-  static const Color orangePrimary = Color(0xFFFF8C00);
-  static const Color orangeLight = Color(0xFFFFB347);
-  static const Color orangeDark = Color(0xFFFF6B00);
-  
+
+  // Deep navy (secondary accents)
+  static const Color navyPrimary = Color(0xFF0F172A);
+  static const Color navyDark = Color(0xFF020617);
+
+  // Blue accents (matching onboarding)
+  static const Color orangePrimary = Color(0xFF1E3A8A);
+  static const Color orangeLight = Color(0xFF2D5BE3);
+  static const Color orangeDark = Color(0xFF152C6B);
+
   // Toggle/Card tint
-  static const Color orangeTint = Color(0xFFFFF4E6);
-  
+  static const Color orangeTint = Color(0xFFEEF2FF);
+
   // Text colors for light theme
   static const Color textPrimary = Color(0xFF1A1A2E);
   static const Color textSecondary = Color(0xFF6B7280);
   static const Color textHint = Color(0xFF9CA3AF);
-  
+
   // Input field colors
   static const Color inputBg = Color(0xFFFFFFFF);
   static const Color inputBorder = Color(0xFFD1D5DB);
-  
+
   // Toggle colors
   static const Color toggleOff = Color(0xFFD1D5DB);
   static const Color toggleTrackOff = Color(0xFFE5E7EB);
 
-  // Orange gradient (primary accent)
+  // Blue gradient (primary accent)
   static const LinearGradient orangeGradient = LinearGradient(
     colors: [orangeLight, orangePrimary, orangeDark],
     begin: Alignment.topLeft,
@@ -69,11 +72,7 @@ class _LuxuryColors {
   );
 
   static const LinearGradient shimmerGradient = LinearGradient(
-    colors: [
-      Color(0x00FFFFFF),
-      Color(0x55FFFFFF),
-      Color(0x00FFFFFF),
-    ],
+    colors: [Color(0x00FFFFFF), Color(0x55FFFFFF), Color(0x00FFFFFF)],
     stops: [0.0, 0.5, 1.0],
     begin: Alignment(-1.0, -0.3),
     end: Alignment(1.0, 0.3),
@@ -93,7 +92,10 @@ class AddProductScreen extends StatefulWidget {
 class _AddProductScreenState extends State<AddProductScreen>
     with TickerProviderStateMixin {
   final PageController _mediaController = PageController();
-  final ScrollController _scrollController = ScrollController();
+  final PageController _stepPageController = PageController();
+
+  static const int _totalSteps = 6;
+  int _currentStep = 0;
 
   final TextEditingController _barcodeController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
@@ -110,11 +112,25 @@ class _AddProductScreenState extends State<AddProductScreen>
   bool _isPublic = true;
   bool _commentsEnabled = true;
   bool _isUploading = false;
+  bool _isMediaUploading = false;
   String? _currentItemId;
-  
+  String _savedMediaString = '';
+  int _uploadedMediaCount = 0;
+  Timer? _autoSaveTimer;
+
   // Categories for autocomplete
   List<String> _categories = [];
   bool _isLoadingCategories = true;
+
+  String get _lang => LocalizationService.instance.currentLanguage;
+
+  Color get _onSurface => Theme.of(context).colorScheme.onSurface;
+
+  Color get _onSurfaceSecondary => AppColors.textSecondaryColor(context);
+
+  Color get _surface => Theme.of(context).colorScheme.surface;
+
+  Color get _outline => Theme.of(context).colorScheme.outline;
 
   // Animation controllers
   late AnimationController _glowController;
@@ -127,20 +143,24 @@ class _AddProductScreenState extends State<AddProductScreen>
   // Focus nodes for glow effect
   final Map<String, FocusNode> _focusNodes = {};
   final Map<String, bool> _fieldFocused = {};
-  
-  Future insertOneRecord() async {
+
+  Future<void> insertOneRecord() async {
     final country = getCountryCode();
-    var request = await Dio().post(
+    final uid = await FlutterSecureStorage().read(key: 'user_uid');
+    final request = await Dio().post(
       'https://Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
       data: FormData.fromMap({
-        "action": "insertNewOne",
-        "country": country,
-        "store_id": "1",
+        'action': 'insertNewOne',
+        'country': country,
+        'store_id': '1',
+        if (uid != null && uid.isNotEmpty) 'uid': uid,
       }),
     );
+    if (!mounted) return;
     setState(() {
       _currentItemId = request.data['item_id'].toString();
     });
+    await _uploadInitialMediaIfNeeded();
   }
 
   Future<void> _fetchCategories() async {
@@ -149,8 +169,9 @@ class _AddProductScreenState extends State<AddProductScreen>
         'https://Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({'action': 'get_categories'}),
       );
-      
-      if (response.data['status'] == 'success' && response.data['categories'] != null) {
+
+      if (response.data['status'] == 'success' &&
+          response.data['categories'] != null) {
         setState(() {
           _categories = List<String>.from(response.data['categories']);
           _isLoadingCategories = false;
@@ -167,16 +188,137 @@ class _AddProductScreenState extends State<AddProductScreen>
   void initState() {
     super.initState();
     _mediaFiles = List.from(widget.mediaFiles);
-    insertOneRecord();
+    if (widget.itemId != null && widget.itemId!.isNotEmpty) {
+      _currentItemId = widget.itemId;
+      if (_mediaFiles.isNotEmpty) {
+        _uploadInitialMediaIfNeeded();
+      }
+    } else {
+      insertOneRecord();
+    }
     _fetchCategories();
     _initAnimations();
     _initFocusNodes();
+    _initAutoSaveListeners();
+    _categoryController.addListener(() {
+      if (mounted) setState(() {});
+    });
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.dark,
       ),
     );
+  }
+
+  void _initAutoSaveListeners() {
+    for (final controller in [
+      _barcodeController,
+      _nameController,
+      _engnameController,
+      _descriptionController,
+      _description_arb_Controller,
+      _priceController,
+      _quantityController,
+      _categoryController,
+    ]) {
+      controller.addListener(_scheduleAutoSave);
+    }
+  }
+
+  void _scheduleAutoSave() {
+    _autoSaveTimer?.cancel();
+    _autoSaveTimer = Timer(const Duration(milliseconds: 800), _autoSave);
+  }
+
+  Future<void> _autoSave() async {
+    if (_currentItemId == null) return;
+
+    final uid = await FlutterSecureStorage().read(key: 'user_uid');
+    if (uid == null || uid.isEmpty) return;
+
+    final name = _nameController.text.trim();
+    final price = _priceController.text.trim();
+    if (name.isEmpty || price.isEmpty) return;
+
+    try {
+      await DatabaseService.updateItem(
+        itemId: _currentItemId!,
+        uid: uid,
+        barcode: _barcodeController.text.trim(),
+        name: name,
+        eng: _engnameController.text.trim(),
+        description: _descriptionController.text.trim(),
+        description_arb: _description_arb_Controller.text.trim(),
+        category: _categoryController.text.trim(),
+        price: price,
+        quantity: _quantityController.text.trim().isEmpty
+            ? '0'
+            : _quantityController.text.trim(),
+        visibility: _isPublic ? 'Public' : 'Private',
+        comments: _commentsEnabled ? 'on' : 'off',
+        media: _savedMediaString,
+      );
+    } catch (e) {
+      print('Auto-save error: $e');
+    }
+  }
+
+  Future<void> _flushAutoSave() async {
+    _autoSaveTimer?.cancel();
+    await _autoSave();
+  }
+
+  Future<void> _uploadInitialMediaIfNeeded() async {
+    if (_currentItemId == null || _uploadedMediaCount > 0) return;
+    if (_mediaFiles.isEmpty) return;
+    await _uploadMediaImmediately(List.from(_mediaFiles));
+  }
+
+  Future<void> _addMediaPaths(List<String> paths) async {
+    if (paths.isEmpty) return;
+    setState(() {
+      _mediaFiles.addAll(paths);
+    });
+    await _uploadMediaImmediately(paths);
+  }
+
+  Future<void> _uploadMediaImmediately(List<String> filePaths) async {
+    if (_currentItemId == null || filePaths.isEmpty || _isMediaUploading) {
+      return;
+    }
+
+    setState(() => _isMediaUploading = true);
+    try {
+      final uploadedUrls = await S3UploadService.uploadMediaFiles(
+        filePaths: filePaths,
+        itemId: _currentItemId!,
+        startIndex: _uploadedMediaCount,
+      );
+
+      if (uploadedUrls.isEmpty) return;
+
+      final newNames = uploadedUrls.map((url) => url.split('/').last).toList();
+      _uploadedMediaCount += newNames.length;
+
+      final newMediaChunk = newNames.join(', ');
+      _savedMediaString = _savedMediaString.isEmpty
+          ? newMediaChunk
+          : '$_savedMediaString, $newMediaChunk';
+
+      await ApiService.updateItemMedia(
+        itemId: _currentItemId!,
+        media: _savedMediaString,
+      );
+
+      await _autoSave();
+
+      if (mounted) setState(() {});
+    } catch (e) {
+      print('Media upload error: $e');
+    } finally {
+      if (mounted) setState(() => _isMediaUploading = false);
+    }
   }
 
   void _initAnimations() {
@@ -210,7 +352,14 @@ class _AddProductScreenState extends State<AddProductScreen>
 
   void _initFocusNodes() {
     final fields = [
-      'barcode', 'nameAr', 'nameEn', 'descAr', 'descEn', 'category', 'price', 'quantity'
+      'barcode',
+      'nameAr',
+      'nameEn',
+      'descAr',
+      'descEn',
+      'category',
+      'price',
+      'quantity',
     ];
     for (final field in fields) {
       _focusNodes[field] = FocusNode();
@@ -223,10 +372,14 @@ class _AddProductScreenState extends State<AddProductScreen>
 
   @override
   void dispose() {
+    _autoSaveTimer?.cancel();
     _mediaController.dispose();
-    _scrollController.dispose();
+    _stepPageController.dispose();
+    _barcodeController.dispose();
     _nameController.dispose();
+    _engnameController.dispose();
     _descriptionController.dispose();
+    _description_arb_Controller.dispose();
     _priceController.dispose();
     _quantityController.dispose();
     _categoryController.dispose();
@@ -239,159 +392,137 @@ class _AddProductScreenState extends State<AddProductScreen>
     super.dispose();
   }
 
+  String _stepTitle(int step) {
+    switch (step) {
+      case 0:
+        return _lang == 'ar' ? 'إضافة صور' : 'Add Photos';
+      case 1:
+        return _lang == 'ar' ? 'اسم المنتج' : 'Product Name';
+      case 2:
+        return _lang == 'ar' ? 'الوصف' : 'Description';
+      case 3:
+        return _lang == 'ar' ? 'التصنيف' : 'Category';
+      case 4:
+        return _lang == 'ar' ? 'السعر والكمية' : 'Price & Quantity';
+      case 5:
+        return _lang == 'ar' ? 'الإعدادات والنشر' : 'Settings & Publish';
+      default:
+        return '';
+    }
+  }
+
+  void _goToStep(int step) {
+    if (step < 0 || step >= _totalSteps) return;
+    FocusScope.of(context).unfocus();
+    _stepPageController.animateToPage(
+      step,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+    );
+    setState(() => _currentStep = step);
+  }
+
+  void _nextStep() {
+    if (_currentStep < _totalSteps - 1) {
+      _goToStep(_currentStep + 1);
+    }
+  }
+
+  void _previousStep() {
+    if (_currentStep > 0) {
+      _goToStep(_currentStep - 1);
+    }
+  }
+
+  bool _canProceedFromCurrentStep() {
+    if (_currentStep == 0) return _mediaFiles.isNotEmpty;
+    return true;
+  }
+
+  void _selectCategory(String category) {
+    setState(() => _categoryController.text = category);
+    _scheduleAutoSave();
+  }
+
+  void _removeMediaAt(int index) {
+    if (index < 0 || index >= _mediaFiles.length) return;
+
+    setState(() {
+      _mediaFiles.removeAt(index);
+
+      if (_currentMediaIndex >= _mediaFiles.length) {
+        _currentMediaIndex = _mediaFiles.isEmpty
+            ? 0
+            : _mediaFiles.length - 1;
+      }
+
+      if (index < _uploadedMediaCount && _savedMediaString.isNotEmpty) {
+        final parts = _savedMediaString
+            .split(',')
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toList();
+        if (index < parts.length) {
+          parts.removeAt(index);
+          _savedMediaString = parts.join(', ');
+          _uploadedMediaCount = parts.length;
+          _scheduleAutoSave();
+          if (_currentItemId != null) {
+            ApiService.updateItemMedia(
+              itemId: _currentItemId!,
+              media: _savedMediaString,
+            );
+          }
+        }
+      } else if (index < _uploadedMediaCount) {
+        _uploadedMediaCount = math.max(0, _uploadedMediaCount - 1);
+      }
+    });
+
+    if (_mediaFiles.isNotEmpty && _mediaController.hasClients) {
+      _mediaController.jumpToPage(
+        _currentMediaIndex.clamp(0, _mediaFiles.length - 1),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    _isUploading = false;
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: LocalizationService.instance.textDirection,
       child: Scaffold(
-        backgroundColor: _LuxuryColors.bgLight,
+        backgroundColor: context.appBackground,
         appBar: _buildLuxuryAppBar(),
         body: SafeArea(
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: Column(
+            children: [
+              _buildStepIndicator(),
+              Expanded(
+                child: PageView(
+                  controller: _stepPageController,
+                  physics: const NeverScrollableScrollPhysics(),
+                  onPageChanged: (index) => setState(() => _currentStep = index),
                   children: [
-                    _buildCinematicMediaPreview(),
-                    const SizedBox(height: 28),
-                    _buildAnimatedSection(
-                      delay: 0,
-                      child: _buildGlassSection(
-                        title: 'معلومات المنتج',
-                        icon: Iconsax.box,
-                        children: [
-                          _buildBarcodeField(),
-                          const SizedBox(height: 20),
-                          _buildLuxuryTextField(
-                            controller: _nameController,
-                            label: 'اسم المنتج بالعربي',
-                            hint: 'أدخل اسم المنتج',
-                            icon: Iconsax.text,
-                            focusKey: 'nameAr',
-                            textDirection: TextDirection.rtl,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(RegExp(r'[\u0600-\u06FF\s0-9٠-٩]')),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          _buildLuxuryTextField(
-                            controller: _engnameController,
-                            label: 'اسم المنتج بالإنجليزي',
-                            hint: 'Enter product name',
-                            icon: Iconsax.text,
-                            focusKey: 'nameEn',
-                            textDirection: TextDirection.ltr,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\s.,!?"-]')),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    _buildAnimatedSection(
-                      delay: 100,
-                      child: _buildGlassSection(
-                        title: 'الوصف',
-                        icon: Iconsax.document_text,
-                        children: [
-                          _buildLuxuryTextField(
-                            controller: _description_arb_Controller,
-                            label: 'الوصف بالعربي',
-                            hint: 'أدخل وصف المنتج بالعربي',
-                            icon: Iconsax.edit_2,
-                            maxLines: 3,
-                            focusKey: 'descAr',
-                            textDirection: TextDirection.rtl,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(RegExp(r'[\u0600-\u06FF\s0-9٠-٩]')),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          _buildLuxuryTextField(
-                            controller: _descriptionController,
-                            label: 'الوصف بالإنجليزي',
-                            hint: 'Enter product description',
-                            icon: Iconsax.edit_2,
-                            maxLines: 3,
-                            focusKey: 'descEn',
-                            textDirection: TextDirection.ltr,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\s.,!?"-]')),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    _buildAnimatedSection(
-                      delay: 200,
-                      child: _buildGlassSection(
-                        title: 'التصنيف',
-                        icon: Iconsax.category,
-                        children: [
-                          _buildCategoryAutocomplete(),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    _buildAnimatedSection(
-                      delay: 300,
-                      child: _buildGlassSection(
-                        title: 'السعر والكمية',
-                        icon: Iconsax.money,
-                        children: [
-                          _buildPriceQuantityRow(),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    _buildAnimatedSection(
-                      delay: 400,
-                      child: _buildGlassSection(
-                        title: 'إعدادات الخصوصية',
-                        icon: Iconsax.shield_tick,
-                        children: [
-                          _buildPremiumToggle(
-                            title: 'منتج عام',
-                            subtitle: 'يمكن لجميع المستخدمين رؤية هذا المنتج',
-                            value: _isPublic,
-                            onChanged: (v) => setState(() => _isPublic = v),
-                            activeIcon: Iconsax.global,
-                            inactiveIcon: Iconsax.lock,
-                          ),
-                          const SizedBox(height: 16),
-                          _buildPremiumToggle(
-                            title: 'تفعيل التعليقات',
-                            subtitle: 'السماح للمستخدمين بالتعليق على المنتج',
-                            value: _commentsEnabled,
-                            onChanged: (v) => setState(() => _commentsEnabled = v),
-                            activeIcon: Iconsax.message,
-                            inactiveIcon: Iconsax.message_minus,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 36),
-                    _buildAnimatedSection(
-                      delay: 500,
-                      child: _buildShimmerButton(),
-                    ),
-                    const SizedBox(height: 20),
+                    _buildMediaStep(),
+                    _buildNameStep(),
+                    _buildDescriptionStep(),
+                    _buildCategoryStep(),
+                    _buildPriceQuantityStep(),
+                    _buildSettingsStep(),
                   ],
                 ),
               ),
-            ),
+              _buildBottomNav(),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   PreferredSizeWidget _buildLuxuryAppBar() {
     return AppBar(
-      backgroundColor: _LuxuryColors.bgLight,
+      backgroundColor: context.appBackground,
       elevation: 0,
       centerTitle: true,
       leading: Container(),
@@ -403,144 +534,719 @@ class _AddProductScreenState extends State<AddProductScreen>
             icon: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: _LuxuryColors.bgCard,
+                color: context.appSurface,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: _LuxuryColors.cardBorder),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              child: const Icon(Iconsax.arrow_right_3, color: _LuxuryColors.textPrimary, size: 20),
+              child: Icon(
+                Iconsax.arrow_right_3,
+                color: _onSurface,
+                size: 20,
+              ),
             ),
           ),
         ),
       ],
       title: ShaderMask(
-        shaderCallback: (bounds) => _LuxuryColors.orangeGradient.createShader(bounds),
-        child: const Text(
-          'إضافة منتج جديد',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: 0.5),
+        shaderCallback: (bounds) =>
+            _LuxuryColors.orangeGradient.createShader(bounds),
+        child: Text(
+          _stepTitle(_currentStep),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+            letterSpacing: 0.5,
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildAnimatedSection({required int delay, required Widget child}) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: Duration(milliseconds: 600 + delay),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, _) {
-        return Transform.translate(
-          offset: Offset(0, 30 * (1 - value)),
-          child: Opacity(opacity: value, child: child),
-        );
-      },
+  Widget _buildStepIndicator() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: List.generate(_totalSteps, (index) {
+          final isActive = _currentStep == index;
+          final isPast = index < _currentStep;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            width: isActive ? 24 : 8,
+            height: 8,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              gradient: isActive ? _LuxuryColors.orangeGradient : null,
+              color: isActive
+                  ? null
+                  : isPast
+                  ? _LuxuryColors.orangePrimary.withOpacity(0.5)
+                  : _LuxuryColors.orangePrimary.withOpacity(0.2),
+            ),
+          );
+        }),
+      ),
     );
   }
 
-  Widget _buildCinematicMediaPreview() {
-    return Consumer<AppProvider>(
-      builder: (context, appProvider, child) {
-        return AnimatedBuilder(
-          animation: _glowAnimation,
-          builder: (context, child) {
-            return Container(
-              height: 380,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: _LuxuryColors.orangePrimary.withOpacity(0.2 * _glowAnimation.value),
-                    blurRadius: 25,
-                    spreadRadius: 0,
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: Stack(
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(24),
-                        gradient: LinearGradient(
-                          colors: [
-                            _LuxuryColors.orangeLight.withOpacity(0.9 + 0.1 * _glowAnimation.value),
-                            _LuxuryColors.orangePrimary.withOpacity(0.85 + 0.15 * _glowAnimation.value),
-                            _LuxuryColors.orangeDark.withOpacity(0.9 + 0.1 * _glowAnimation.value),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
+  Widget _buildBottomNav() {
+    final isLastStep = _currentStep == _totalSteps - 1;
+    final canProceed = _canProceedFromCurrentStep();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+      child: Row(
+        children: [
+          _buildNavButton(
+            label: _lang == 'ar' ? 'رجوع' : 'Back',
+            onPressed: _currentStep > 0 ? _previousStep : null,
+            outlined: true,
+          ),
+          const Spacer(),
+          if (isLastStep)
+            _buildNavButton(
+              label: _lang == 'ar' ? 'نشر' : 'Publish',
+              onPressed: _submitProduct,
+              outlined: false,
+            )
+          else
+            _buildNavButton(
+              label: _lang == 'ar' ? 'التالي' : 'Next',
+              onPressed: canProceed ? _nextStep : null,
+              outlined: false,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavButton({
+    required String label,
+    required VoidCallback? onPressed,
+    required bool outlined,
+  }) {
+    final enabled = onPressed != null;
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.4,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              gradient: outlined || !enabled ? null : _LuxuryColors.orangeGradient,
+              color: outlined ? context.appSurface : null,
+              border: outlined
+                  ? Border.all(
+                      color: enabled
+                          ? _LuxuryColors.orangePrimary
+                          : _LuxuryColors.inputBorder,
+                    )
+                  : null,
+              boxShadow: !outlined && enabled
+                  ? [
+                      BoxShadow(
+                        color: _LuxuryColors.orangePrimary.withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
                       ),
-                      padding: const EdgeInsets.all(3),
-                      child: Container(
+                    ]
+                  : null,
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: outlined
+                    ? (enabled
+                          ? _LuxuryColors.orangePrimary
+                          : _onSurfaceSecondary)
+                    : Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMediaStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: _buildCinematicMediaPreview(fullHeight: true),
+          ),
+        ),
+        _buildMediaThumbnailsRow(),
+        if (_isMediaUploading)
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      _LuxuryColors.orangePrimary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _lang == 'ar' ? 'جاري رفع الوسائط...' : 'Uploading media...',
+                  style: TextStyle(
+                    color: _onSurfaceSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMediaThumbnailsRow() {
+    return SizedBox(
+      height: 80,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        shrinkWrap: true,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: [
+          ...List.generate(_mediaFiles.length, (index) {
+            final path = _mediaFiles[index];
+            final isVideo = path.toLowerCase().contains('.mp4');
+            final isSelected = index == _currentMediaIndex;
+            return Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: GestureDetector(
+                onTap: () {
+                  setState(() => _currentMediaIndex = index);
+                  if (_mediaController.hasClients) {
+                    _mediaController.animateToPage(
+                      index,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                  }
+                },
+                child: SizedBox(
+                  width: 80,
+                  height: 80,
+                  child: Stack(
+                    clipBehavior: Clip.hardEdge,
+                    children: [
+                      Container(
+                        width: 80,
+                        height: 80,
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(21),
-                          color: _LuxuryColors.bgCard,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isSelected
+                                ? _LuxuryColors.orangePrimary
+                                : _LuxuryColors.inputBorder,
+                            width: isSelected ? 2.5 : 1,
+                          ),
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                    color: _LuxuryColors.orangePrimary
+                                        .withOpacity(0.25),
+                                    blurRadius: 8,
+                                  ),
+                                ]
+                              : null,
                         ),
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(21),
-                          child: appProvider.allMedia.isEmpty
-                              ? _buildEmptyMediaState()
-                              : PageView.builder(
-                                  controller: _mediaController,
-                                  onPageChanged: (index) => setState(() => _currentMediaIndex = index),
-                                  itemCount: appProvider.allMedia.length,
-                                  itemBuilder: (context, index) {
-                                    final file = File(appProvider.allMedia[index]);
-                                    final isVideo = appProvider.allMedia[index].toLowerCase().contains('.mp4');
-                                    return isVideo
-                                        ? VideoPlayerWidget(filePath: appProvider.allMedia[index], autoPlay: false, showControls: true)
-                                        : Image.file(file, fit: BoxFit.cover);
-                                  },
+                          borderRadius: BorderRadius.circular(11),
+                          child: isVideo
+                              ? ColoredBox(
+                                  color: _LuxuryColors.navyPrimary,
+                                  child: const Center(
+                                    child: Icon(
+                                      Iconsax.video_play,
+                                      color: Colors.white,
+                                      size: 28,
+                                    ),
+                                  ),
+                                )
+                              : Image.file(
+                                  File(path),
+                                  fit: BoxFit.cover,
+                                  width: 80,
+                                  height: 80,
                                 ),
                         ),
                       ),
-                    ),
-                    Positioned(top: 16, left: 16, child: _buildGlowingAddButton()),
-                    if (appProvider.allMedia.length > 1)
                       Positioned(
-                        bottom: 20,
-                        left: 0,
+                        top: 0,
                         right: 0,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(
-                            appProvider.allMedia.length,
-                            (index) => AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                              width: _currentMediaIndex == index ? 24 : 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(4),
-                                gradient: _currentMediaIndex == index ? _LuxuryColors.orangeGradient : null,
-                                color: _currentMediaIndex == index ? null : Colors.white.withOpacity(0.5),
-                              ),
+                        child: GestureDetector(
+                          onTap: () => _removeMediaAt(index),
+                          child: Container(
+                            width: 20,
+                            height: 20,
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 12,
                             ),
                           ),
                         ),
                       ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             );
-          },
+          }),
+          GestureDetector(
+            onTap: _showAddMoreMediaBottomSheet,
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _LuxuryColors.orangePrimary,
+                  width: 1.5,
+                ),
+                color: _LuxuryColors.orangeTint,
+              ),
+              child: const Icon(
+                Iconsax.add,
+                color: _LuxuryColors.orangePrimary,
+                size: 28,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNameStep() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 32),
+          _buildLuxuryTextField(
+            controller: _nameController,
+            label: _lang == 'ar' ? 'اسم المنتج بالعربي' : 'Product Name (Arabic)',
+            hint: _lang == 'ar' ? 'أدخل اسم المنتج' : 'Enter product name',
+            icon: Iconsax.text,
+            focusKey: 'nameAr',
+            textDirection: TextDirection.rtl,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(
+                RegExp(r'[\u0600-\u06FF\s0-9٠-٩]'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 28),
+          _buildLuxuryTextField(
+            controller: _engnameController,
+            label: _lang == 'ar'
+                ? 'اسم المنتج بالإنجليزي'
+                : 'Product Name (English)',
+            hint: 'Enter product name',
+            icon: Iconsax.text,
+            focusKey: 'nameEn',
+            textDirection: TextDirection.ltr,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(
+                RegExp(r'[a-zA-Z0-9\s.,!?"-]'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDescriptionStep() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 32),
+          _buildLuxuryTextField(
+            controller: _description_arb_Controller,
+            label: _lang == 'ar' ? 'الوصف بالعربي' : 'Description (Arabic)',
+            hint: _lang == 'ar'
+                ? 'أدخل وصف المنتج بالعربي'
+                : 'Enter Arabic description',
+            icon: Iconsax.edit_2,
+            maxLines: 4,
+            focusKey: 'descAr',
+            textDirection: TextDirection.rtl,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(
+                RegExp(r'[\u0600-\u06FF\s0-9٠-٩]'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 28),
+          _buildLuxuryTextField(
+            controller: _descriptionController,
+            label: _lang == 'ar'
+                ? 'الوصف بالإنجليزي'
+                : 'Description (English)',
+            hint: 'Enter product description',
+            icon: Iconsax.edit_2,
+            maxLines: 4,
+            focusKey: 'descEn',
+            textDirection: TextDirection.ltr,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(
+                RegExp(r'[a-zA-Z0-9\s.,!?"-]'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryStep() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            _lang == 'ar' ? 'اختر تصنيفاً' : 'Choose a category',
+            style: TextStyle(
+              color: _onSurface,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildCategoryGrid(),
+          const SizedBox(height: 28),
+          Text(
+            _lang == 'ar' ? 'أو أدخل تصنيفاً جديداً' : 'Or enter a new category',
+            style: TextStyle(
+              color: _onSurfaceSecondary,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildLuxuryTextField(
+            controller: _categoryController,
+            label: _lang == 'ar' ? 'تصنيف مخصص' : 'Custom category',
+            hint: _lang == 'ar' ? 'أدخل تصنيف المنتج' : 'Enter product category',
+            icon: Iconsax.tag,
+            focusKey: 'category',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryGrid() {
+    if (_isLoadingCategories) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(
+              _LuxuryColors.orangePrimary,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_categories.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Text(
+          _lang == 'ar'
+              ? 'لا توجد تصنيفات — أدخل تصنيفاً جديداً أدناه'
+              : 'No categories yet — enter one below',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: _onSurfaceSecondary),
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: _categories.map((category) {
+        final isSelected = _categoryController.text.trim() == category;
+        return GestureDetector(
+          onTap: () => _selectCategory(category),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              color: isSelected ? AppColors.primary : _surface,
+              border: Border.all(
+                color: isSelected ? AppColors.primary : _outline,
+                width: isSelected ? 1.5 : 1,
+              ),
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.25),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Text(
+              category,
+              style: TextStyle(
+                color: isSelected ? Colors.white : _onSurface,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                fontSize: 14,
+              ),
+            ),
+          ),
         );
+      }).toList(),
+    );
+  }
+
+  Widget _buildPriceQuantityStep() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 40),
+          _buildNumericField(
+            controller: _priceController,
+            label: _lang == 'ar' ? 'السعر' : 'Price',
+            icon: Iconsax.money_4,
+            focusKey: 'price',
+            suffix: 'ر.ق',
+          ),
+          const SizedBox(height: 40),
+          Text(
+            _lang == 'ar' ? 'الكمية' : 'Quantity',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _onSurfaceSecondary,
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildQuantityField(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsStep() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildPremiumToggle(
+            title: _lang == 'ar' ? 'منتج عام' : 'Public Product',
+            subtitle: _lang == 'ar'
+                ? 'يمكن لجميع المستخدمين رؤية هذا المنتج'
+                : 'All users can see this product',
+            value: _isPublic,
+            onChanged: (v) {
+              setState(() => _isPublic = v);
+              _autoSave();
+            },
+            activeIcon: Iconsax.global,
+            inactiveIcon: Iconsax.lock,
+          ),
+          const SizedBox(height: 16),
+          _buildPremiumToggle(
+            title: _lang == 'ar' ? 'تفعيل التعليقات' : 'Enable Comments',
+            subtitle: _lang == 'ar'
+                ? 'السماح للمستخدمين بالتعليق على المنتج'
+                : 'Allow users to comment on product',
+            value: _commentsEnabled,
+            onChanged: (v) {
+              setState(() => _commentsEnabled = v);
+              _autoSave();
+            },
+            activeIcon: Iconsax.message,
+            inactiveIcon: Iconsax.message_minus,
+          ),
+          const SizedBox(height: 28),
+          Text(
+            _lang == 'ar' ? 'الباركود (اختياري)' : 'Barcode (optional)',
+            style: TextStyle(
+              color: _onSurfaceSecondary,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildBarcodeField(),
+          const SizedBox(height: 32),
+          _buildShimmerButton(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCinematicMediaPreview({bool fullHeight = false}) {
+    return AnimatedBuilder(
+      animation: _glowAnimation,
+      builder: (context, child) {
+        final preview = Container(
+          height: fullHeight ? null : 380,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: _LuxuryColors.orangePrimary.withOpacity(
+                  0.2 * _glowAnimation.value,
+                ),
+                blurRadius: 25,
+                spreadRadius: 0,
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: Stack(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    gradient: LinearGradient(
+                      colors: [
+                        _LuxuryColors.orangeLight.withOpacity(
+                          0.9 + 0.1 * _glowAnimation.value,
+                        ),
+                        _LuxuryColors.orangePrimary.withOpacity(
+                          0.85 + 0.15 * _glowAnimation.value,
+                        ),
+                        _LuxuryColors.orangeDark.withOpacity(
+                          0.9 + 0.1 * _glowAnimation.value,
+                        ),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  padding: const EdgeInsets.all(3),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(21),
+                      color: context.appSurface,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(21),
+                      child: _mediaFiles.isEmpty
+                          ? _buildEmptyMediaState()
+                          : PageView.builder(
+                              controller: _mediaController,
+                              onPageChanged: (index) => setState(
+                                () => _currentMediaIndex = index,
+                              ),
+                              itemCount: _mediaFiles.length,
+                              itemBuilder: (context, index) {
+                                final file = File(_mediaFiles[index]);
+                                final isVideo = _mediaFiles[index]
+                                    .toLowerCase()
+                                    .contains('.mp4');
+                                return isVideo
+                                    ? VideoPlayerWidget(
+                                        filePath: _mediaFiles[index],
+                                        autoPlay: false,
+                                        showControls: true,
+                                      )
+                                    : Image.file(file, fit: BoxFit.cover);
+                              },
+                            ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 16,
+                  left: 16,
+                  child: _buildGlowingAddButton(),
+                ),
+                if (_mediaFiles.length > 1)
+                  Positioned(
+                    bottom: 20,
+                    left: 0,
+                    right: 0,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        _mediaFiles.length,
+                        (index) => AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          width: _currentMediaIndex == index ? 24 : 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(4),
+                            gradient: _currentMediaIndex == index
+                                ? _LuxuryColors.orangeGradient
+                                : null,
+                            color: _currentMediaIndex == index
+                                ? null
+                                : Colors.white.withOpacity(0.5),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+        if (fullHeight) {
+          return SizedBox.expand(child: preview);
+        }
+        return preview;
       },
     );
   }
 
   Widget _buildEmptyMediaState() {
     return Container(
-      decoration: BoxDecoration(
-        color: _LuxuryColors.bgLight,
-      ),
+      decoration: BoxDecoration(color: context.appBackground),
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -555,20 +1261,48 @@ class _AddProductScreenState extends State<AddProductScreen>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: _LuxuryColors.orangeGradient,
-                      boxShadow: [BoxShadow(color: _LuxuryColors.orangePrimary.withOpacity(0.3), blurRadius: 20, spreadRadius: 2)],
+                      boxShadow: [
+                        BoxShadow(
+                          color: _LuxuryColors.orangePrimary.withOpacity(0.3),
+                          blurRadius: 20,
+                          spreadRadius: 2,
+                        ),
+                      ],
                     ),
-                    child: const Icon(Iconsax.camera, color: Colors.white, size: 40),
+                    child: const Icon(
+                      Iconsax.camera,
+                      color: Colors.white,
+                      size: 40,
+                    ),
                   ),
                 );
               },
             ),
             const SizedBox(height: 20),
             ShaderMask(
-              shaderCallback: (bounds) => _LuxuryColors.orangeGradient.createShader(bounds),
-              child: const Text('أضف صور أو فيديو للمنتج', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
+              shaderCallback: (bounds) =>
+                  _LuxuryColors.orangeGradient.createShader(bounds),
+              child: Text(
+                _lang == 'ar'
+                    ? 'أضف صور أو فيديو للمنتج'
+                    : 'Add photos or video',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
             const SizedBox(height: 8),
-            Text('اضغط على زر الإضافة للبدء', style: TextStyle(color: _LuxuryColors.textSecondary, fontSize: 14)),
+            Text(
+              _lang == 'ar'
+                  ? 'اضغط على زر الإضافة للبدء'
+                  : 'Tap the add button to start',
+              style: TextStyle(
+                color: _onSurfaceSecondary,
+                fontSize: 14,
+              ),
+            ),
           ],
         ),
       ),
@@ -587,40 +1321,20 @@ class _AddProductScreenState extends State<AddProductScreen>
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(15),
               gradient: _LuxuryColors.orangeGradient,
-              boxShadow: [BoxShadow(color: _LuxuryColors.orangePrimary.withOpacity(0.5 * _pulseAnimation.value), blurRadius: 15, spreadRadius: 1)],
+              boxShadow: [
+                BoxShadow(
+                  color: _LuxuryColors.orangePrimary.withOpacity(
+                    0.5 * _pulseAnimation.value,
+                  ),
+                  blurRadius: 15,
+                  spreadRadius: 1,
+                ),
+              ],
             ),
             child: const Icon(Iconsax.add, color: Colors.white, size: 26),
           ),
         );
       },
-    );
-  }
-
-  Widget _buildGlassSection({required String title, required IconData icon, required List<Widget> children}) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: _LuxuryColors.bgCard,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              ShaderMask(shaderCallback: (bounds) => _LuxuryColors.orangeGradient.createShader(bounds), child: Icon(icon, color: Colors.white, size: 22)),
-              const SizedBox(width: 10),
-              ShaderMask(
-                shaderCallback: (bounds) => _LuxuryColors.orangeGradient.createShader(bounds),
-                child: Text(title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 0.3)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          ...children,
-        ],
-      ),
     );
   }
 
@@ -643,18 +1357,35 @@ class _AddProductScreenState extends State<AddProductScreen>
             duration: const Duration(milliseconds: 300),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              boxShadow: isFocused ? [BoxShadow(color: _LuxuryColors.orangePrimary.withOpacity(0.2), blurRadius: 12)] : [],
+              boxShadow: isFocused
+                  ? [
+                      BoxShadow(
+                        color: _LuxuryColors.orangePrimary.withOpacity(0.2),
+                        blurRadius: 12,
+                      ),
+                    ]
+                  : [],
             ),
             child: TextField(
               controller: _barcodeController,
               focusNode: _focusNodes['barcode'],
               keyboardType: TextInputType.number,
-              style: const TextStyle(color: _LuxuryColors.textPrimary, fontSize: 16),
+              style: TextStyle(
+                color: _onSurface,
+                fontSize: 16,
+              ),
               decoration: InputDecoration(
-                labelText: 'الباركود',
-                hintText: 'أدخل باركود المنتج',
-                hintStyle: const TextStyle(color: _LuxuryColors.textHint),
-                labelStyle: TextStyle(color: isFocused ? _LuxuryColors.orangePrimary : _LuxuryColors.textSecondary, fontWeight: isFocused ? FontWeight.w600 : FontWeight.normal),
+                labelText: _lang == 'ar' ? 'الباركود' : 'Barcode',
+                hintText: _lang == 'ar'
+                    ? 'أدخل باركود المنتج'
+                    : 'Enter product barcode',
+                hintStyle: TextStyle(color: _onSurfaceSecondary),
+                labelStyle: TextStyle(
+                  color: isFocused
+                      ? _LuxuryColors.orangePrimary
+                      : _onSurfaceSecondary,
+                  fontWeight: isFocused ? FontWeight.w600 : FontWeight.normal,
+                ),
                 prefixIcon: GestureDetector(
                   onTap: () {
                     setState(() {
@@ -667,15 +1398,37 @@ class _AddProductScreenState extends State<AddProductScreen>
                       borderRadius: BorderRadius.circular(10),
                       gradient: _LuxuryColors.orangeGradient,
                     ),
-                    child: const Icon(Iconsax.refresh, color: Colors.white, size: 20),
+                    child: const Icon(
+                      Iconsax.refresh,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                   ),
                 ),
                 filled: true,
-                fillColor: _LuxuryColors.inputBg,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _LuxuryColors.inputBorder, width: 1)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _LuxuryColors.orangePrimary, width: 2)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                fillColor: context.appSurface,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(
+                    color: _LuxuryColors.inputBorder,
+                    width: 1,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(
+                    color: _LuxuryColors.orangePrimary,
+                    width: 2,
+                  ),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 18,
+                ),
               ),
             ),
           ),
@@ -699,10 +1452,20 @@ class _AddProductScreenState extends State<AddProductScreen>
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('مسح الباركود', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                          Text(
+                            _lang == 'ar' ? 'مسح الباركود' : 'Scan Barcode',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                           TextButton(
                             onPressed: () => Navigator.pop(context, '-1'),
-                            child: Text('إلغاء', style: TextStyle(color: Color(0xFFD4AF37))),
+                            child: Text(
+                              _lang == 'ar' ? 'إلغاء' : 'Cancel',
+                              style: const TextStyle(color: Color(0xFFD4AF37)),
+                            ),
                           ),
                         ],
                       ),
@@ -735,9 +1498,18 @@ class _AddProductScreenState extends State<AddProductScreen>
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
                   gradient: _LuxuryColors.navyGradient,
-                  boxShadow: [BoxShadow(color: _LuxuryColors.navyPrimary.withOpacity(0.4), blurRadius: 12)],
+                  boxShadow: [
+                    BoxShadow(
+                      color: _LuxuryColors.navyPrimary.withOpacity(0.4),
+                      blurRadius: 12,
+                    ),
+                  ],
                 ),
-                child: const Icon(Iconsax.scan_barcode, color: Colors.white, size: 24),
+                child: const Icon(
+                  Iconsax.scan_barcode,
+                  color: Colors.white,
+                  size: 24,
+                ),
               );
             },
           ),
@@ -758,12 +1530,19 @@ class _AddProductScreenState extends State<AddProductScreen>
     List<TextInputFormatter>? inputFormatters,
   }) {
     final isFocused = _fieldFocused[focusKey] ?? false;
-    
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        boxShadow: isFocused ? [BoxShadow(color: _LuxuryColors.orangePrimary.withOpacity(0.2), blurRadius: 12)] : [],
+        boxShadow: isFocused
+            ? [
+                BoxShadow(
+                  color: _LuxuryColors.orangePrimary.withOpacity(0.2),
+                  blurRadius: 12,
+                ),
+              ]
+            : [],
       ),
       child: TextField(
         controller: controller,
@@ -772,198 +1551,129 @@ class _AddProductScreenState extends State<AddProductScreen>
         keyboardType: keyboardType,
         textDirection: textDirection,
         inputFormatters: inputFormatters,
-        style: const TextStyle(color: _LuxuryColors.textPrimary, fontSize: 16),
+        style: TextStyle(color: _onSurface, fontSize: 16),
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
-          hintStyle: const TextStyle(color: _LuxuryColors.textHint),
-          labelStyle: TextStyle(color: isFocused ? _LuxuryColors.orangePrimary : _LuxuryColors.textSecondary, fontWeight: isFocused ? FontWeight.w600 : FontWeight.normal),
+          hintStyle: TextStyle(color: _onSurfaceSecondary),
+          labelStyle: TextStyle(
+            color: isFocused
+                ? _LuxuryColors.orangePrimary
+                : _onSurfaceSecondary,
+            fontWeight: isFocused ? FontWeight.w600 : FontWeight.normal,
+          ),
           prefixIcon: ShaderMask(
-            shaderCallback: (bounds) => isFocused ? _LuxuryColors.orangeGradient.createShader(bounds) : LinearGradient(colors: [_LuxuryColors.textSecondary, _LuxuryColors.textSecondary]).createShader(bounds),
+            shaderCallback: (bounds) => isFocused
+                ? _LuxuryColors.orangeGradient.createShader(bounds)
+                : LinearGradient(
+                    colors: [
+                      _onSurfaceSecondary,
+                      _onSurfaceSecondary,
+                    ],
+                  ).createShader(bounds),
             child: Icon(icon, color: Colors.white, size: 22),
           ),
           filled: true,
-          fillColor: _LuxuryColors.inputBg,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _LuxuryColors.inputBorder, width: 1)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _LuxuryColors.orangePrimary, width: 2)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          fillColor: context.appSurface,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: _LuxuryColors.inputBorder, width: 1),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(
+              color: _LuxuryColors.orangePrimary,
+              width: 2,
+            ),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 18,
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildCategoryAutocomplete() {
-    final isFocused = _fieldFocused['category'] ?? false;
-    
+  Widget _buildNumericField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    required String focusKey,
+    String? suffix,
+  }) {
+    final isFocused = _fieldFocused[focusKey] ?? false;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        boxShadow: isFocused ? [BoxShadow(color: _LuxuryColors.orangePrimary.withOpacity(0.2), blurRadius: 12)] : [],
-      ),
-      child: Autocomplete<String>(
-        optionsBuilder: (TextEditingValue textEditingValue) {
-          if (_isLoadingCategories) return const Iterable<String>.empty();
-          if (textEditingValue.text.isEmpty) return _categories;
-          
-          final query = textEditingValue.text.toLowerCase();
-          return _categories.where((category) => 
-            category.toLowerCase().contains(query)
-          );
-        },
-        onSelected: (String selection) {
-          _categoryController.text = selection;
-        },
-        fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-          // Sync with our controller
-          if (_categoryController.text.isNotEmpty && textEditingController.text.isEmpty) {
-            textEditingController.text = _categoryController.text;
-          }
-          textEditingController.addListener(() {
-            _categoryController.text = textEditingController.text;
-          });
-          
-          // Track focus for styling
-          focusNode.addListener(() {
-            setState(() => _fieldFocused['category'] = focusNode.hasFocus);
-          });
-          
-          return TextField(
-            controller: textEditingController,
-            focusNode: focusNode,
-            style: const TextStyle(color: _LuxuryColors.textPrimary, fontSize: 16),
-            decoration: InputDecoration(
-              labelText: 'التصنيف',
-              hintText: 'أدخل تصنيف المنتج',
-              hintStyle: const TextStyle(color: _LuxuryColors.textHint),
-              labelStyle: TextStyle(
-                color: isFocused ? _LuxuryColors.orangePrimary : _LuxuryColors.textSecondary,
-                fontWeight: isFocused ? FontWeight.w600 : FontWeight.normal,
-              ),
-              prefixIcon: ShaderMask(
-                shaderCallback: (bounds) => isFocused 
-                  ? _LuxuryColors.orangeGradient.createShader(bounds) 
-                  : LinearGradient(colors: [_LuxuryColors.textSecondary, _LuxuryColors.textSecondary]).createShader(bounds),
-                child: const Icon(Iconsax.tag, color: Colors.white, size: 22),
-              ),
-              suffixIcon: _isLoadingCategories 
-                ? const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(_LuxuryColors.orangePrimary),
-                      ),
-                    ),
-                  )
-                : null,
-              filled: true,
-              fillColor: _LuxuryColors.inputBg,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _LuxuryColors.inputBorder, width: 1)),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _LuxuryColors.orangePrimary, width: 2)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-            ),
-          );
-        },
-        optionsViewBuilder: (context, onSelected, options) {
-          return Align(
-            alignment: Alignment.topLeft,
-            child: Material(
-              elevation: 4,
-              borderRadius: BorderRadius.circular(12),
-              color: _LuxuryColors.bgCard,
-              child: Container(
-                constraints: const BoxConstraints(maxHeight: 200),
-                width: MediaQuery.of(context).size.width - 72,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: _LuxuryColors.inputBorder),
+        boxShadow: isFocused
+            ? [
+                BoxShadow(
+                  color: _LuxuryColors.orangePrimary.withOpacity(0.2),
+                  blurRadius: 12,
                 ),
-                child: ListView.builder(
-                  padding: EdgeInsets.zero,
-                  shrinkWrap: true,
-                  itemCount: options.length,
-                  itemBuilder: (context, index) {
-                    final option = options.elementAt(index);
-                    return InkWell(
-                      onTap: () => onSelected(option),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        decoration: BoxDecoration(
-                          border: index < options.length - 1 
-                            ? Border(bottom: BorderSide(color: _LuxuryColors.inputBorder.withOpacity(0.5)))
-                            : null,
-                        ),
-                        child: Row(
-                          children: [
-                            ShaderMask(
-                              shaderCallback: (bounds) => _LuxuryColors.orangeGradient.createShader(bounds),
-                              child: const Icon(Iconsax.tag, color: Colors.white, size: 18),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                option,
-                                style: const TextStyle(
-                                  color: _LuxuryColors.textPrimary,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          );
-        },
+              ]
+            : [],
       ),
-    );
-  }
-
-  Widget _buildPriceQuantityRow() {
-    return Row(
-      children: [
-        Expanded(child: _buildNumericField(controller: _priceController, label: 'السعر', icon: Iconsax.money_4, focusKey: 'price', suffix: 'ر.ق')),
-        const SizedBox(width: 16),
-        Expanded(child: _buildQuantityField()),
-      ],
-    );
-  }
-
-  Widget _buildNumericField({required TextEditingController controller, required String label, required IconData icon, required String focusKey, String? suffix}) {
-    final isFocused = _fieldFocused[focusKey] ?? false;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), boxShadow: isFocused ? [BoxShadow(color: _LuxuryColors.orangePrimary.withOpacity(0.2), blurRadius: 12)] : []),
       child: TextField(
         controller: controller,
         focusNode: _focusNodes[focusKey],
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         textAlign: TextAlign.center,
-        style: const TextStyle(color: _LuxuryColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w600),
+        style: TextStyle(
+          color: _onSurface,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+        ),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: TextStyle(color: isFocused ? _LuxuryColors.orangePrimary : _LuxuryColors.textSecondary),
+          labelStyle: TextStyle(
+            color: isFocused
+                ? _LuxuryColors.orangePrimary
+                : _onSurfaceSecondary,
+          ),
           suffixText: suffix,
-          suffixStyle: TextStyle(color: _LuxuryColors.orangePrimary, fontWeight: FontWeight.w600),
+          suffixStyle: TextStyle(
+            color: _LuxuryColors.orangePrimary,
+            fontWeight: FontWeight.w600,
+          ),
           prefixIcon: ShaderMask(
-            shaderCallback: (bounds) => isFocused ? _LuxuryColors.orangeGradient.createShader(bounds) : LinearGradient(colors: [_LuxuryColors.textSecondary, _LuxuryColors.textSecondary]).createShader(bounds),
+            shaderCallback: (bounds) => isFocused
+                ? _LuxuryColors.orangeGradient.createShader(bounds)
+                : LinearGradient(
+                    colors: [
+                      _onSurfaceSecondary,
+                      _onSurfaceSecondary,
+                    ],
+                  ).createShader(bounds),
             child: Icon(icon, color: Colors.white, size: 22),
           ),
           filled: true,
-          fillColor: _LuxuryColors.inputBg,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _LuxuryColors.inputBorder, width: 1)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _LuxuryColors.orangePrimary, width: 2)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          fillColor: context.appSurface,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: _LuxuryColors.inputBorder, width: 1),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(
+              color: _LuxuryColors.orangePrimary,
+              width: 2,
+            ),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 18,
+          ),
         ),
       ),
     );
@@ -976,19 +1686,38 @@ class _AddProductScreenState extends State<AddProductScreen>
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        color: _LuxuryColors.inputBg,
-        border: Border.all(color: isFocused ? _LuxuryColors.orangePrimary : _LuxuryColors.inputBorder, width: isFocused ? 2 : 1),
-        boxShadow: isFocused ? [BoxShadow(color: _LuxuryColors.orangePrimary.withOpacity(0.2), blurRadius: 12)] : [],
+        color: context.appSurface,
+        border: Border.all(
+          color: isFocused
+              ? _LuxuryColors.orangePrimary
+              : _LuxuryColors.inputBorder,
+          width: isFocused ? 2 : 1,
+        ),
+        boxShadow: isFocused
+            ? [
+                BoxShadow(
+                  color: _LuxuryColors.orangePrimary.withOpacity(0.2),
+                  blurRadius: 12,
+                ),
+              ]
+            : [],
       ),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildQuantityButton(icon: Iconsax.minus, onTap: () {
-                final current = int.tryParse(_quantityController.text) ?? 1;
-                if (current > 1) { _quantityController.text = (current - 1).toString(); setState(() {}); }
-              }),
+              _buildQuantityButton(
+                icon: Iconsax.minus,
+                onTap: () {
+                  final current = int.tryParse(_quantityController.text) ?? 1;
+                  if (current > 1) {
+                    _quantityController.text = (current - 1).toString();
+                    setState(() {});
+                    _scheduleAutoSave();
+                  }
+                },
+              ),
               SizedBox(
                 width: 40,
                 height: 40,
@@ -998,17 +1727,31 @@ class _AddProductScreenState extends State<AddProductScreen>
                     focusNode: _focusNodes['quantity'],
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    decoration: const InputDecoration(fillColor: Colors.transparent,border: InputBorder.none, contentPadding: EdgeInsets.zero, isDense: true, focusedBorder: OutlineInputBorder(borderSide: BorderSide.none)),
-          
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    decoration: const InputDecoration(
+                      fillColor: Colors.transparent,
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                      isDense: true,
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
                   ),
                 ),
               ),
-              _buildQuantityButton(icon: Iconsax.add, onTap: () {
-                final current = int.tryParse(_quantityController.text) ?? 0;
-                _quantityController.text = (current + 1).toString();
-                setState(() {});
-              }),
+              _buildQuantityButton(
+                icon: Iconsax.add,
+                onTap: () {
+                  final current = int.tryParse(_quantityController.text) ?? 0;
+                  _quantityController.text = (current + 1).toString();
+                  setState(() {});
+                  _scheduleAutoSave();
+                },
+              ),
             ],
           ),
         ],
@@ -1016,55 +1759,93 @@ class _AddProductScreenState extends State<AddProductScreen>
     );
   }
 
-  Widget _buildQuantityButton({required IconData icon, required VoidCallback onTap}) {
+  Widget _buildQuantityButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: 40,
         height: 40,
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), gradient: _LuxuryColors.navyGradient),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          gradient: _LuxuryColors.navyGradient,
+        ),
         child: Icon(icon, color: Colors.white, size: 20),
       ),
     );
   }
 
-  Widget _buildPremiumToggle({required String title, required String subtitle, required bool value, required ValueChanged<bool> onChanged, required IconData activeIcon, required IconData inactiveIcon}) {
+  Widget _buildPremiumToggle({
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+    required IconData activeIcon,
+    required IconData inactiveIcon,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = Theme.of(context).colorScheme.surface;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        color: value ? _LuxuryColors.orangeTint : _LuxuryColors.inputBg,
-        border: Border.all(color: value ? _LuxuryColors.orangePrimary.withOpacity(0.3) : _LuxuryColors.inputBorder, width: 1),
+        color: value
+            ? (isDark ? AppColors.darkElevated : _LuxuryColors.orangeTint)
+            : surface,
+        border: Border.all(
+          color: value
+              ? _LuxuryColors.orangePrimary.withOpacity(0.3)
+              : _outline,
+          width: 1,
+        ),
       ),
       child: Row(
         children: [
-         
-          // Icon
           AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               gradient: value ? _LuxuryColors.orangeGradient : null,
-              color: value ? null : _LuxuryColors.bgLight,
-              border: value ? null : Border.all(color: _LuxuryColors.inputBorder),
+              color: value ? null : surface,
+              border: value ? null : Border.all(color: _outline),
             ),
-            child: Icon(value ? activeIcon : inactiveIcon, color: value ? Colors.white : _LuxuryColors.textSecondary, size: 22),
+            child: Icon(
+              value ? activeIcon : inactiveIcon,
+              color: value ? Colors.white : _onSurfaceSecondary,
+              size: 22,
+            ),
           ),
           const SizedBox(width: 14),
-          // Text
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(color: value ? _LuxuryColors.orangePrimary : _LuxuryColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: value
+                        ? (isDark ? Colors.white : _LuxuryColors.orangePrimary)
+                        : _onSurface,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(subtitle, style: TextStyle(color: _LuxuryColors.textSecondary, fontSize: 12)),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: _onSurfaceSecondary,
+                    fontSize: 12,
+                  ),
+                ),
               ],
             ),
           ),
           const SizedBox(width: 12),
-           // Toggle switch on the LEFT (RTL layout)
           Transform.scale(
             scale: 1.1,
             child: Switch(
@@ -1072,17 +1853,17 @@ class _AddProductScreenState extends State<AddProductScreen>
               onChanged: onChanged,
               activeThumbColor: _LuxuryColors.orangePrimary,
               activeTrackColor: _LuxuryColors.orangePrimary.withOpacity(0.4),
-              inactiveThumbColor: Colors.white,
-              inactiveTrackColor: _LuxuryColors.toggleTrackOff,
+              inactiveThumbColor: surface,
+              inactiveTrackColor:
+                  isDark ? AppColors.darkElevated : _LuxuryColors.toggleTrackOff,
               trackOutlineColor: WidgetStateProperty.resolveWith((states) {
                 if (states.contains(WidgetState.selected)) {
                   return Colors.transparent;
                 }
-                return _LuxuryColors.toggleOff;
+                return isDark ? AppColors.darkBorder : _LuxuryColors.toggleOff;
               }),
             ),
           ),
-          
         ],
       ),
     );
@@ -1099,29 +1880,76 @@ class _AddProductScreenState extends State<AddProductScreen>
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
               gradient: _LuxuryColors.orangeGradient,
-              boxShadow: [BoxShadow(color: _LuxuryColors.orangePrimary.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8))],
+              boxShadow: [
+                BoxShadow(
+                  color: _LuxuryColors.orangePrimary.withOpacity(0.4),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
             child: Stack(
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(20),
                   child: Transform.translate(
-                    offset: Offset(MediaQuery.of(context).size.width * _shimmerAnimation.value, 0),
-                    child: Container(width: 100, decoration: BoxDecoration(gradient: _LuxuryColors.shimmerGradient)),
+                    offset: Offset(
+                      MediaQuery.of(context).size.width *
+                          _shimmerAnimation.value,
+                      0,
+                    ),
+                    child: Container(
+                      width: 100,
+                      decoration: BoxDecoration(
+                        gradient: _LuxuryColors.shimmerGradient,
+                      ),
+                    ),
                   ),
                 ),
                 Center(
                   child: _isUploading
-                      ? Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5)),
-                          const SizedBox(width: 12),
-                          const Text('جاري الرفع...', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                        ])
-                      : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          const Icon(Iconsax.send_1, color: Colors.white, size: 24),
-                          const SizedBox(width: 10),
-                          const Text('نشر المنتج', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                        ]),
+                      ? Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2.5,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              _lang == 'ar' ? 'جاري الرفع...' : 'Uploading...',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Iconsax.send_1,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              _lang == 'ar' ? 'نشر المنتج' : 'Publish Product',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
                 ),
               ],
             ),
@@ -1132,12 +1960,13 @@ class _AddProductScreenState extends State<AddProductScreen>
   }
 
   void _showAddMoreMediaBottomSheet() {
+    final lang = _lang;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
+        decoration: BoxDecoration(
+        color: context.appSurface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         padding: const EdgeInsets.all(20),
@@ -1153,11 +1982,14 @@ class _AddProductScreenState extends State<AddProductScreen>
               ),
             ),
             const SizedBox(height: 20),
-            Text('إضافة وسائط', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              lang == 'ar' ? 'إضافة وسائط' : 'Add Media',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 20),
             ListTile(
               leading: const Icon(Iconsax.camera, color: AppColors.primary),
-              title: const Text('التقاط صورة'),
+              title: Text(lang == 'ar' ? 'التقاط صورة' : 'Take Photo'),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -1165,7 +1997,13 @@ class _AddProductScreenState extends State<AddProductScreen>
                   MaterialPageRoute(
                     builder: (context) => const CameraScreen(isVideo: false),
                   ),
-                );
+                ).then((result) async {
+                  if (result != null &&
+                      result is List<String> &&
+                      result.isNotEmpty) {
+                    await _addMediaPaths(result);
+                  }
+                });
               },
             ),
             ListTile(
@@ -1173,7 +2011,7 @@ class _AddProductScreenState extends State<AddProductScreen>
                 Iconsax.video_circle,
                 color: AppColors.secondary,
               ),
-              title: const Text('تسجيل فيديو'),
+              title: Text(lang == 'ar' ? 'تسجيل فيديو' : 'Record Video'),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -1181,12 +2019,20 @@ class _AddProductScreenState extends State<AddProductScreen>
                   MaterialPageRoute(
                     builder: (context) => const CameraScreen(isVideo: true),
                   ),
-                );
+                ).then((result) async {
+                  if (result != null &&
+                      result is List<String> &&
+                      result.isNotEmpty) {
+                    await _addMediaPaths(result);
+                  }
+                });
               },
             ),
             ListTile(
               leading: const Icon(Iconsax.gallery, color: Colors.green),
-              title: const Text('اختيار من المعرض'),
+              title: Text(
+                lang == 'ar' ? 'اختيار من المعرض' : 'Choose from Gallery',
+              ),
               onTap: () {
                 Navigator.pop(context);
                 _pickFromGallery();
@@ -1200,219 +2046,131 @@ class _AddProductScreenState extends State<AddProductScreen>
   }
 
   void _pickFromGallery() async {
+    final lang = _lang;
     final ImagePicker picker = ImagePicker();
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('اختيار نوع الوسائط'),
-        content: Consumer<AppProvider>(
-          builder: (context, appProvider, child) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Iconsax.image),
-                  title: const Text('صور'),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    final List<XFile> images = await picker.pickMultiImage();
-                    if (images.isNotEmpty) {
-                      setState(() {
-                        appProvider.allMedia.addAll(
-                          images.map((image) => image.path),
-                        );
-                      });
-                    }
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Iconsax.video_play),
-                  title: const Text('فيديو'),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    final XFile? video = await picker.pickVideo(
-                      source: ImageSource.gallery,
-                    );
-                    if (video != null) {
-                      setState(() {
-                        appProvider.allMedia.add(video.path);
-                      });
-                    }
-                  },
-                ),
-              ],
-            );
-          },
+        title: Text(lang == 'ar' ? 'اختيار نوع الوسائط' : 'Choose Media Type'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Iconsax.image),
+              title: Text(lang == 'ar' ? 'صور' : 'Photos'),
+              onTap: () async {
+                Navigator.pop(context);
+                final List<XFile> images = await picker.pickMultiImage();
+                if (images.isNotEmpty) {
+                  await _addMediaPaths(
+                    images.map((image) => image.path).toList(),
+                  );
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Iconsax.video_play),
+              title: Text(lang == 'ar' ? 'فيديو' : 'Video'),
+              onTap: () async {
+                Navigator.pop(context);
+                final XFile? video = await picker.pickVideo(
+                  source: ImageSource.gallery,
+                );
+                if (video != null) {
+                  await _addMediaPaths([video.path]);
+                }
+              },
+            ),
+          ],
         ),
       ),
     );
   }
 
-  void _submitProduct() async {
-    // Validate fields
-    if (_nameController.text.trim().isEmpty) {
-      _showError('يرجى إدخال اسم المنتج');
-      return;
+  void _showValidationError(String message) {
+    AwesomeDialog(
+      context: context,
+      dialogType: DialogType.error,
+      animType: AnimType.scale,
+      title: _lang == 'ar' ? 'خطأ' : 'Error',
+      desc: message,
+      btnOkOnPress: () {},
+      btnOkText: _lang == 'ar' ? 'حسناً' : 'OK',
+    ).show();
+  }
+
+  bool _validateProductForm() {
+    if (_mediaFiles.isEmpty) {
+      _showValidationError(
+        _lang == 'ar'
+            ? 'يجب إضافة صورة واحدة على الأقل للمنتج'
+            : 'Add at least one photo',
+      );
+      return false;
     }
 
-    if (_descriptionController.text.trim().isEmpty) {
-      _showError('يرجى إدخال وصف المنتج');
-      return;
+    final name = _nameController.text.trim();
+    if (name.isEmpty || name.length < 3) {
+      _showValidationError(
+        _lang == 'ar' ? 'يجب إدخال اسم المنتج' : 'Product name is required',
+      );
+      return false;
     }
 
-    if (_priceController.text.trim().isEmpty) {
-      _showError('يرجى إدخال سعر المنتج');
-      return;
+    final priceText = _priceController.text.trim();
+    final price = double.tryParse(priceText);
+    if (priceText.isEmpty || price == null || price <= 0) {
+      _showValidationError(
+        _lang == 'ar' ? 'يجب إدخال سعر صحيح للمنتج' : 'Enter a valid price',
+      );
+      return false;
     }
 
-    if (_quantityController.text.trim().isEmpty) {
-      _showError('يرجى إدخال كمية المنتج');
-      return;
+    final quantityText = _quantityController.text.trim();
+    final quantity = int.tryParse(quantityText);
+    if (quantityText.isEmpty || quantity == null || quantity <= 0) {
+      _showValidationError(
+        _lang == 'ar'
+            ? 'يجب إدخال كمية صحيحة للمنتج'
+            : 'Enter a valid quantity',
+      );
+      return false;
     }
 
     if (_categoryController.text.trim().isEmpty) {
-      _showError('يرجى إدخال تصنيف المنتج');
-      return;
+      _showValidationError(
+        _lang == 'ar' ? 'يجب اختيار تصنيف للمنتج' : 'Select a category',
+      );
+      return false;
     }
 
-    // if (_currentItemId == null) {
-    //   _showError('خطأ في إنشاء المنتج');
-    //   return;
-    // }
+    return true;
+  }
+
+  void _submitProduct() async {
+    if (!_validateProductForm()) {
+      return;
+    }
 
     setState(() {
       _isUploading = true;
     });
 
-    final appProvider = Provider.of<AppProvider>(context, listen: false);
-    String? uid = await FlutterSecureStorage().read(key: "user_uid");
-    String? userName = await AuthService.getCurrentName();
-    // Prepare data for background upload
-    Map<String, dynamic> data = {
-      'itemId': _currentItemId,
-      'uid': uid,
-      'userName': userName,
-      'barcode': _barcodeController.text.trim(),
-      'name': _nameController.text.trim(),
-      'eng': _engnameController.text.trim(),
-      'description': _descriptionController.text.trim(),
-      '_description_arb_Controller': _description_arb_Controller.text.trim(),
-      'price': _priceController.text.trim(),
-      'quantity': _quantityController.text.trim(),
-      'category': _categoryController.text.trim(),
-      'visibility': _isPublic ? 'public' : 'private',
-      'comments': _commentsEnabled ? 'on' : 'off',
-      'mediaFiles': appProvider.allMedia,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-    };
+    await _flushAutoSave();
 
-    // Start background upload
-    _startBackgroundUpload(data);
+    if (!mounted) return;
+    setState(() {
+      _isUploading = false;
+    });
 
-    Navigator.pushReplacement(
+    showAppSnackbar(
       context,
-      MaterialPageRoute(builder: (context) => TikTokFeedScreen()),
+      message: _lang == 'ar' ? 'تم حفظ المنتج بنجاح' : 'Product saved successfully',
+      type: SnackType.success,
     );
-    // Show success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('تم بدء رفع المنتج في الخلفية'),
-        backgroundColor: Colors.green,
-      ),
-    );
-  }
-
-  void _startBackgroundUpload(Map<String, dynamic> data) async {
-    try {
-      final appProvider = Provider.of<AppProvider>(context, listen: false);
-      _runBackgroundUpload(data);
-      appProvider.allMedia.clear();
-    } catch (e) {
-      print("Error starting background upload: $e");
-    }
-  }
-
-  void _runBackgroundUpload(Map<String, dynamic> data) async {
-    try {
-      print("🚀 Starting product upload: ${data['name']}");
-
-      final itemId = data['itemId'];
-      final mediaFiles = List<String>.from(data['mediaFiles']);
-
-      // Step 1: Upload media files to S3
-      print("📤 Uploading ${mediaFiles.length} media files...");
-
-      final uploadedUrls = await S3UploadService.uploadMediaFiles(
-        filePaths: mediaFiles,
-        itemId: itemId,
-      );
-
-      if (uploadedUrls.isEmpty) {
-        print("❌ No media files uploaded");
-        return;
-      }
-
-      // Step 2: Create media string for database
-      final mediaString = uploadedUrls
-          .map((url) {
-            final fileName = url.split('/').last;
-            return fileName;
-          })
-          .join(', ');
-
-      print("📝 Media string: $mediaString");
-
-      // Step 3: Update item in database
-      final updateResult = await DatabaseService.updateItem(
-        itemId: itemId,
-        uid: data['uid'],
-        barcode: data['barcode'],
-        name: data['name'],
-        eng: data['eng'],
-        description: data['description'],
-        description_arb: data['_description_arb_Controller'],
-        category: data['category'],
-        price: data['price'],
-        quantity: data['quantity'],
-        visibility: data['visibility'],
-        comments: data['comments'],
-        media: mediaString,
-      );
-
-      if (updateResult['success'] == true) {
-        print("✅ Product uploaded successfully: ${data['name']}");
-
-        final request = await Dio().post(
-          "https://www.Globee-Trading.com/app2026/sql.php",
-          data: FormData.fromMap({"action": "get_tokens"}),
-        );
-        List playerIds = request.data['player_ids'];
-        List<String> setPlayers = [];
-        for (var player_id in playerIds) {
-          setPlayers.add(player_id['player_id'].toString());
-          await OneSignalService.sendNotificationToMultipleUsers(
-            playerIds: setPlayers,
-            title: "المستخدم: ${data['userName']} رفع منتج جديد",
-            message:
-                "تم رفع منتج جديد بواسطة ${data['userName']} في النظام. اضغط هنا لعرض التفاصيل أو متابعة النشاط.",
-          );
-        }
-      } else {
-        print("❌ Failed to update database: ${updateResult['error']}");
-
-      }
-
-      data.clear();
-      mediaFiles.clear();
-    } catch (e) {
-      print("❌ Error uploading product: $e");
-    }
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
+    final appProvider = Provider.of<AppProvider>(context, listen: false);
+    appProvider.allMedia.clear();
+    Navigator.pop(context, _currentItemId);
   }
 }

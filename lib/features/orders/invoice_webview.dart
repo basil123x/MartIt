@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import '../../core/utils/theme_extensions.dart';
 
 class InvoiceWebView extends StatefulWidget {
   final String url;

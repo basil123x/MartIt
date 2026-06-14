@@ -15,15 +15,14 @@ import 'package:shorebird_code_push/shorebird_code_push.dart';
 import 'package:terminate_restart/terminate_restart.dart';
 import 'core/constants/app_strings.dart';
 import 'core/constants/app_theme.dart';
+import 'core/services/localization_service.dart';
 import 'features/splash/splash_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -72,11 +71,18 @@ void main() async {
     event.notification.display();
   });
 
-  runApp(const MartItApp());
+  await LocalizationService.instance.init();
+
+  final prefs = await SharedPreferences.getInstance();
+  final isDark = prefs.getBool(AppProvider.darkModeKey) ?? false;
+
+  runApp(MartItApp(initialDarkMode: isDark));
 }
 
 class MartItApp extends StatefulWidget {
-  const MartItApp({super.key});
+  final bool? initialDarkMode;
+
+  const MartItApp({super.key, this.initialDarkMode});
 
   @override
   State<MartItApp> createState() => _MartItAppState();
@@ -148,15 +154,41 @@ class _MartItAppState extends State<MartItApp> {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-      providers: [ChangeNotifierProvider(create: (_) => AppProvider())],
-      child: MaterialApp(
-        title: AppStrings.appName,
-        theme: AppTheme.lightTheme,
-        navigatorKey: navigatorKey,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.light,
-        debugShowCheckedModeBanner: false,
-        home: const SplashScreen(),
+      providers: [
+        ChangeNotifierProvider.value(value: LocalizationService.instance),
+        ChangeNotifierProvider(
+          create: (_) {
+            final provider = AppProvider(initialDarkMode: widget.initialDarkMode);
+            provider.loadPreferences();
+            return provider;
+          },
+        ),
+      ],
+      child: Consumer2<LocalizationService, AppProvider>(
+        builder: (context, localization, appProvider, _) {
+          return MaterialApp(
+            title: AppStrings.appName,
+            theme: AppTheme.lightTheme,
+            navigatorKey: navigatorKey,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: appProvider.themeMode,
+            debugShowCheckedModeBanner: false,
+            locale: Locale(localization.currentLanguage),
+            builder: (context, child) {
+              return Directionality(
+                textDirection: localization.textDirection,
+                child: DefaultTextStyle(
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontFamily: 'Cairo',
+                  ),
+                  child: child!,
+                ),
+              );
+            },
+            home: const SplashScreen(),
+          );
+        },
       ),
     );
   }

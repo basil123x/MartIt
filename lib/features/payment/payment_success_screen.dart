@@ -10,6 +10,8 @@ import '../../core/models/shipping_address_model.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
 import '../sellers/sellers_contact_screen.dart';
+import '../../core/utils/snackbar_helper.dart';
+import '../../core/utils/theme_extensions.dart';
 
 class PaymentSuccessScreen extends StatefulWidget {
   final String userId;
@@ -34,6 +36,7 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
+  String? _createdOrderOid;
 
   @override
   void initState() {
@@ -59,36 +62,45 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
 
   Future<void> _createOrders() async {
     try {
-      // Get current OID
       final currentOid = await AuthService.getCurrentOID();
 
-      // Calculate total for all items
-      double totalAmount = 0.0;
+      final Map<String, List<CartItemModel>> itemsBySeller = {};
       for (var item in widget.cartItems) {
-        totalAmount += (double.parse(item.item.price) * item.cartQuantity);
+        final sellerId = item.seller.id;
+        itemsBySeller.putIfAbsent(sellerId, () => []);
+        itemsBySeller[sellerId]!.add(item);
       }
 
-      // Prepare items JSON with seller_id for each item
-      // Backend will split by seller_id and create separate orders
-      String itemsJson = widget.cartItems
-          .map(
-            (item) =>
-                '{"id":"${item.item.id}","name":"${item.item.name}","price":"${item.item.price}","quantity":${item.cartQuantity},"seller_id":"${item.seller.id}"}',
-          )
-          .join(',');
-      itemsJson = '[$itemsJson]';
+      for (final entry in itemsBySeller.entries) {
+        final sellerId = entry.key;
+        final sellerItems = entry.value;
 
-      // Create order - backend will split by seller_id
-      await ApiService.createOrder(
-        uid: '', // Not needed anymore, backend extracts from items
-        custId: widget.userId,
-        oid: currentOid ?? '',
-        shipId: widget.shippingAddress.id.toString(),
-        items: itemsJson,
-        totalAmount: totalAmount.toStringAsFixed(2),
-      );
+        double sellerTotal = 0.0;
+        for (var item in sellerItems) {
+          sellerTotal += double.parse(item.item.price) * item.cartQuantity;
+        }
 
-      print('✅ Orders created successfully');
+        final itemsJson =
+            '[${sellerItems.map((item) => '{"id":"${item.item.id}","name":"${item.item.name}","price":"${item.item.price}","quantity":${item.cartQuantity}}').join(',')}]';
+
+        final result = await ApiService.createOrder(
+          uid: sellerId,
+          custId: widget.userId,
+          oid: currentOid ?? '',
+          shipId: widget.shippingAddress.id.toString(),
+          items: itemsJson,
+          totalAmount: sellerTotal.toStringAsFixed(2),
+        );
+
+        print('Order API response: $result');
+        print('✅ Order created for seller $sellerId: $result');
+      }
+
+      if (mounted) {
+        setState(() {
+          _createdOrderOid = currentOid;
+        });
+      }
     } catch (e) {
       print('❌ Error creating orders: $e');
     }
@@ -128,9 +140,11 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
       webViewConfiguration: const WebViewConfiguration(enableJavaScript: true),
     )) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
+        showAppSnackbar(
           context,
-        ).showSnackBar(const SnackBar(content: Text('فشل فتح الفاتورة')));
+          message: 'فشل فتح الفاتورة',
+          type: SnackType.error,
+        );
       }
     }
   }
@@ -145,7 +159,7 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       // backgroundColor: const Color(0xFF0A0E27),
-      backgroundColor: const Color(0xFFF5F7FB),
+      backgroundColor: context.appBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -205,11 +219,11 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
                       opacity: _fadeAnimation,
                       child: Column(
                         children: [
-                          const Text(
+                          Text(
                             'تم الدفع بنجاح!',
                             style: TextStyle(
                               // color: Colors.white,
-                              color: Color(0xFF1A1A2E),
+                              color: context.appTextPrimary,
                               fontSize: 28,
                               fontWeight: FontWeight.bold,
                             ),
@@ -219,7 +233,7 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
                             'شكراً لك، تم تأكيد طلبك بنجاح',
                             style: TextStyle(
                               // color: Colors.white.withOpacity(0.8),
-                              color: const Color(0xFF1A1A2E).withOpacity(0.7),
+                              color: context.appTextSecondary,
                               fontSize: 16,
                             ),
                             textAlign: TextAlign.center,
@@ -237,19 +251,10 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
                         width: double.infinity,
                         padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              // const Color(0xFF1A1A2E).withOpacity(0.8),
-                              // const Color(0xFF16213E).withOpacity(0.6),
-                              Color(0xFFD4D4F0),
-                              Color(0xFFC8D4F5),
-                            ],
-                          ),
+                          gradient: context.surfaceGradient(),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.1),
+                            color: context.appBorder,
                             width: 1,
                           ),
                         ),
@@ -263,11 +268,11 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
                                   size: 24,
                                 ),
                                 const SizedBox(width: 12),
-                                const Text(
+                                Text(
                                   'ملخص الطلب',
                                   style: TextStyle(
                                     // color: Colors.white,
-                                    color: Color(0xFF1A1A2E),
+                                    color: context.appTextPrimary,
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -383,12 +388,17 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
                             child: OutlinedButton.icon(
                               onPressed: () {
                                 _clearCartAndUpdateOID();
-                                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => TikTokFeedScreen()));
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => TikTokFeedScreen(),
+                                  ),
+                                );
                               },
                               // 31665646
                               style: OutlinedButton.styleFrom(
                                 // foregroundColor: Colors.white,
-                                foregroundColor: const Color(0xFF1A1A2E),
+                                foregroundColor: context.appTextPrimary,
                                 side: BorderSide(
                                   color: const Color(
                                     0xFF1A1A2E,
@@ -419,17 +429,16 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
                             width: double.infinity,
                             child: OutlinedButton.icon(
                               onPressed: () {
-                                // _clearCartAndUpdateOID();
-                                // Navigator.popUntil(context, (route) => route.isFirst);
-                                String orderId = "";
-                                for (var carto in widget.cartItems) {
-                                  orderId = carto.orderId;
-                                }
-                                _openInvoice(orderId);
+                                final oid =
+                                    _createdOrderOid ??
+                                    (widget.cartItems.isNotEmpty
+                                        ? widget.cartItems.first.orderId
+                                        : '');
+                                _openInvoice(oid);
                               },
                               style: OutlinedButton.styleFrom(
                                 // foregroundColor: Colors.white,
-                                foregroundColor: const Color(0xFF1A1A2E),
+                                foregroundColor: context.appTextPrimary,
                                 side: BorderSide(
                                   color: const Color(
                                     0xFF1A1A2E,
@@ -474,7 +483,7 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
           label,
           style: TextStyle(
             // color: Colors.white.withOpacity(0.7),
-            color: const Color(0xFF1A1A2E).withOpacity(0.7),
+            color: context.appTextSecondary,
             fontSize: 14,
           ),
         ),
@@ -482,9 +491,9 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               // color: Colors.white,
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),

@@ -1,0 +1,103 @@
+{
+  "splash": {
+    "tagline_ar": "Discover • Shop • Interact",
+    "tagline_en": "Swipe it, love it, and MartIt"
+  },
+  "onboarding": {
+    "language_title_ar": "Choose your language",
+    "language_title_en": "Choose your language",
+    "language_subtitle": "You can change the language later from settings",
+    "language_arabic": "العربية",
+    "language_arabic_sub": "Arabic",
+    "language_english": "English",
+    "language_english_sub": "English",
+    "next": "Next / التالي",
+    "country_title": "Choose your country",
+    "country_title_en": "Choose your country",
+    "country_subtitle": "Products available in your country will be shown",
+    "start_shopping": "Start Shopping / ابدأ التسوق"
+  },
+  "auth": {
+    "phone_login_title": "Login with Phone Number",
+    "phone_login_subtitle": "We will send you a verification code via SMS",
+    "send_otp": "Send Verification Code",
+    "choose_country_code": "Choose Country Code",
+    "enter_phone": "Enter your phone number",
+    "login_google": "Sign in with Google",
+    "login_apple": "Sign in with Apple",
+    "login_email": "Sign in with Email",
+    "login_phone": "Sign in with Phone",
+    "login_facebook": "Sign in with Facebook",
+    "coming_soon": "Coming Soon",
+    "terms": "By continuing, you agree to our Terms of Use and Privacy Policy",
+    "welcome": "Welcome to the Smart Shopping World",
+    "otp_title": "Enter Verification Code",
+    "otp_subtitle": "Code sent to",
+    "verify": "Verify",
+    "resend": "Resend",
+    "resend_after": "Resend after",
+    "seconds": "seconds",
+    "wrong_otp": "Wrong verification code ❌",
+    "enter_full_otp": "Enter the complete code"
+  },
+  "feed": {
+    "all": "All",
+    "out_of_stock": "Out of Stock",
+    "notify_me": "Notify",
+    "notify_subscribed": "Registered ✓",
+    "notify_when_available": "Notify when available",
+    "follow": "Follow",
+    "following": "Following",
+    "add_to_cart": "Add to Cart",
+    "view_cart": "View Cart",
+    "added_to_cart": "Added to Cart ✓",
+    "no_products": "No products found",
+    "retry": "Retry",
+    "price": "QAR",
+    "pieces": "Pcs",
+    "piece": "Pc"
+  },
+  "profile": {
+    "products": "Products",
+    "trending": "Trending",
+    "newest": "Newest",
+    "oldest": "Oldest",
+    "no_products": "No products yet",
+    "add_products_hint": "Start adding your products now",
+    "load_error": "Failed to load products",
+    "profile_error": "Error loading profile",
+    "retry": "Retry"
+  },
+  "product": {
+    "available": "Available",
+    "out_of_stock": "Out of Stock",
+    "description": "Description",
+    "seller": "Seller",
+    "add_to_cart": "Add to Cart",
+    "in_cart": "in Cart",
+    "notify_me": "Notify when available",
+    "notify_registered": "Registered for notification ✓",
+    "notify_success": "You will be notified when product is available ✓"
+  },
+  "cart": {
+    "title": "Shopping Cart",
+    "empty": "Cart is empty",
+    "checkout": "Checkout",
+    "total": "Total"
+  },
+  "common": {
+    "error": "An error occurred",
+    "connection_error": "Connection error",
+    "loading": "Loading",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "close": "Close",
+    "back": "Back",
+    "yes": "Yes",
+    "no": "No",
+    "login_required": "Please login first",
+    "exit_app": "Confirm Exit",
+    "exit_app_msg": "Do you want to exit the app?"
+  }
+}

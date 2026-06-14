@@ -4,11 +4,15 @@ import 'package:MartIt/features/update/update_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shorebird_code_push/shorebird_code_push.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/constants/app_strings.dart';
+import '../../core/services/localization_service.dart';
 import '../home/tiktok_feed_screen.dart';
+import '../onboarding/onboarding_screen.dart';
+import '../../core/utils/theme_extensions.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -146,7 +150,18 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   void _navigateToHome() {
-    Future.delayed(AppConstants.splashDuration, () {
+    Future.delayed(AppConstants.splashDuration, () async {
+      if (!mounted) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final onboardingDone = prefs.getBool('onboarding_done') ?? false;
+      if (!onboardingDone) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+        );
+        return;
+      }
+
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => const TikTokFeedScreen()),
       );
@@ -163,7 +178,9 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return Directionality(
+      textDirection: LocalizationService.instance.textDirection,
+      child: Scaffold(
       backgroundColor: AppColors.primary,
       body: Container(
         color: AppColors.primary,
@@ -231,7 +248,7 @@ class _SplashScreenState extends State<SplashScreen>
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'اكتشف • تسوق • تفاعل',
+                                tr('splash.tagline_ar'),
                                 style: Theme.of(context).textTheme.titleMedium
                                     ?.copyWith(
                                       color: AppColors.white.withValues(
@@ -251,7 +268,7 @@ class _SplashScreenState extends State<SplashScreen>
                       FadeTransition(
                         opacity: _sloganAnimation,
                         child: Text(
-                          'Swipe it, love it, and MartIt',
+                          tr('splash.tagline_en'),
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
                                 color: AppColors.white.withValues(alpha: 0.70),
@@ -337,6 +354,7 @@ class _SplashScreenState extends State<SplashScreen>
           ),
         ),
       ),
+    ),
     );
   }
 }

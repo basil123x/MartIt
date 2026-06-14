@@ -4,7 +4,9 @@ import 'package:iconsax/iconsax.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/models/chat_model.dart';
+import '../../core/widgets/smart_avatar_widget.dart';
 import 'chat_screen.dart';
+import '../../core/utils/theme_extensions.dart';
 
 class ConversationsScreen extends StatefulWidget {
   final String userId;
@@ -108,20 +110,20 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         // backgroundColor: const Color(0xFF0A0E27),
-        backgroundColor: const Color(0xFFF5F7FB),
+        backgroundColor: context.appBackground,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
             onPressed: () => Navigator.pop(context),
             // icon: const Icon(Iconsax.arrow_right_3, color: Colors.white),
-            icon: const Icon(Iconsax.arrow_right, color: Color(0xFF1A1A2E)),
+            icon: Icon(Iconsax.arrow_right, color: context.appTextPrimary),
           ),
-          title: const Text(
+          title: Text(
             'المحادثات',
             style: TextStyle(
               // color: Colors.white,
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
@@ -131,7 +133,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
             IconButton(
               onPressed: _loadConversations,
               // icon: const Icon(Iconsax.refresh, color: Colors.white),
-              icon: const Icon(Iconsax.refresh, color: Color(0xFF1A1A2E)),
+              icon: Icon(Iconsax.refresh, color: context.appTextPrimary),
             ),
           ],
         ),
@@ -165,11 +167,11 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         children: [
           const Icon(Iconsax.warning_2, size: 80, color: Colors.red),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'حدث خطأ في تحميل المحادثات',
             style: TextStyle(
               // color: Colors.white,
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 18,
               fontWeight: FontWeight.w500,
             ),
@@ -207,11 +209,11 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'لا توجد محادثات',
             style: TextStyle(
               // color: Colors.white,
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 24,
               fontWeight: FontWeight.bold,
             ),
@@ -221,7 +223,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
             'ابدأ محادثة جديدة مع البائعين',
             style: TextStyle(
               // color: Colors.white.withOpacity(0.7),
-              color: const Color(0xFF1A1A2E).withOpacity(0.7),
+              color: context.appTextSecondary,
               fontSize: 16,
             ),
           ),
@@ -250,41 +252,25 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            // const Color(0xFF1A1A2E).withOpacity(0.8),
-            // const Color(0xFF16213E).withOpacity(0.6),
-            Color(0xFFD4D4F0),
-            Color(0xFFC8D4F5),
-          ],
-        ),
+        gradient: context.surfaceGradient(),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+        border: Border.all(color: context.appBorder, width: 1),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.all(16),
         leading: Stack(
           children: [
-            CircleAvatar(
-              radius: 28,
+            SmartAvatarWidget(
+              userId: conversation.participantId,
+              name: conversation.participantName,
+              size: 56,
+              fallbackUrl: conversation.participantAvatar,
               backgroundColor: AppColors.primary,
-              backgroundImage: conversation.participantAvatar.isNotEmpty
-                  ? NetworkImage(conversation.participantAvatar)
-                  : null,
-              child: conversation.participantAvatar.isEmpty
-                  ? Text(
-                      conversation.participantName.isNotEmpty
-                          ? conversation.participantName[0]
-                          : 'U',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    )
-                  : null,
+              initialsStyle: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             // Online indicator
             if (_onlineStatuses[conversation.participantId] == true)
@@ -308,9 +294,9 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
             Expanded(
               child: Text(
                 conversation.participantName,
-                style: const TextStyle(
+                style: TextStyle(
                   // color: Colors.white,
-                  color: Color(0xFF1A1A2E),
+                  color: context.appTextPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
@@ -373,7 +359,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                       conversation.lastMessage?.message ?? 'ابدأ محادثة جديدة',
                       style: TextStyle(
                         // color: Colors.white.withOpacity(0.7),
-                        color: const Color(0xFF1A1A2E).withOpacity(0.7),
+                        color: context.appTextSecondary,
                         fontSize: 14,
                       ),
                       maxLines: 1,
@@ -386,7 +372,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                       _formatTime(conversation.lastMessage!.timestamp),
                       style: TextStyle(
                         // color: Colors.white.withOpacity(0.5),
-                        color: const Color(0xFF1A1A2E).withOpacity(0.5),
+                        color: context.appTextSecondary.withOpacity(0.8),
                         fontSize: 12,
                       ),
                     ),

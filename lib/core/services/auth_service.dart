@@ -1,8 +1,8 @@
-import 'dart:io';
 import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 's3_upload_service.dart';
 
 class AuthService {
   static const _storage = FlutterSecureStorage();
@@ -75,8 +75,24 @@ class AuthService {
     final uid = 1000 + Random().nextInt(9000);
     final oid = 1000 + Random().nextInt(9000);
     String? userId = OneSignal.User.pushSubscription.id;
+
+    await _storage.write(key: _uidKey, value: uid.toString());
+    await _storage.write(key: "user_oid", value: oid.toString());
+
+    String? avatarUrl;
+    if (profileImage != null) {
+      final storedUid = await _storage.read(key: _uidKey);
+      avatarUrl = await S3UploadService.uploadProfileImage(
+        userId: storedUid ?? uid.toString(),
+        filePath: profileImage,
+      );
+      if (avatarUrl != null) {
+        await _storage.write(key: _profileImageKey, value: avatarUrl);
+      }
+    }
+
     await Dio().post(
-      '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+      "$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}",
       data: FormData.fromMap({
         "action": "create_account",
         "uid": uid,
@@ -85,31 +101,27 @@ class AuthService {
         "phone": phone,
         "player_id": userId,
         "login_type": "Phone",
+        "avatar_url": avatarUrl ?? "",
+        "store_id": "1",
       }),
     );
 
-    await _storage.write(key: _uidKey, value: uid.toString());
-    await _storage.write(key: "user_oid", value: oid.toString());
     await _storage.write(key: _phoneKey, value: phone);
     await _storage.write(key: _nameKey, value: name);
+    await _storage.write(key: "login_type", value: "Phone");
+  }
 
-    if (profileImage != null) {
-      await _storage.write(key: _profileImageKey, value: profileImage);
-    }
-
-    File file = File(profileImage ?? "");
-
-    List<int> fileBytes = await file.readAsBytes();
-
-    await Dio().put(
-      "https://storage.bunnycdn.com/globee-trading/users/$uid/avatar.jpg",
-      data: Stream.fromIterable([fileBytes]),
-      options: Options(
-        headers: {
-          "AccessKey": "18808acb-f5f1-473e-bd84cf669411-20c0-499c",
-          "Content-Type": "application/octet-stream",
-        },
-      ),
+  static Future<void> updateUserAvatarUrl({
+    required String uid,
+    required String avatarUrl,
+  }) async {
+    await Dio().post(
+      "$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}",
+      data: FormData.fromMap({
+        "action": "update_user_avatar",
+        "uid": uid,
+        "avatar_url": avatarUrl,
+      }),
     );
   }
 
@@ -160,6 +172,7 @@ class AuthService {
             value: response.data['data']['avatar'],
           );
         }
+        await _storage.write(key: "login_type", value: "Phone");
         return response.data['success'];
       } else {
         return response.data['success'];
@@ -169,12 +182,43 @@ class AuthService {
     }
   }
 
-  // Logout
+  // Logout — clear all session keys so the next login starts fresh
   static Future<void> logout() async {
-    await _storage.delete(key: _uidKey);
-    await _storage.delete(key: _phoneKey);
-    await _storage.delete(key: _nameKey);
-    await _storage.delete(key: _profileImageKey);
+    const keys = [
+      _uidKey,
+      'user_oid',
+      'user_email',
+      'social_email',
+      'social_name',
+      'social_avatar',
+      _nameKey,
+      _phoneKey,
+      _profileImageKey,
+      'login_type',
+    ];
+    for (final key in keys) {
+      await _storage.delete(key: key);
+    }
+  }
+
+  /// Overwrite cached session with authoritative API user data.
+  static Future<void> syncSessionFromApi({
+    required String uid,
+    String? oid,
+    String? name,
+    String? phone,
+  }) async {
+    if (uid.isEmpty) return;
+    await _storage.write(key: _uidKey, value: uid);
+    if (oid != null && oid.isNotEmpty) {
+      await _storage.write(key: 'user_oid', value: oid);
+    }
+    if (name != null && name.isNotEmpty) {
+      await updateUserName(name);
+    }
+    if (phone != null && phone.isNotEmpty) {
+      await updateUserPhone(phone);
+    }
   }
 
   // Update profile image
@@ -185,5 +229,15 @@ class AuthService {
   // Update user name
   static Future<void> updateUserName(String name) async {
     await _storage.write(key: _nameKey, value: name);
+  }
+
+  // Update user phone
+  static Future<void> updateUserPhone(String phone) async {
+    await _storage.write(key: _phoneKey, value: phone);
+  }
+
+  // Social login profile photo (Google/Apple)
+  static Future<String?> getSocialAvatar() async {
+    return await _storage.read(key: "social_avatar");
   }
 }

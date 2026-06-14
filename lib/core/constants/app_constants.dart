@@ -24,4 +24,10 @@ class AppConstants {
   // Animation Durations
   static const Duration splashDuration = Duration(seconds: 3);
   static const Duration animationDuration = Duration(milliseconds: 300);
+
+  /// Per-flavor store id (`--dart-define=STORE_ID=2`). Empty = no store filter.
+  static const String storeId = String.fromEnvironment(
+    'STORE_ID',
+    defaultValue: '',
+  );
 }

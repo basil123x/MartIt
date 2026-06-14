@@ -1,0 +1,103 @@
+{
+  "splash": {
+    "tagline_ar": "اكتشف • تسوق • تفاعل",
+    "tagline_en": "Swipe it, love it, and MartIt"
+  },
+  "onboarding": {
+    "language_title_ar": "اختر لغتك",
+    "language_title_en": "Choose your language",
+    "language_subtitle": "يمكنك تغيير اللغة لاحقاً من الإعدادات",
+    "language_arabic": "العربية",
+    "language_arabic_sub": "Arabic",
+    "language_english": "English",
+    "language_english_sub": "English",
+    "next": "التالي / Next",
+    "country_title": "اختر دولتك",
+    "country_title_en": "Choose your country",
+    "country_subtitle": "سيتم عرض المنتجات المتاحة في دولتك",
+    "start_shopping": "ابدأ التسوق / Start Shopping"
+  },
+  "auth": {
+    "phone_login_title": "تسجيل الدخول برقم الهاتف",
+    "phone_login_subtitle": "سنرسل لك رمز التحقق عبر رسالة نصية",
+    "send_otp": "إرسال كود التحقق",
+    "choose_country_code": "اختر كود الدولة",
+    "enter_phone": "أدخل رقم هاتفك",
+    "login_google": "سجل بواسطة جوجل",
+    "login_apple": "سجل بواسطة أبل",
+    "login_email": "التسجيل بالبريد الإلكتروني",
+    "login_phone": "التسجيل برقم الهاتف",
+    "login_facebook": "سجل بواسطة الفيسبوك",
+    "coming_soon": "قريباً",
+    "terms": "بالمتابعة، أنت توافق على شروط الاستخدام وسياسة الخصوصية",
+    "welcome": "مرحباً بك في عالم التسوق الذكي",
+    "otp_title": "أدخل رمز التحقق",
+    "otp_subtitle": "تم إرسال الرمز إلى",
+    "verify": "تحقق",
+    "resend": "إعادة الإرسال",
+    "resend_after": "إعادة الإرسال بعد",
+    "seconds": "ثانية",
+    "wrong_otp": "رمز التحقق غير صحيح ❌",
+    "enter_full_otp": "أدخل الرمز كاملاً"
+  },
+  "feed": {
+    "all": "الكل",
+    "out_of_stock": "نفذ من المخزون",
+    "notify_me": "ذكرني",
+    "notify_subscribed": "تم التسجيل للإشعار ✓",
+    "notify_when_available": "ذكرني عند التوفر",
+    "follow": "متابعة",
+    "following": "يتابع",
+    "add_to_cart": "أضف للسلة",
+    "view_cart": "عرض السلة",
+    "added_to_cart": "تمت الإضافة إلى السلة ✓",
+    "no_products": "لا توجد منتجات",
+    "retry": "إعادة المحاولة",
+    "price": "ريال",
+    "pieces": "Pcs",
+    "piece": "Pc"
+  },
+  "profile": {
+    "products": "منتج",
+    "trending": "الرائجة",
+    "newest": "الأحدث",
+    "oldest": "الأقدم",
+    "no_products": "لا توجد منتجات بعد",
+    "add_products_hint": "ابدأ بإضافة منتجاتك الآن",
+    "load_error": "فشل في تحميل المنتجات",
+    "profile_error": "حدث خطأ في تحميل الملف الشخصي",
+    "retry": "إعادة المحاولة"
+  },
+  "product": {
+    "available": "متوفر",
+    "out_of_stock": "نفذ من المخزون",
+    "description": "الوصف",
+    "seller": "البائع",
+    "add_to_cart": "أضف إلى السلة",
+    "in_cart": "في السلة",
+    "notify_me": "ذكرني عند التوفر",
+    "notify_registered": "تم التسجيل للإشعار ✓",
+    "notify_success": "سيتم إشعارك عند توفر المنتج ✓"
+  },
+  "cart": {
+    "title": "سلة التسوق",
+    "empty": "السلة فارغة",
+    "checkout": "إتمام الشراء",
+    "total": "المجموع"
+  },
+  "common": {
+    "error": "حدث خطأ",
+    "connection_error": "خطأ في الاتصال",
+    "loading": "جاري التحميل",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "confirm": "تأكيد",
+    "close": "إغلاق",
+    "back": "رجوع",
+    "yes": "نعم",
+    "no": "لا",
+    "login_required": "يجب تسجيل الدخول أولاً",
+    "exit_app": "تأكيد الخروج",
+    "exit_app_msg": "هل تريد الخروج من التطبيق؟"
+  }
+}

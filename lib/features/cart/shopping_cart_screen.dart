@@ -3,6 +3,9 @@ import 'package:iconsax/iconsax.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/models/cart_model.dart';
+import '../../core/utils/item_media_url_util.dart';
+import '../../core/utils/snackbar_helper.dart';
+import '../../core/utils/theme_extensions.dart';
 import '../order/order_summary_screen.dart';
 
 class ShoppingCartScreen extends StatefulWidget {
@@ -33,14 +36,17 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
     });
 
     try {
+      print('Loading cart for userId: ${widget.userId}');
       final result = await ApiService.getCartItems(userId: widget.userId);
+      print('Cart result: $result');
 
       if (result['success'] == true) {
         final List<dynamic> data = result['data'] ?? [];
         setState(() {
-          _cartItems = data
-              .map((item) => CartItemModel.fromJson(item))
-              .toList();
+          _cartItems = data.map((item) {
+            print('Parsing cart item: $item');
+            return CartItemModel.fromJson(item as Map<String, dynamic>);
+          }).toList();
           _calculateTotal();
           _isLoading = false;
         });
@@ -93,29 +99,25 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
           });
         }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              newQuantity == 0 ? 'تم حذف العنصر' : 'تم تحديث الكمية',
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 1),
-          ),
-        );
+        if (newQuantity == 0) {
+          showAppSnackbar(
+            context,
+            message: 'تم حذف العنصر',
+            type: SnackType.success,
+          );
+        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'فشل في التحديث'),
-            backgroundColor: Colors.red,
-          ),
+        showAppSnackbar(
+          context,
+          message: result['error'] ?? 'فشل في التحديث',
+          type: SnackType.error,
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('حدث خطأ أثناء التحديث'),
-          backgroundColor: Colors.red,
-        ),
+      showAppSnackbar(
+        context,
+        message: 'حدث خطأ أثناء التحديث',
+        type: SnackType.error,
       );
     }
   }
@@ -125,7 +127,7 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF5F7FB),
+        backgroundColor: context.appBackground,
         // backgroundColor: const Color(0xFF0A0E27),
         appBar: AppBar(
           forceMaterialTransparency: true,
@@ -134,13 +136,12 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
           leading: IconButton(
             onPressed: () => Navigator.pop(context),
             // icon: const Icon(Iconsax.arrow_right_3, color: Colors.white),
-            icon: const Icon(Iconsax.arrow_right, color: Color(0xFF1A1A2E)),
+            icon: Icon(Iconsax.arrow_right, color: context.appTextPrimary),
           ),
-          title: const Text(
+          title: Text(
             'سلة التسوق',
             style: TextStyle(
-              // color: Colors.white,
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
@@ -180,11 +181,10 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
         children: [
           const Icon(Iconsax.warning_2, size: 80, color: Colors.red),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'حدث خطأ في تحميل السلة',
             style: TextStyle(
-              // color: Colors.white,
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 18,
               fontWeight: FontWeight.w500,
             ),
@@ -222,11 +222,11 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'سلة التسوق فارغة',
             style: TextStyle(
               // color: Colors.white,
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 24,
               fontWeight: FontWeight.bold,
             ),
@@ -236,7 +236,7 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
             'ابدأ بإضافة المنتجات إلى سلتك',
             style: TextStyle(
               // color: Colors.white.withOpacity(0.7),
-              color: const Color(0xFF1A1A2E).withOpacity(0.6),
+              color: context.appTextSecondary,
               fontSize: 16,
             ),
           ),
@@ -265,18 +265,9 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            // const Color(0xFF1A1A2E).withOpacity(0.8),
-            // const Color(0xFF16213E).withOpacity(0.6),
-            const Color(0xFFD4D4F0),
-            const Color(0xFFC8D4F5),
-          ],
-        ),
+        gradient: context.surfaceGradient(),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+        border: Border.all(color: context.appBorder, width: 1),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -295,9 +286,12 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(13),
-                child: cartItem.item.idx.isNotEmpty
-                    ? Image.network(
-                        "https://martit.s3.ap-south-1.amazonaws.com/store_${cartItem.item.store_id}/${cartItem.item.idx != '' ? cartItem.item.idx : cartItem.item.id}/1.png",
+                child: Image.network(
+                        ItemMediaUrlUtil.thumbnail(
+                          storeId: cartItem.item.store_id,
+                          itemId: cartItem.item.id,
+                          itemIdx: cartItem.item.idx,
+                        ),
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           return Container(
@@ -309,14 +303,6 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                             ),
                           );
                         },
-                      )
-                    : Container(
-                        color: Colors.grey[800],
-                        child: const Icon(
-                          Iconsax.image,
-                          color: Colors.grey,
-                          size: 30,
-                        ),
                       ),
               ),
             ),
@@ -330,9 +316,9 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                 children: [
                   Text(
                     cartItem.item.name,
-                    style: const TextStyle(
+                    style: TextStyle(
                       // color: Colors.white,
-                      color: Color(0xFF1A1A2E),
+                      color: context.appTextPrimary,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -344,7 +330,7 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                     'البائع: ${cartItem.seller.name}',
                     style: TextStyle(
                       // color: Colors.white.withOpacity(0.7),
-                      color: const Color(0xFF1A1A2E).withOpacity(0.6),
+                      color: context.appTextSecondary,
                       fontSize: 14,
                     ),
                   ),
@@ -424,8 +410,7 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    // color: Colors.white.withOpacity(0.1),
-                    color: Colors.white,
+                    color: context.appSurface,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       // color: Colors.white.withOpacity(0.2),
@@ -435,9 +420,9 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                   ),
                   child: Text(
                     cartItem.cartQuantity.toString(),
-                    style: const TextStyle(
+                    style: TextStyle(
                       // color: Colors.white,
-                      color: Color(0xFF1A1A2E),
+                      color: context.appTextPrimary,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -478,19 +463,9 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            // const Color(0xFF1A1A2E).withOpacity(0.9),
-            // const Color(0xFF0F3460),
-            Color(0xFFD4D4F0),
-            Color(0xFFC8D4F5),
-            Color(0xFFB4D4F0),
-          ],
-        ),
+        gradient: context.bottomBarGradient(),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+        border: Border.all(color: context.appBorder, width: 1),
       ),
       child: SafeArea(
         child: Column(
@@ -499,11 +474,11 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'المجموع الكلي:',
                   style: TextStyle(
                     // color: Colors.white,
-                    color: Color(0xFF1A1A2E),
+                    color: context.appTextPrimary,
                     fontSize: 17,
                     fontWeight: FontWeight.w600,
                   ),

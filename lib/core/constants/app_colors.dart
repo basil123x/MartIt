@@ -51,4 +51,23 @@ class AppColors {
   static const Color priceColor    = Color(0xFF4CAF50);
   static const Color discountColor = Color(0xFFD4863C);
   static const Color cartColor     = Color(0xFFE8A05A);
+
+  // ── Dark Mode
+  static const Color darkBackground = Color(0xFF1A1A2E);
+  static const Color darkSurface = Color(0xFF16213E);
+  static const Color darkElevated = Color(0xFF0F3460);
+  static const Color darkText = Color(0xFFFFFFFF);
+  static const Color darkTextSecondary = Color(0xFFA0A0B0);
+  static const Color darkBorder = Color(0x1AFFFFFF);
+
+  /// Theme-aware text colors — prefer these over hardcoded [textPrimary].
+  static Color textColor(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? Colors.white
+          : textPrimary;
+
+  static Color textSecondaryColor(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? Colors.white70
+          : textSecondary;
 }

@@ -12,3 +12,4 @@ echo json_encode(array(
     "success" => true,
     "base_url" => "https://martit.s3.ap-south-1.amazonaws.com",
 ));
+?>

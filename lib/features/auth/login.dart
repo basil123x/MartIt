@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'package:MartIt/core/services/apple_auth_service.dart';
+import 'package:MartIt/core/services/avatar_service.dart';
 import 'package:MartIt/core/services/google_auth_service.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:MartIt/features/splash/splash_screen.dart';
@@ -13,8 +14,11 @@ import 'package:iconsax/iconsax.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
+import '../../core/services/localization_service.dart';
+import '../../core/utils/snackbar_helper.dart';
 import 'phone_login_screen.dart';
 import 'email_login_screen.dart';
+import '../../core/utils/theme_extensions.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -33,15 +37,31 @@ class _LoginScreenState extends State<LoginScreen> {
       if (user != null) {
         int uid = 1000 + Random().nextInt(9000);
         int oid = 1000 + Random().nextInt(9000);
-        
-        await FlutterSecureStorage().write(key: "user_uid", value: uid.toString());
-        await FlutterSecureStorage().write(key: "user_oid", value: oid.toString());
-        await FlutterSecureStorage().write(key: 'social_name', value: user.displayName);
-        await FlutterSecureStorage().write(key: 'social_email', value: user.email);
-        await FlutterSecureStorage().write(key: 'social_avatar', value: user.photoURL);
-        
+
+        await FlutterSecureStorage().write(
+          key: "user_uid",
+          value: uid.toString(),
+        );
+        await FlutterSecureStorage().write(
+          key: "user_oid",
+          value: oid.toString(),
+        );
+        await FlutterSecureStorage().write(
+          key: 'social_name',
+          value: user.displayName,
+        );
+        await FlutterSecureStorage().write(
+          key: 'social_email',
+          value: user.email,
+        );
+        await FlutterSecureStorage().write(
+          key: 'social_avatar',
+          value: user.photoURL,
+        );
+        await FlutterSecureStorage().write(key: "login_type", value: "Google");
+
         String? playerId = OneSignal.User.pushSubscription.id;
-        
+
         var result = await Dio().post(
           "https://www.globee-trading.com/app2026/sql.php?k=${DateTime.now().millisecond}",
           data: FormData.fromMap({
@@ -56,37 +76,75 @@ class _LoginScreenState extends State<LoginScreen> {
             "login_type": "Google",
           }),
         );
-        
+
         // ← أضف الـ print دي
         print('🔥 API Response: ${result.data}');
-        
+
         if (result.data['success'] == true) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => SplashScreen()),
+          final userId = await FlutterSecureStorage().read(key: "user_uid");
+          await AvatarService.uploadSocialPhotoIfNeeded(
+            userId: userId ?? "",
+            photoUrl: user.photoURL,
           );
-        } else {
-          
-          if (result.data['success'] == false) {
-            await FlutterSecureStorage().write(key: "user_uid", value: result.data['uid']['uid'].toString());
-            await FlutterSecureStorage().write(key: "user_oid", value: result.data['uid']['oid'].toString());
-            await FlutterSecureStorage().write(key: 'social_name', value: user.displayName);
-            await FlutterSecureStorage().write(key: 'social_email', value: user.email);
-            await FlutterSecureStorage().write(key: 'social_avatar', value: user.photoURL);
+
+          if (mounted) {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(builder: (context) => SplashScreen()),
             );
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('API Error: ${result.data}')),
+          }
+        } else {
+          if (result.data['success'] == false) {
+            final existingUid = result.data['uid']['uid'].toString();
+            await FlutterSecureStorage().write(
+              key: "user_uid",
+              value: existingUid,
             );
+            await FlutterSecureStorage().write(
+              key: "user_oid",
+              value: result.data['uid']['oid'].toString(),
+            );
+            await FlutterSecureStorage().write(
+              key: 'social_name',
+              value: user.displayName,
+            );
+            await FlutterSecureStorage().write(
+              key: 'social_email',
+              value: user.email,
+            );
+            await FlutterSecureStorage().write(
+              key: 'social_avatar',
+              value: user.photoURL,
+            );
+            await FlutterSecureStorage().write(
+              key: "login_type",
+              value: "Google",
+            );
+
+            final userId = await FlutterSecureStorage().read(key: "user_uid");
+            await AvatarService.uploadSocialPhotoIfNeeded(
+              userId: userId ?? "",
+              photoUrl: user.photoURL,
+            );
+
+            if (mounted) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (context) => SplashScreen()),
+              );
+            }
+          } else {
+            if (mounted) {
+              showAppSnackbar(
+                context,
+                message: 'API Error: ${result.data}',
+                type: SnackType.error,
+              );
+            }
           }
         }
       }
     } catch (e) {
       print('❌ Error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+      showAppSnackbar(context, message: "Error: $e", type: SnackType.error);
     }
   }
 
@@ -105,6 +163,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
       await AppleAuthService.saveSession(result);
 
+      // Apple Sign In does not provide a profile photo URL — skip upload.
+      final userId = await FlutterSecureStorage().read(key: "user_uid");
+      await AvatarService.uploadSocialPhotoIfNeeded(
+        userId: userId ?? "",
+        photoUrl: null,
+      );
+
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const SplashScreen()),
@@ -112,15 +177,11 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } on SignInWithAppleAuthorizationException catch (e) {
       if (e.code != AuthorizationErrorCode.canceled && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e")),
-        );
+        showAppSnackbar(context, message: "Error: $e", type: SnackType.error);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e")),
-        );
+        showAppSnackbar(context, message: "Error: $e", type: SnackType.error);
       }
     } finally {
       if (mounted) {
@@ -133,8 +194,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
+    final lang = LocalizationService.instance.currentLanguage;
+    return Directionality(
+      textDirection: LocalizationService.instance.textDirection,
+      child: Scaffold(
+      backgroundColor: context.appSurface,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios, color: Theme.of(context).colorScheme.onSurface),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
@@ -170,25 +242,23 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 12),
 
                 Text(
-                  'مرحباً بك في عالم التسوق الذكي',
+                  lang == 'ar'
+                      ? 'مرحباً بك في عالم التسوق الذكي'
+                      : 'Welcome to the Smart Shopping World',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: AppColors.textSecondaryColor(context),
                     fontSize: 16,
                   ),
                 ),
 
                 const SizedBox(height: 30),
 
-                
-
-                const SizedBox(height: 16),
-
                 _buildLoginOptionButton(
                   context: context,
                   imageTxt: "assets/images/social/google.png",
                   isimg: true,
-                  title: 'سجل بواسطة جوجل',
+                  title: lang == 'ar' ? 'سجل بواسطة جوجل' : 'Sign in with Google',
                   gradient: LinearGradient(
                     colors: [
                       AppColors.primary,
@@ -200,76 +270,39 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 16),
 
-                // Email Login Button
-                _buildLoginOptionButton(
-                  context: context,
-                  icon: Iconsax.sms,
-                  isimg: false,
-                  title: 'التسجيل بالبريد الإلكتروني',
-                  gradient: LinearGradient(
-                    colors: [const Color(0xFF6366F1), const Color(0xFF8B5CF6)],
-                  ),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const EmailLoginScreen(),
-                      ),
-                    );
-                  },
-                ),
-
-                const SizedBox(height: 16),
-
                 Visibility(
                   visible: Platform.isIOS,
-                  child: _buildLoginOptionButton(
-                    context: context,
-                    imageTxt: "assets/images/social/apple.png",
-                    isimg: true,
-                    title: _isAppleLoading
-                        ? "جاري تسجيل الدخول..."
-                        : "سجل بواسطة أبل",
-                    gradient: LinearGradient(
-                      colors: [
-                        AppColors.primary,
-                        AppColors.primary.withValues(alpha: 0.8),
-                      ],
-                    ),
-                    onTap: _isAppleLoading ? null : _appleSignIn,
+                  child: Column(
+                    children: [
+                      _buildLoginOptionButton(
+                        context: context,
+                        imageTxt: "assets/images/social/apple.png",
+                        isimg: true,
+                        title: _isAppleLoading
+                            ? (lang == 'ar' ? 'جاري التحميل' : 'Loading')
+                            : (lang == 'ar'
+                                ? 'سجل بواسطة أبل'
+                                : 'Sign in with Apple'),
+                        gradient: LinearGradient(
+                          colors: [
+                            AppColors.primary,
+                            AppColors.primary.withValues(alpha: 0.8),
+                          ],
+                        ),
+                        onTap: _isAppleLoading ? null : _appleSignIn,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                   ),
                 ),
 
-                const SizedBox(height: 30),
-
-                // Divider
-                Row(
-                  children: [
-                    Expanded(
-                      child: Container(height: 1, color: AppColors.lightGrey),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        'أو تسجيل الدخول باستخدام',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: Container(height: 1, color: AppColors.lightGrey),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 30),
-
-                // Phone Login Button
                 _buildLoginOptionButton(
                   context: context,
                   icon: Iconsax.mobile,
                   isimg: false,
-                  title: 'التسجيل برقم الهاتف',
+                  title: lang == 'ar'
+                      ? 'التسجيل برقم الهاتف'
+                      : 'Sign in with Phone',
                   gradient: LinearGradient(
                     colors: [
                       AppColors.primary,
@@ -288,14 +321,39 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 16),
 
+                // Email Login Button
+                _buildLoginOptionButton(
+                  context: context,
+                  icon: Iconsax.sms,
+                  isimg: false,
+                  title: lang == 'ar'
+                      ? 'التسجيل بالبريد الإلكتروني'
+                      : 'Sign in with Email',
+                  gradient: LinearGradient(
+                    colors: [const Color(0xFF6366F1), const Color(0xFF8B5CF6)],
+                  ),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const EmailLoginScreen(),
+                      ),
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
                 Opacity(
                   opacity: 0.4,
                   child: _buildLoginOptionButton(
                     context: context,
                     imageTxt: "assets/images/social/face.png",
                     isimg: true,
-                    title: 'سجل بواسطة الفيسبوك',
-                    subtitle: 'قريباً',
+                    title: lang == 'ar'
+                        ? 'سجل بواسطة الفيسبوك'
+                        : 'Sign in with Facebook',
+                    subtitle: lang == 'ar' ? 'قريباً' : 'Coming Soon',
                     gradient: LinearGradient(
                       colors: [
                         AppColors.primary,
@@ -309,7 +367,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 // Footer
                 Text(
-                  'بالمتابعة، أنت توافق على شروط الاستخدام وسياسة الخصوصية',
+                  lang == 'ar'
+                      ? 'بالمتابعة، أنت توافق على شروط الاستخدام وسياسة الخصوصية'
+                      : 'By continuing, you agree to our Terms and Privacy Policy',
                   textAlign: TextAlign.center,
                   style: Theme.of(
                     context,
@@ -320,6 +380,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
+    ),
     );
   }
 
@@ -337,7 +398,7 @@ class _LoginScreenState extends State<LoginScreen> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
       child: Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: LocalizationService.instance.textDirection,
         child: Container(
           width: double.infinity,
           padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -416,7 +477,7 @@ class _LoginScreenState extends State<LoginScreen> {
         width: 70,
         height: 70,
         decoration: BoxDecoration(
-          color: Colors.white,
+        color: context.appSurface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.lightGrey, width: 1.5),
           boxShadow: [

@@ -4,8 +4,10 @@ import "package:flutter/material.dart";
 import "package:flutter_spinkit/flutter_spinkit.dart";
 import "package:iconsax/iconsax.dart";
 
+import "../utils/item_media_url_util.dart";
 import "../constants/app_colors.dart";
 import "video_player_widget.dart";
+import '../../core/utils/theme_extensions.dart';
 
 class MediaViewerWidget extends StatefulWidget {
   static const String s3BaseUrl = "https://martit.s3.ap-south-1.amazonaws.com";
@@ -17,6 +19,7 @@ class MediaViewerWidget extends StatefulWidget {
   final bool autoPlayVideo;
   final bool showControls;
   final bool showIndicators;
+  final VoidCallback? onMediaUnavailable;
 
   const MediaViewerWidget({
     super.key,
@@ -27,6 +30,7 @@ class MediaViewerWidget extends StatefulWidget {
     this.autoPlayVideo = true,
     this.showControls = false,
     this.showIndicators = true,
+    this.onMediaUnavailable,
   });
 
   @override
@@ -40,6 +44,7 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
   final Dio _dio = Dio();
   int _currentIndex = 0;
   late Future<List<String>> _mediaFuture;
+  bool _unavailableReported = false;
 
   @override
   void initState() {
@@ -53,9 +58,20 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
     if (oldWidget.itmId != widget.itmId ||
         oldWidget.itmIdx != widget.itmIdx ||
         oldWidget.storeid != widget.storeid) {
+      _unavailableReported = false;
       _mediaFuture = _resolveMediaUrlsDeferred();
     }
   }
+
+  void _reportMediaUnavailable() {
+    if (_unavailableReported || widget.onMediaUnavailable == null) return;
+    _unavailableReported = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onMediaUnavailable?.call();
+    });
+  }
+
+  bool get _hideUnavailablePlaceholder => widget.onMediaUnavailable != null;
 
   Future<List<String>> _resolveMediaUrlsDeferred() async {
     await Future<void>.delayed(Duration.zero);
@@ -66,7 +82,11 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
   }
 
   String _mediaUrl(int index, String ext) {
-    return "${MediaViewerWidget.s3BaseUrl}/store_${widget.storeid}/${widget.itmIdx != "" ? widget.itmIdx : widget.itmId}/$index.$ext";
+    final pathKey = ItemMediaUrlUtil.resolveItemPathKey(
+      itemIdx: widget.itmIdx,
+      itemId: widget.itmId,
+    );
+    return "${MediaViewerWidget.s3BaseUrl}/store_${ItemMediaUrlUtil.normalizeStoreId(widget.storeid)}/$pathKey/$index.$ext";
   }
 
   Future<bool> _urlExists(String url) async {
@@ -141,6 +161,10 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
         final resolvedUrls = snapshot.data ?? [];
 
         if (resolvedUrls.isEmpty) {
+          _reportMediaUnavailable();
+          if (_hideUnavailablePlaceholder) {
+            return const SizedBox.shrink();
+          }
           return Container(
             color: Colors.black,
             child: const Center(
@@ -205,22 +229,28 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
           color: Colors.black,
           child: const Center(child: SpinKitPulse(color: AppColors.white)),
         ),
-        errorWidget: (context, url, error) => Container(
-          color: Colors.grey[300],
-          child: const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Iconsax.image, size: 64, color: Colors.grey),
-                SizedBox(height: 8),
-                Text(
-                  "فشل في تحميل الصورة",
-                  style: TextStyle(color: Colors.grey, fontSize: 14),
-                ),
-              ],
+        errorWidget: (context, url, error) {
+          _reportMediaUnavailable();
+          if (_hideUnavailablePlaceholder) {
+            return const SizedBox.shrink();
+          }
+          return Container(
+            color: Colors.grey[300],
+            child: const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Iconsax.image, size: 64, color: Colors.grey),
+                  SizedBox(height: 8),
+                  Text(
+                    "فشل في تحميل الصورة",
+                    style: TextStyle(color: Colors.grey, fontSize: 14),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       );
     }
   }

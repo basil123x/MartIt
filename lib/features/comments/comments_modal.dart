@@ -7,6 +7,9 @@ import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/models/item_model.dart';
+import '../../core/widgets/smart_avatar_widget.dart';
+import '../../core/utils/snackbar_helper.dart';
+import '../../core/utils/theme_extensions.dart';
 
 class CommentsModal extends StatefulWidget {
   final String itemId;
@@ -85,9 +88,7 @@ class _CommentsModalState extends State<CommentsModal> {
     try {
       final currentUserId = await AuthService.getCurrentUserId();
       if (currentUserId == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('يجب تسجيل الدخول أولاً')));
+        showAppSnackbar(context, message: 'يجب تسجيل الدخول أولاً', type: SnackType.error);
         setState(() {
           _isSending = false;
         });
@@ -120,14 +121,10 @@ class _CommentsModalState extends State<CommentsModal> {
           );
         });
       } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('فشل في إرسال التعليق')));
+        showAppSnackbar(context, message: 'فشل في إرسال التعليق', type: SnackType.error);
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('حدث خطأ في إرسال التعليق')));
+      showAppSnackbar(context, message: 'حدث خطأ في إرسال التعليق', type: SnackType.error);
     }
 
     setState(() {
@@ -145,8 +142,8 @@ class _CommentsModalState extends State<CommentsModal> {
           ? screenHeight *
                 0.9 // عند فتح الكيبورد
           : screenHeight * 0.8, // الحالة العادية
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: context.appSurface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
@@ -179,7 +176,7 @@ class _CommentsModalState extends State<CommentsModal> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+        border: Border(bottom: BorderSide(color: context.appCardBorder)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -241,21 +238,16 @@ class _CommentsModalState extends State<CommentsModal> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // User Avatar
-          CircleAvatar(
-            radius: 20,
-            backgroundImage: comment.userAvatar.isNotEmpty
-                ? NetworkImage(comment.userAvatar)
-                : null,
+          SmartAvatarWidget(
+            userId: comment.userId,
+            name: comment.userName,
+            size: 40,
+            fallbackUrl: comment.userAvatar,
             backgroundColor: AppColors.secondary,
-            child: comment.userAvatar.isEmpty
-                ? Text(
-                    comment.userName.isNotEmpty ? comment.userName[0] : 'U',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  )
-                : null,
+            initialsStyle: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
           ),
 
           const SizedBox(width: 12),
@@ -289,7 +281,7 @@ class _CommentsModalState extends State<CommentsModal> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
+                    color: context.appSurfaceVariant,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -310,7 +302,7 @@ class _CommentsModalState extends State<CommentsModal> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: Colors.grey[200]!)),
+        border: Border(top: BorderSide(color: context.appSurfaceVariant!)),
       ),
       child: SafeArea(
         child: Row(
@@ -342,7 +334,7 @@ class _CommentsModalState extends State<CommentsModal> {
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.grey[100],
+                  color: context.appSurfaceVariant,
                   borderRadius: BorderRadius.circular(25),
                 ),
                 child: TextField(

@@ -4,6 +4,7 @@ import 'package:iconsax/iconsax.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/utils/theme_extensions.dart';
 
 class MyOrdersScreen extends StatefulWidget {
   const MyOrdersScreen({super.key});
@@ -85,19 +86,19 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF5F7FB),
+        backgroundColor: context.appBackground,
         appBar: AppBar(
           forceMaterialTransparency: true,
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
             onPressed: () => Navigator.pop(context),
-            icon: const Icon(Iconsax.arrow_right, color: Color(0xFF1A1A2E)),
+            icon: Icon(Iconsax.arrow_right, color: context.appTextPrimary),
           ),
-          title: const Text(
+          title: Text(
             'طلباتي',
             style: TextStyle(
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
@@ -133,10 +134,10 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         children: [
           const Icon(Iconsax.warning_2, size: 80, color: Colors.red),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'حدث خطأ في تحميل الطلبات',
             style: TextStyle(
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 18,
               fontWeight: FontWeight.w500,
             ),
@@ -174,10 +175,10 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'لا توجد طلبات',
             style: TextStyle(
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 24,
               fontWeight: FontWeight.bold,
             ),
@@ -186,7 +187,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
           Text(
             'لم تقم بأي طلبات حتى الآن',
             style: TextStyle(
-              color: const Color(0xFF1A1A2E).withOpacity(0.6),
+              color: context.appTextSecondary,
               fontSize: 16,
             ),
           ),
@@ -199,13 +200,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFD4D4F0), Color(0xFFC8D4F5)],
-        ),
+        gradient: context.surfaceGradient(),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+        border: Border.all(color: context.appBorder, width: 1),
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -234,18 +231,18 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'رقم الطلب',
                           style: TextStyle(
-                            color: Color(0xFF1A1A2E),
+                            color: context.appTextPrimary,
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                         Text(
                           '#${order['oid']}',
-                          style: const TextStyle(
-                            color: Color(0xFF1A1A2E),
+                          style: TextStyle(
+                            color: context.appTextPrimary,
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
@@ -319,7 +316,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
             Text(
               'اضغط لعرض تفاصيل الأصناف',
               style: TextStyle(
-                color: const Color(0xFF1A1A2E).withOpacity(0.5),
+                color: context.appTextSecondary.withOpacity(0.8),
                 fontSize: 12,
                 fontStyle: FontStyle.italic,
               ),
@@ -362,15 +359,15 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         Text(
           '$label: ',
           style: TextStyle(
-            color: const Color(0xFF1A1A2E).withOpacity(0.7),
+            color: context.appTextSecondary,
             fontSize: 14,
           ),
         ),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(
-              color: Color(0xFF1A1A2E),
+            style: TextStyle(
+              color: context.appTextPrimary,
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),

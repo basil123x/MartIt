@@ -1,12 +1,19 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/localization_service.dart';
 import '../../core/models/item_model.dart';
 import '../../core/widgets/media_viewer_widget.dart';
-import 'edit_profile_screen.dart';
+import '../../core/widgets/smart_avatar_widget.dart';
+import '../../core/utils/theme_extensions.dart';
+import '../settings/settings_screen.dart';
+import '../product/product_detail_screen.dart';
+import 'profile_avatar_preview_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userId;
@@ -28,16 +35,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _hasMore = true;
   int _currentOffset = 0;
   final int _pageSize = 20;
-  String _selectedFilter = 'الرائجة';
-  final List<String> _filters = ['الرائجة', 'الأحدث', 'الأقدم'];
+  String _selectedFilter = '';
   final ScrollController _scrollController = ScrollController();
+  bool _isCollapsed = false;
+  int _avatarCacheTimestamp = DateTime.now().millisecondsSinceEpoch;
+
+  void _bumpAvatarCache() {
+    _avatarCacheTimestamp = DateTime.now().millisecondsSinceEpoch;
+  }
+
+  List<String> get _filters {
+    final lang = LocalizationService.instance.currentLanguage;
+    return lang == 'ar'
+        ? ['الرائجة', 'الأحدث', 'الأقدم']
+        : ['Trending', 'Newest', 'Oldest'];
+  }
 
   @override
   void initState() {
     super.initState();
+    _selectedFilter = _filters.first;
+    _bumpAvatarCache();
     _loadProfile();
-    _loadItems();
+    _loadFreshUserDetails();
     _scrollController.addListener(_onScroll);
+  }
+
+  String get _itemsOwnerUid =>
+      (_profile?.uid.isNotEmpty == true) ? _profile!.uid : widget.userId;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    setState(_bumpAvatarCache);
+    _loadFreshUserDetails();
   }
 
   @override
@@ -48,7 +79,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+    final isCollapsed = _scrollController.hasClients &&
+        _scrollController.offset > (300 - kToolbarHeight);
+    if (isCollapsed != _isCollapsed) {
+      setState(() => _isCollapsed = isCollapsed);
+    }
+
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
       if (!_isLoadingMore && _hasMore) {
         _loadMoreItems();
       }
@@ -58,10 +96,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _getSortParam() {
     switch (_selectedFilter) {
       case 'الأحدث':
+      case 'Newest':
         return 'newest';
       case 'الأقدم':
+      case 'Oldest':
         return 'oldest';
       case 'الرائجة':
+      case 'Trending':
       default:
         return 'views';
     }
@@ -74,26 +115,81 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
 
     try {
-      final response = await ApiService.getUserProfile(
-        int.parse(widget.userId),
-      );
+      print('🔍 Loading profile for userId: ${widget.userId}');
+
+      final response = await ApiService.getUserProfile(widget.userId);
+
+      print('🔍 Profile response: $response');
 
       if (response['success'] == true) {
         setState(() {
           _profile = UserProfileModel.fromJson(response['data']);
           _isLoading = false;
+          _bumpAvatarCache();
         });
+        await _loadFreshUserDetails();
+        _loadItems();
       } else {
+        print('❌ Profile error: ${response['error']}');
         setState(() {
           _hasError = true;
           _isLoading = false;
         });
       }
     } catch (e) {
+      print('❌ Profile exception: $e');
       setState(() {
         _hasError = true;
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _loadFreshUserDetails() async {
+    final currentUid = await AuthService.getCurrentUID();
+    if (currentUid == null || currentUid != widget.userId) return;
+
+    const storage = FlutterSecureStorage();
+    final email =
+        await storage.read(key: "user_email") ??
+        await storage.read(key: "social_email");
+    if (email == null || email.isEmpty) return;
+
+    try {
+      final response = await Dio().post(
+        "${AuthService.baseUrl}/sql.php?k=${DateTime.now().millisecondsSinceEpoch}",
+        data: FormData.fromMap({
+          "action": "get_user_details",
+          "email": email,
+        }),
+      );
+
+      if (response.data["success"] != true || response.data["data"] == null) {
+        return;
+      }
+
+      final data = response.data["data"] as Map<String, dynamic>;
+      final name = data["name"]?.toString() ?? "";
+      if (name.isEmpty) return;
+
+      await AuthService.updateUserName(name);
+
+      if (!mounted) return;
+      setState(() {
+        if (_profile != null) {
+          _profile = UserProfileModel(
+            id: _profile!.id,
+            uid: _profile!.uid,
+            name: name,
+            phone: data["phone"]?.toString() ?? _profile!.phone,
+            avatar: _profile!.avatar,
+            type: _profile!.type,
+            itemsCount: _profile!.itemsCount,
+          );
+        }
+      });
+    } catch (e) {
+      print("Failed to refresh profile name: $e");
     }
   }
 
@@ -107,7 +203,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       final response = await ApiService.getUserProfileItems(
-        int.parse(widget.userId),
+        _itemsOwnerUid,
         limit: _pageSize,
         offset: 0,
         sort: _getSortParam(),
@@ -143,7 +239,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       final response = await ApiService.getUserProfileItems(
-        int.parse(widget.userId),
+        _itemsOwnerUid,
         limit: _pageSize,
         offset: _currentOffset,
         sort: _getSortParam(),
@@ -180,7 +276,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.appBackground,
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(color: AppColors.primary),
@@ -222,7 +318,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildProfileContent() {
     if (_profile == null) return const SizedBox();
 
-    return CustomScrollView(
+    return Directionality(
+      textDirection: LocalizationService.instance.textDirection,
+      child: CustomScrollView(
       controller: _scrollController,
       slivers: [
         // App Bar
@@ -230,7 +328,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
           expandedHeight: 300,
           floating: false,
           pinned: true,
-          backgroundColor: AppColors.primary,
+          centerTitle: true,
+          backgroundColor: context.appSurface,
+          elevation: 1,
+          forceElevated: true,
+          title: AnimatedOpacity(
+            opacity: _isCollapsed ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 200),
+            child: _profile == null
+                ? const SizedBox.shrink()
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ClipOval(
+                        child: SmartAvatarWidget(
+                          userId: _profile!.uid.isNotEmpty
+                              ? _profile!.uid
+                              : widget.userId,
+                          name: _profile!.name,
+                          size: 28,
+                          cacheTimestamp: _avatarCacheTimestamp,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _profile!.name,
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
           leading: FutureBuilder<String?>(
             future: AuthService.getCurrentUserId(),
             builder: (context, snapshot) {
@@ -240,18 +371,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     final result = await Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => EditProfileScreen(
-                          currentName: _profile?.name ?? '',
-                          currentPhone: _profile?.phone ?? '',
-                          currentType: _profile?.type ?? '',
-                          currentAvatar: _profile?.avatar ?? '',
-                          currentUid: _profile?.uid ?? '',
-                        ),
+                        builder: (context) => SettingsScreen(profile: _profile),
                       ),
                     );
                     if (result != null && result is Map<String, dynamic>) {
                       if (result['success'] == true) {
                         setState(() {
+                          _bumpAvatarCache();
                           if (_profile != null) {
                             _profile = UserProfileModel(
                               id: _profile!.id,
@@ -265,12 +391,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           }
                         });
                         _loadProfile();
+                        _loadFreshUserDetails();
                       }
                     } else if (result == true) {
+                      setState(() => _bumpAvatarCache());
                       _loadProfile();
+                      _loadFreshUserDetails();
                     }
                   },
-                  icon: const Icon(Iconsax.edit, color: AppColors.primary),
+                  icon: const Icon(Iconsax.setting_2, color: AppColors.primary),
                 );
               }
               return const SizedBox();
@@ -284,16 +413,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
           flexibleSpace: FlexibleSpaceBar(
             background: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0xFFD4D4F0),
-                    Color(0xFFC8D4F5),
-                    Color(0xFFB4D4F0),
-                  ],
-                ),
+              decoration: BoxDecoration(
+                gradient: context.bottomBarGradient(),
               ),
               child: _buildProfileHeader(),
             ),
@@ -306,73 +427,109 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // Profile Items Grid
         SliverToBoxAdapter(child: _buildItemsSection()),
       ],
+      ),
+    );
+  }
+
+  static const _avatarHeroTag = "profile_avatar";
+
+  Future<void> _openAvatarPreview({
+    required String userId,
+    required bool isOwnProfile,
+  }) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (context) => ProfileAvatarPreviewScreen(
+          userId: userId,
+          name: _profile?.name ?? "",
+          loadSocialFromStorage: isOwnProfile,
+          fallbackUrl: _profile?.avatar.isNotEmpty == true ? _profile!.avatar : null,
+          cacheTimestamp: _avatarCacheTimestamp,
+          heroTag: _avatarHeroTag,
+        ),
+      ),
     );
   }
 
   Widget _buildProfileHeader() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const SizedBox(height: 40),
+    final userId =
+        _profile!.uid.isNotEmpty ? _profile!.uid : widget.userId;
+    print('Avatar userId: ${_profile!.uid}');
 
-          // Profile Avatar
-          Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.primary, width: 4),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
+    return FutureBuilder<String?>(
+      future: AuthService.getCurrentUID(),
+      builder: (context, snapshot) {
+        final isOwnProfile =
+            snapshot.hasData && snapshot.data == widget.userId;
+
+        return Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 40),
+              GestureDetector(
+                onTap: () => _openAvatarPreview(
+                  userId: userId,
+                  isOwnProfile: isOwnProfile,
                 ),
-              ],
-            ),
-            child: CircleAvatar(
-              radius: 56,
-              backgroundImage: NetworkImage(
-                "https://globee.b-cdn.net/users/${_profile?.uid}/1.jpg?k=${DateTime.now().millisecondsSinceEpoch}",
+                child: Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.primary, width: 4),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 10,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: SmartAvatarWidget(
+                    userId: userId,
+                    name: _profile!.name,
+                    size: 112,
+                    cacheTimestamp: _avatarCacheTimestamp,
+                    loadSocialFromStorage: isOwnProfile,
+                    fallbackUrl: _profile!.avatar.isNotEmpty ? _profile!.avatar : null,
+                    heroTag: _avatarHeroTag,
+                  ),
+                ),
               ),
-              backgroundColor: Colors.white,
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // User Name
-          Text(
-            _profile!.name,
-            style: const TextStyle(
-              color: AppColors.primary,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-            textAlign: TextAlign.center,
-          ),
-
-          const SizedBox(height: 8),
-          // Items Count
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              '${_profile!.itemsCount} منتج',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
+              const SizedBox(height: 16),
+              Text(
+                _profile!.name,
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
               ),
-            ),
+              const SizedBox(height: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${_profile!.itemsCount} منتج',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -391,8 +548,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: isSelected
                       ? AppColors.primary
-                      : Colors.grey[200],
-                  foregroundColor: isSelected ? Colors.white : Colors.black,
+                      : (context.isDarkMode
+                          ? AppColors.darkElevated
+                          : context.appSurfaceVariant),
+                  foregroundColor: isSelected
+                      ? Colors.white
+                      : context.appTextPrimary,
                   elevation: isSelected ? 2 : 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
@@ -415,7 +576,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildItemsSection() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
       child: Column(
         children: [
           // Skeleton Loading
@@ -434,13 +595,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
               physics: const NeverScrollableScrollPhysics(),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
                 childAspectRatio: 0.8,
               ),
               itemCount: _items.length,
               itemBuilder: (context, index) {
-                return ProfileItemCard(item: _items[index]);
+                return GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          ProductDetailScreen(item: _items[index]),
+                    ),
+                  ),
+                  child: ProfileItemCard(item: _items[index]),
+                );
               },
             ),
 
@@ -477,30 +647,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildSkeletonCard() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Shimmer.fromColors(
-      baseColor: Colors.grey[300]!,
-      highlightColor: Colors.grey[100]!,
+      baseColor: isDark ? const Color(0xFF1E1E2E) : Colors.grey[300]!,
+      highlightColor: isDark ? const Color(0xFF2A2A3E) : Colors.grey[100]!,
       child: Card(
         elevation: 0,
+        color: isDark ? AppColors.darkSurface : null,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Image placeholder
             Expanded(
               flex: 3,
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
+                  color: isDark ? AppColors.darkElevated : Colors.grey[300],
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(12),
                   ),
                 ),
               ),
             ),
-            // Text placeholders
             Expanded(
               flex: 2,
               child: Padding(
@@ -512,7 +682,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       height: 14,
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        color: Colors.grey[300],
+                        color: isDark ? AppColors.darkElevated : Colors.grey[300],
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
@@ -521,7 +691,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       height: 12,
                       width: 80,
                       decoration: BoxDecoration(
-                        color: Colors.grey[300],
+                        color: isDark ? AppColors.darkElevated : Colors.grey[300],
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
@@ -607,7 +777,9 @@ class ProfileItemCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: Color(0xFFB4D4F0).withAlpha(40),
+      color: context.isDarkMode
+          ? AppColors.darkSurface
+          : const Color(0xFFB4D4F0).withAlpha(40),
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -626,7 +798,7 @@ class ProfileItemCard extends StatelessWidget {
                 mediaUrls: const [],
                 itmId: "${item["id"] ?? ""}",
                 itmIdx: "${item["idx"] ?? ""}",
-                storeid: "${item["storeid"] ?? "1"}",
+                storeid: "${item["storeid"] ?? item["store_id"] ?? "1"}",
                 autoPlayVideo: false,
                 showControls: false,
                 showIndicators: false,

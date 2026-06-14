@@ -10,7 +10,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/utils/snackbar_helper.dart';
 import '../add_product/add_product_screen.dart';
+import '../../core/utils/theme_extensions.dart';
 
 class CameraScreen extends StatefulWidget {
   final bool isVideo;
@@ -51,21 +53,10 @@ class _CameraScreenState extends State<CameraScreen> {
     } else {
       // لو المستخدم رفض الأذونات
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'نحتاج أذونات الكاميرا والميكروفون لتسجيل الفيديو بالصوت',
-              style: GoogleFonts.cairo(),
-            ),
-            backgroundColor: Colors.red,
-            action: SnackBarAction(
-              label: 'الإعدادات',
-              textColor: Colors.white,
-              onPressed: () {
-                openAppSettings(); // يفتح إعدادات التطبيق
-              },
-            ),
-          ),
+        showAppSnackbar(
+          context,
+          message: 'نحتاج أذونات الكاميرا والميكروفون لتسجيل الفيديو بالصوت',
+          type: SnackType.error,
         );
         Navigator.pop(context);
       }
@@ -136,7 +127,7 @@ class _CameraScreenState extends State<CameraScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: context.appBackground,
       body: permissionsGranted
           ? Consumer<AppProvider>(
               builder: (context, appProvider, child) {
@@ -171,20 +162,12 @@ class _CameraScreenState extends State<CameraScreen> {
                       final isVideo = capture.captureRequest.path!.endsWith(
                         '.mp4',
                       );
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            isVideo
-                                ? 'تم تسجيل الفيديو ✅'
-                                : 'تم التقاط الصورة ✅',
-                          ),
-                          backgroundColor: Colors.green,
-                          duration: const Duration(seconds: 1),
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
+                      showAppSnackbar(
+                        context,
+                        message: isVideo
+                            ? 'تم تسجيل الفيديو ✅'
+                            : 'تم التقاط الصورة ✅',
+                        type: SnackType.success,
                       );
                     }
                   },
@@ -256,7 +239,7 @@ class _CameraScreenState extends State<CameraScreen> {
                       width: 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: Colors.white,
+        color: context.appSurface,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -515,8 +498,8 @@ class _CameraScreenState extends State<CameraScreen> {
       isScrollControlled: true,
       builder: (context) => Container(
         height: MediaQuery.of(context).size.height * 0.8,
-        decoration: const BoxDecoration(
-          color: Colors.white,
+        decoration: BoxDecoration(
+        color: context.appSurface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(

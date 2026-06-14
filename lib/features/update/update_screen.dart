@@ -2,6 +2,7 @@ import 'package:MartIt/core/constants/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/utils/theme_extensions.dart';
 
 class ForceUpdateScreen extends StatefulWidget {
   final String message;
@@ -70,7 +71,7 @@ class _ForceUpdateScreenState extends State<ForceUpdateScreen> {
                   width: double.maxFinite,
                   padding: EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+        color: context.appSurface,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(

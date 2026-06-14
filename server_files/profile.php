@@ -16,17 +16,23 @@ try {
     // SQL query to get user profile data
     $sql = "SELECT
         Users.id,
+        Users.uid,
+        Users.oid,
         Users.Fullname,
+        Users.PhoneNumber,
+        Users.login_type as type,
+        Users.urlAvatar,
+        Users.role,
         COUNT(Items.id) AS items_count
     FROM
         Users
     LEFT JOIN Items
         ON Items.uid = Users.uid
-    WHERE Users.id = $userId
+    WHERE Users.uid = $userId
         AND (Items.Visibility = 'Public' OR Items.Visibility IS NULL)
     GROUP BY Users.id, Users.Fullname";
 
-    $result = $conn->query($sql);
+    $result = $conx->query($sql);
     
     if ($result->num_rows > 0) {
         $row = $result->fetch_assoc();
@@ -34,9 +40,15 @@ try {
         $profile = array(
             'id' => $row['id'],
             'name' => $row['Fullname'],
-            'avatar' => "https://globee.b-cdn.net/users/" . $row['id'] . "/avatar.jpg",
+            'phone' => $row['PhoneNumber'],
+            'type' => $row['type'],
+            'uid' => $row['uid'],
+            'oid' => $row['oid'],
+            'avatar' => $row['urlAvatar'],
+            'role' => $row['role'],
             'itemsCount' => (int)$row['items_count']
         );
+        // "https://globee.b-cdn.net/users/" .  . "/avatar.jpg?k=".time()
         
         echo json_encode(array(
             'success' => true,
@@ -57,5 +69,5 @@ try {
     ));
 }
 
-$conn->close();
+$conx->close();
 ?>

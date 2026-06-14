@@ -41,6 +41,7 @@ class S3UploadService {
   static Future<List<String>> uploadMediaFiles({
     required List<String> filePaths,
     required String itemId,
+    int startIndex = 0,
     Function(int current, int total, double progress)? onProgress,
   }) async {
     final uploadedUrls = <String>[];
@@ -59,10 +60,10 @@ class S3UploadService {
         final List<int> payload;
 
         if (_isVideoExtension(extension)) {
-          fileName = "${i + 1}$extension";
+          fileName = "${startIndex + i + 1}$extension";
           payload = await file.readAsBytes();
         } else {
-          fileName = "${i + 1}.png";
+          fileName = "${startIndex + i + 1}.png";
           try {
             final bytes = await file.readAsBytes();
             payload = await compute(convertImageToPng, bytes);
@@ -92,17 +93,64 @@ class S3UploadService {
     }
   }
 
+  static Future<String?> uploadProfileImage({
+    required String userId,
+    required String filePath,
+    Function(double progress)? onProgress,
+  }) async {
+    if (userId.isEmpty) {
+      print("Profile upload skipped: userId is empty");
+      return null;
+    }
+
+    try {
+      final file = File(filePath);
+      if (!file.existsSync()) {
+        print("Profile upload skipped: file not found");
+        return null;
+      }
+
+      final bytes = await file.readAsBytes();
+      final pngBytes = await compute(convertImageToPng, bytes);
+      final objectKey = "Users/store_1/$userId/1.png";
+
+      return _uploadBytes(
+        pngBytes,
+        objectKey,
+        onProgress: onProgress,
+      );
+    } catch (e) {
+      print("Error uploading profile image: $e");
+      return null;
+    }
+  }
+
+  static Future<String?> uploadBytes({
+    required List<int> bytes,
+    required String objectKey,
+    String? contentType,
+    Function(double progress)? onProgress,
+  }) async {
+    return _uploadBytes(
+      bytes,
+      objectKey,
+      contentType: contentType,
+      onProgress: onProgress,
+    );
+  }
+
   static Future<String?> _uploadBytes(
     List<int> bytes,
     String objectKey, {
+    String? contentType,
     Function(double progress)? onProgress,
   }) async {
     try {
-      final contentType = _getContentType(objectKey);
+      final resolvedContentType = contentType ?? _getContentType(objectKey);
       final headers = _signedHeaders(
         method: "PUT",
         objectKey: objectKey,
-        contentType: contentType,
+        contentType: resolvedContentType,
         payload: bytes,
       );
 

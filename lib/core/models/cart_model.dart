@@ -17,9 +17,18 @@ class CartItemModel {
     return CartItemModel(
       cartId: json['cart_id']?.toString() ?? '',
       orderId: json['order_id']?.toString() ?? '',
-      cartQuantity: json['cart_quantity'] ?? 0,
-      item: CartItem.fromJson(json['item'] ?? {}),
-      seller: CartSeller.fromJson(json['seller'] ?? {}),
+      cartQuantity:
+          int.tryParse(json['cart_quantity']?.toString() ?? '') ?? 0,
+      item: CartItem.fromJson(
+        json['item'] is Map<String, dynamic>
+            ? json['item'] as Map<String, dynamic>
+            : Map<String, dynamic>.from(json['item'] ?? {}),
+      ),
+      seller: CartSeller.fromJson(
+        json['seller'] is Map<String, dynamic>
+            ? json['seller'] as Map<String, dynamic>
+            : Map<String, dynamic>.from(json['seller'] ?? {}),
+      ),
     );
   }
 
@@ -59,7 +68,8 @@ class CartItem {
       idx: json['idx']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       price: json['price']?.toString() ?? '0',
-      availableQuantity: json['available_quantity'] ?? 0,
+      availableQuantity:
+          int.tryParse(json['available_quantity']?.toString() ?? '') ?? 0,
       thumbnail: json['thumbnail']?.toString() ?? '',
       store_id: json['store_id']?.toString() ?? '',
     );

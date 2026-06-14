@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/utils/snackbar_helper.dart';
+import '../../core/utils/theme_extensions.dart';
 
 class CustomerOrdersScreen extends StatefulWidget {
   const CustomerOrdersScreen({super.key});
@@ -66,12 +68,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('فشل في فتح الفاتورة'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      showAppSnackbar(context, message: 'فشل في فتح الفاتورة', type: SnackType.error);
     }
   }
 
@@ -114,8 +111,8 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
+        decoration: BoxDecoration(
+        color: context.appSurface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
         ),
         padding: const EdgeInsets.all(20),
@@ -131,12 +128,12 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            const Text(
+            Text(
               'تغيير حالة الطلب',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1A1A2E),
+                color: context.appTextPrimary,
               ),
             ),
             const SizedBox(height: 20),
@@ -179,7 +176,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
             decoration: BoxDecoration(
               color: isCurrentStatus
                   ? AppColors.primary.withOpacity(0.1)
-                  : Colors.grey[100],
+                  : context.appSurfaceVariant,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: isCurrentStatus ? AppColors.primary : Colors.transparent,
@@ -213,7 +210,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
                           : FontWeight.w500,
                       color: isCurrentStatus
                           ? AppColors.primary
-                          : const Color(0xFF1A1A2E),
+                          : context.appTextPrimary,
                     ),
                   ),
                 ),
@@ -257,11 +254,10 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
       Navigator.pop(context); // Close loading
 
       if (result['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم تحديث حالة الطلب بنجاح'),
-            backgroundColor: Colors.green,
-          ),
+        showAppSnackbar(
+          context,
+          message: 'تم تحديث حالة الطلب بنجاح',
+          type: SnackType.success,
         );
         List<String> tokens = [];
         for (var i = 0; i < result['client_token'].length; i++) {
@@ -274,19 +270,16 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
         );
         _loadOrders();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'فشل في تحديث الحالة'),
-            backgroundColor: Colors.red,
-          ),
+        showAppSnackbar(
+          context,
+          message: result['error'] ?? 'فشل في تحديث الحالة',
+          type: SnackType.error,
         );
       }
     } catch (e) {
       if (!mounted) return;
       Navigator.pop(context); // Close loading
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('حدث خطأ: $e'), backgroundColor: Colors.red),
-      );
+      showAppSnackbar(context, message: 'حدث خطأ: $e', type: SnackType.error);
     }
   }
 
@@ -295,19 +288,19 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF5F7FB),
+        backgroundColor: context.appBackground,
         appBar: AppBar(
           forceMaterialTransparency: true,
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
             onPressed: () => Navigator.pop(context),
-            icon: const Icon(Iconsax.arrow_right, color: Color(0xFF1A1A2E)),
+            icon: Icon(Iconsax.arrow_right, color: context.appTextPrimary),
           ),
-          title: const Text(
+          title: Text(
             'طلبات العملاء',
             style: TextStyle(
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
@@ -343,10 +336,10 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
         children: [
           const Icon(Iconsax.warning_2, size: 80, color: Colors.red),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'حدث خطأ في تحميل الطلبات',
             style: TextStyle(
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 18,
               fontWeight: FontWeight.w500,
             ),
@@ -384,10 +377,10 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'لا توجد طلبات',
             style: TextStyle(
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 24,
               fontWeight: FontWeight.bold,
             ),
@@ -396,7 +389,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
           Text(
             'لم يقم أي عميل بطلب منتجاتك حتى الآن',
             style: TextStyle(
-              color: const Color(0xFF1A1A2E).withOpacity(0.6),
+              color: context.appTextSecondary,
               fontSize: 16,
             ),
             textAlign: TextAlign.center,
@@ -412,13 +405,9 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFD4D4F0), Color(0xFFC8D4F5)],
-        ),
+        gradient: context.surfaceGradient(),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+        border: Border.all(color: context.appBorder, width: 1),
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -447,18 +436,18 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'رقم الطلب',
                           style: TextStyle(
-                            color: Color(0xFF1A1A2E),
+                            color: context.appTextPrimary,
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                         Text(
                           '#${order['oid']}',
-                          style: const TextStyle(
-                            color: Color(0xFF1A1A2E),
+                          style: TextStyle(
+                            color: context.appTextPrimary,
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
@@ -543,10 +532,10 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
                         size: 18,
                       ),
                       const SizedBox(width: 8),
-                      const Text(
+                      Text(
                         'معلومات العميل',
                         style: TextStyle(
-                          color: Color(0xFF1A1A2E),
+                          color: context.appTextPrimary,
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
                         ),
@@ -590,10 +579,10 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
                           size: 18,
                         ),
                         const SizedBox(width: 8),
-                        const Text(
+                        Text(
                           'معلومات الشحن',
                           style: TextStyle(
-                            color: Color(0xFF1A1A2E),
+                            color: context.appTextPrimary,
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
                           ),
@@ -674,15 +663,15 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
         Text(
           '$label: ',
           style: TextStyle(
-            color: const Color(0xFF1A1A2E).withOpacity(0.7),
+            color: context.appTextSecondary,
             fontSize: 13,
           ),
         ),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(
-              color: Color(0xFF1A1A2E),
+            style: TextStyle(
+              color: context.appTextPrimary,
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),

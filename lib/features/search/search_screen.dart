@@ -1,8 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:shimmer/shimmer.dart';
+import '../../core/services/localization_service.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
+import '../../core/utils/item_media_url_util.dart';
 import '../home/tiktok_feed_screen.dart';
+import '../../core/utils/theme_extensions.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -13,6 +19,8 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  Timer? _debounce;
   List<dynamic> _searchResults = [];
   bool _isLoading = false;
   bool _hasSearched = false;
@@ -21,17 +29,29 @@ class _SearchScreenState extends State<SearchScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _searchFocusNode.requestFocus();
+    });
   }
 
   void _onSearchChanged() {
-    if (_searchController.text.isNotEmpty) {
-      _performSearch(_searchController.text);
-    } else {
+    setState(() {});
+
+    _debounce?.cancel();
+    final query = _searchController.text.trim();
+
+    if (query.isEmpty) {
       setState(() {
-        _searchResults.clear();
+        _searchResults = [];
         _hasSearched = false;
+        _isLoading = false;
       });
+      return;
     }
+
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      _performSearch(query);
+    });
   }
 
   Future<void> _performSearch(String query) async {
@@ -45,6 +65,8 @@ class _SearchScreenState extends State<SearchScreen> {
     try {
       final response = await ApiService.searchItems(query);
 
+      if (!mounted) return;
+
       if (response['success'] == true) {
         setState(() {
           _searchResults = response['data'] ?? [];
@@ -57,6 +79,7 @@ class _SearchScreenState extends State<SearchScreen> {
         });
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _searchResults = [];
         _isLoading = false;
@@ -73,204 +96,353 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  String _thumbnailUrl(dynamic item) {
+    final storeId =
+        item['storeid']?.toString() ?? item['store_id']?.toString() ?? '1';
+    final itemId = item['id']?.toString() ?? '';
+    final itemIdx = item['idx']?.toString();
+    return ItemMediaUrlUtil.thumbnail(
+      storeId: storeId,
+      itemId: itemId,
+      itemIdx: itemIdx,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final lang = LocalizationService.instance.currentLanguage;
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: LocalizationService.instance.textDirection,
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: context.appBackground,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: context.appSurface,
           elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: IconButton(
+            icon: Icon(Iconsax.arrow_right_3, color: context.appTextPrimary),
+            onPressed: () => Navigator.pop(context),
+          ),
           title: Container(
-            height: 45,
+            height: 46,
             decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(25),
+              color: context.appSurfaceVariant,
+              borderRadius: BorderRadius.circular(30),
             ),
             child: TextField(
               controller: _searchController,
+              focusNode: _searchFocusNode,
               autofocus: true,
               textAlign: TextAlign.right,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (value) {
+                _debounce?.cancel();
+                if (value.trim().isNotEmpty) {
+                  _performSearch(value.trim());
+                }
+              },
+              style: TextStyle(fontSize: 15, color: context.appTextPrimary),
               decoration: InputDecoration(
-                hintText: 'ابحث عن المنتجات...',
-                hintStyle: TextStyle(color: Colors.grey),
+                hintText: lang == 'ar'
+                    ? 'ابحث عن المنتجات...'
+                    : 'Search for products...',
+                hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
                 border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                prefixIcon: Icon(
+                  Iconsax.search_normal_1,
+                  color: Colors.grey[500],
+                  size: 22,
                 ),
-                prefixIcon: IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Iconsax.arrow_right, color: Colors.grey),
-                ),
-                suffixIcon: Visibility(
-                  visible: _searchController.text != "" ? true : false,
-                  child: IconButton(
-                    onPressed: () => _searchController.clear(),
-                    icon: Icon(Iconsax.close_square, color: Colors.red),
-                  ),
-                ),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        onPressed: () {
+                          _searchController.clear();
+                          _searchFocusNode.requestFocus();
+                        },
+                        icon: Icon(
+                          Iconsax.close_circle,
+                          color: Colors.grey[500],
+                          size: 22,
+                        ),
+                      )
+                    : null,
               ),
             ),
           ),
         ),
-        body: Column(
+        body: _buildBody(),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (!_hasSearched) {
+      return _buildInitialEmptyState();
+    }
+    if (_isLoading) {
+      return _buildLoadingState();
+    }
+    if (_searchResults.isEmpty) {
+      return _buildNoResultsState();
+    }
+    return _buildResultsList();
+  }
+
+  Widget _buildInitialEmptyState() {
+    final lang = LocalizationService.instance.currentLanguage;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (_isLoading)
-              const Padding(
-                padding: EdgeInsets.all(20),
-                child: Center(
-                  child: CircularProgressIndicator(color: AppColors.primary),
-                ),
+            Icon(Iconsax.search_normal, size: 80, color: context.appTextSecondary),
+            const SizedBox(height: 24),
+            Text(
+              lang == 'ar' ? 'ابحث عن ما تريد' : 'Search for what you want',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: context.appTextSecondary,
               ),
-
-            if (!_isLoading && _hasSearched && _searchResults.isEmpty)
-              const Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Iconsax.search_normal, size: 64, color: Colors.grey),
-                      SizedBox(height: 16),
-                      Text(
-                        'لا توجد نتائج',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'جرب البحث بكلمات مختلفة',
-                        style: TextStyle(fontSize: 14, color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-            if (!_isLoading && _searchResults.isNotEmpty)
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _searchResults.length,
-                  itemBuilder: (context, index) {
-                    final item = _searchResults[index];
-                    return _buildSearchResultItem(item);
-                  },
-                ),
-              ),
-
-            if (!_hasSearched)
-              const Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Iconsax.search_normal, size: 64, color: Colors.grey),
-                      SizedBox(height: 16),
-                      Text(
-                        'ابحث عن المنتجات',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'اكتب اسم المنتج الذي تبحث عنه',
-                        style: TextStyle(fontSize: 14, color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              lang == 'ar'
+                  ? 'اكتب اسم المنتج في مربع البحث'
+                  : 'Type product name in search box',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: context.appTextSecondary),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSearchResultItem(dynamic item) {
-    String thumbnail = "";
-    print(item);
-    switch (item['store_id']) {
-      case '1':
-        thumbnail =
-            "https://globee.b-cdn.net/${item['id']}/${item['fmedia']}";
-        break;
-      case '2':
-        thumbnail =
-            "https://globalfarmnursery.s3.ap-south-1.amazonaws.com/items/${item['idx']}.jpg";
-        break;
-      case '3':
-        thumbnail =
-            "https://ges.qa/gesqatar/sys2025/attx/itmx/${item['idx']}.png";
-        break;
-      default:
-    }
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      color: Color(0xFFB4D4F0).withAlpha(40),
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(12),
-        leading: Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            color: Colors.grey[200],
-          ),
-          child: thumbnail != ''
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    thumbnail,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Icon(Iconsax.image, color: Colors.grey);
-                    },
-                  ),
-                )
-              : const Icon(Iconsax.image, color: Colors.grey),
-        ),
-        title: Text(
-          item['name'] ?? '',
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildNoResultsState() {
+    final lang = LocalizationService.instance.currentLanguage;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const SizedBox(height: 4),
+            Icon(Iconsax.emoji_sad, size: 80, color: context.appTextSecondary),
+            const SizedBox(height: 24),
             Text(
-              '${item['price']} ريال',
-              style: const TextStyle(
-                color: AppColors.primary,
+              lang == 'ar' ? 'لا توجد نتائج' : 'No results found',
+              style: TextStyle(
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
-                fontSize: 14,
+                color: context.appTextSecondary,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Text(
-              'البائع: ${item['seller']['name']}',
-              style: const TextStyle(color: Colors.grey, fontSize: 12),
+              lang == 'ar'
+                  ? 'جرب كلمة بحث مختلفة'
+                  : 'Try a different search term',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: context.appTextSecondary),
             ),
           ],
         ),
-        trailing: const Icon(Iconsax.arrow_left_2, color: Colors.grey),
-        onTap: () => _navigateToItem(item['id'].toString()),
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 4,
+      itemBuilder: (context, index) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: _buildShimmerCard(),
+      ),
+    );
+  }
+
+  Widget _buildShimmerCard() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Shimmer.fromColors(
+      baseColor: isDark ? const Color(0xFF1E1E2E) : Colors.grey[300]!,
+      highlightColor: isDark ? const Color(0xFF2A2A3E) : Colors.grey[100]!,
+      child: Container(
+        height: 94,
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkSurface : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Container(
+              width: 70,
+              height: 70,
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkElevated : Colors.grey[200],
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    height: 14,
+                    width: double.infinity,
+                    color: isDark ? AppColors.darkElevated : Colors.grey[300],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 12,
+                    width: 120,
+                    color: isDark ? AppColors.darkElevated : Colors.grey[300],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 14,
+                    width: 80,
+                    color: isDark ? AppColors.darkElevated : Colors.grey[300],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResultsList() {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      itemCount: _searchResults.length,
+      itemBuilder: (context, index) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: _buildSearchResultItem(_searchResults[index]),
+        );
+      },
+    );
+  }
+
+  Widget _buildSearchResultItem(dynamic item) {
+    final lang = LocalizationService.instance.currentLanguage;
+    final itemId = item['id']?.toString() ?? '';
+    final thumbnailUrl = _thumbnailUrl(item);
+    final sellerName = item['seller']?['name']?.toString() ?? 'بائع';
+
+    return InkWell(
+      onTap: () => _navigateToItem(itemId),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        decoration: BoxDecoration(
+        color: context.appSurface,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    lang == 'ar'
+                        ? (item['name']?.toString() ?? '')
+                        : ((item['eng']?.toString().isNotEmpty == true)
+                            ? item['eng'].toString()
+                            : item['name']?.toString() ?? ''),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: context.appTextPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(Iconsax.shop, size: 14, color: Colors.grey[500]),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          sellerName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.appTextSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${item['price']} ${lang == 'ar' ? 'ريال' : 'QAR'}',
+                    style: const TextStyle(
+                      color: AppColors.secondary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: 70,
+                height: 70,
+                color: context.appSurfaceVariant,
+                child: itemId.isNotEmpty
+                    ? Image.network(
+                        thumbnailUrl,
+                        width: 70,
+                        height: 70,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: context.appSurfaceVariant,
+                            child: Icon(
+                              Iconsax.image,
+                              color: Colors.grey[400],
+                              size: 28,
+                            ),
+                          );
+                        },
+                      )
+                    : Icon(Iconsax.image, color: Colors.grey[400], size: 28),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(Iconsax.arrow_left_2, color: Colors.grey[400], size: 22),
+          ],
+        ),
       ),
     );
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 }

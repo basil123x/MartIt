@@ -8,7 +8,10 @@ import 'package:iconsax/iconsax.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/localization_service.dart';
+import '../../core/utils/snackbar_helper.dart';
 import 'create_account_screen.dart';
+import '../../core/utils/theme_extensions.dart';
 
 class OTPScreen extends StatefulWidget {
   final String phoneNumber;
@@ -34,6 +37,8 @@ class _OTPScreenState extends State<OTPScreen> {
   final List<FocusNode> _focusNodes = List.generate(6, (index) => FocusNode());
   bool _isLoading = false;
   String _enteredOTP = '';
+  late String _activeOtp;
+  String? _debugOtp;
 
   Future sendOTP() async {
     await Dio().post(
@@ -56,7 +61,7 @@ class _OTPScreenState extends State<OTPScreen> {
             {
               "type": "body",
               "parameters": [
-                {"type": "text", "text": widget.generatedOTP},
+                {"type": "text", "text": _activeOtp},
               ],
             },
             {
@@ -64,7 +69,7 @@ class _OTPScreenState extends State<OTPScreen> {
               "sub_type": "url",
               "index": 0,
               "parameters": [
-                {"type": "text", "text": widget.generatedOTP},
+                {"type": "text", "text": _activeOtp},
               ],
             },
           ],
@@ -76,6 +81,8 @@ class _OTPScreenState extends State<OTPScreen> {
   @override
   void initState() {
     super.initState();
+    _activeOtp = widget.generatedOTP;
+    _debugOtp = widget.generatedOTP;
     // Auto focus first field
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNodes[0].requestFocus();
@@ -104,8 +111,13 @@ class _OTPScreenState extends State<OTPScreen> {
   }
 
   void _verifyOTP() async {
+    final lang = LocalizationService.instance.currentLanguage;
     if (_enteredOTP.length != 6) {
-      _showError('يرجى إدخال الكود المكون من 6 أرقام');
+      _showError(
+        lang == 'ar'
+            ? 'يرجى إدخال الكود المكون من 6 أرقام'
+            : 'Please enter 6 digit code',
+      );
       return;
     }
 
@@ -117,14 +129,16 @@ class _OTPScreenState extends State<OTPScreen> {
     await Future.delayed(const Duration(seconds: 1));
 
     if (_enteredOTP != '000000') {
-      if (_enteredOTP == widget.generatedOTP) {
+      if (_enteredOTP == _activeOtp) {
         final response = await AuthService.loginWithPhone(widget.phoneNumber);
 
         if (response == false) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
-              builder: (context) =>
-                  CreateAccountScreen(phoneNumber: widget.phoneNumber),
+              builder: (context) => CreateAccountScreen(
+                phoneNumber: widget.phoneNumber,
+                countryDialCode: widget.countryCode,
+              ),
             ),
           );
         } else {
@@ -136,7 +150,11 @@ class _OTPScreenState extends State<OTPScreen> {
         setState(() {
           _isLoading = false;
         });
-        _showError('كود التحقق غير صحيح، يرجى المحاولة مرة أخرى');
+        _showError(
+          lang == 'ar'
+              ? 'كود التحقق غير صحيح، يرجى المحاولة مرة أخرى'
+              : 'Wrong code, please try again',
+        );
         _clearOTP();
       }
     } else {
@@ -173,6 +191,7 @@ class _OTPScreenState extends State<OTPScreen> {
         key: "user_name",
         value: response.data['data']['name'],
       );
+      await FlutterSecureStorage().write(key: "login_type", value: "Phone");
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => SplashScreen()),
       );
@@ -188,201 +207,270 @@ class _OTPScreenState extends State<OTPScreen> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: AppColors.error),
-    );
+    showAppSnackbar(context, message: message, type: SnackType.error);
   }
 
-  void _resendOTP() {
-    // Generate new OTP
-    final newOTP = AuthService.generateOTP();
+  void _resendOTP() async {
+    final newOtp = AuthService.generateOTP();
+    setState(() {
+      _activeOtp = newOtp;
+      _debugOtp = newOtp;
+    });
     _clearOTP();
+    await sendOTP();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('تم إرسال كود جديد: $newOTP'),
-        backgroundColor: AppColors.success,
-      ),
+    if (!mounted) return;
+    showAppSnackbar(
+      context,
+      message: LocalizationService.instance.currentLanguage == 'ar'
+          ? 'تم إرسال كود جديد'
+          : 'New code sent',
+      type: SnackType.success,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-      },
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          title: Text("OTP is ${widget.generatedOTP}"),
-          leading: IconButton(
-            icon: const Icon(Iconsax.arrow_left, color: AppColors.textPrimary),
-            onPressed: () => Navigator.of(context).pop(),
+    final lang = LocalizationService.instance.currentLanguage;
+    return Directionality(
+      textDirection: LocalizationService.instance.textDirection,
+      child: GestureDetector(
+        onTap: () {
+          FocusScope.of(context).unfocus();
+        },
+        child: Scaffold(
+          backgroundColor: context.appSurface,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            title: null,
+            leading: IconButton(
+              icon: Icon(
+                Iconsax.arrow_left,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
           ),
-        ),
-        body: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: IntrinsicHeight(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                // Icon
-                                Container(
-                                  width: 100,
-                                  height: 100,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.secondary.withValues(
-                                      alpha: 0.1,
+          body: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: IntrinsicHeight(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  // Icon
+                                  Container(
+                                    width: 100,
+                                    height: 100,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.secondary.withValues(
+                                        alpha: 0.1,
+                                      ),
+                                      borderRadius: BorderRadius.circular(25),
                                     ),
-                                    borderRadius: BorderRadius.circular(25),
+                                    child: const Icon(
+                                      Iconsax.sms,
+                                      size: 50,
+                                      color: AppColors.secondary,
+                                    ),
                                   ),
-                                  child: const Icon(
-                                    Iconsax.sms,
-                                    size: 50,
-                                    color: AppColors.secondary,
-                                  ),
-                                ),
 
-                                const SizedBox(height: 40),
+                                  const SizedBox(height: 40),
 
-                                // Title
-                                Text(
-                                  'تحقق من رقم هاتفك',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineMedium
-                                      ?.copyWith(
-                                        color: AppColors.textPrimary,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                ),
-
-                                const SizedBox(height: 16),
-
-                                // Subtitle
-                                RichText(
-                                  textAlign: TextAlign.center,
-                                  text: TextSpan(
-                                    style: Theme.of(context).textTheme.bodyLarge
+                                  // Title
+                                  Text(
+                                    lang == 'ar'
+                                        ? 'تحقق من رقم هاتفك'
+                                        : 'Verify your phone',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineMedium
                                         ?.copyWith(
-                                          color: AppColors.textSecondary,
+                                          color: Theme.of(context).colorScheme.onSurface,
+                                          fontWeight: FontWeight.bold,
                                         ),
-                                    children: [
-                                      const TextSpan(
-                                        text: 'أدخل الكود المرسل إلى\n',
+                                  ),
+
+                                  const SizedBox(height: 16),
+
+                                  // Subtitle
+                                  RichText(
+                                    textAlign: TextAlign.center,
+                                    text: TextSpan(
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyLarge
+                                          ?.copyWith(
+                                            color: AppColors.textSecondaryColor(context),
+                                          ),
+                                      children: [
+                                        TextSpan(
+                                          text: lang == 'ar'
+                                              ? 'أدخل الكود المرسل إلى\n'
+                                              : 'Enter the code sent to\n',
+                                        ),
+                                        TextSpan(
+                                          text:
+                                              '${widget.countryCode} ${widget.phoneNumber}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.primary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                  if (_debugOtp != null)
+                                    Container(
+                                      margin: const EdgeInsets.symmetric(
+                                        horizontal: 24,
+                                        vertical: 8,
                                       ),
-                                      TextSpan(
-                                        text:
-                                            '${widget.countryCode} ${widget.phoneNumber}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Colors.orange,
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          const Icon(
+                                            Icons.info_outline,
+                                            color: Colors.orange,
+                                            size: 18,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            lang == 'ar'
+                                                ? 'رمز التحقق: $_debugOtp'
+                                                : 'OTP Code: $_debugOtp',
+                                            style: const TextStyle(
+                                              color: Colors.orange,
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              letterSpacing: 4,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                  const SizedBox(height: 50),
+
+                                  // OTP Input Fields
+                                  Directionality(
+                                    textDirection: TextDirection.ltr,
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: List.generate(
+                                        6,
+                                        (index) => _buildOTPField(index),
+                                      ),
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 40),
+
+                                  // Loading indicator
+                                  if (_isLoading)
+                                    const CircularProgressIndicator(
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        AppColors.primary,
+                                      ),
+                                    ),
+
+                                  const SizedBox(height: 40),
+
+                                  // Resend OTP
+                                  TextButton(
+                                    onPressed: _resendOTP,
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(
+                                          Iconsax.refresh,
+                                          size: 18,
                                           color: AppColors.primary,
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                const SizedBox(height: 50),
-
-                                // OTP Input Fields
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
-                                  children: List.generate(
-                                    6,
-                                    (index) => _buildOTPField(index),
-                                  ),
-                                ),
-
-                                const SizedBox(height: 40),
-
-                                // Loading indicator
-                                if (_isLoading)
-                                  const CircularProgressIndicator(
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      AppColors.primary,
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          lang == 'ar'
+                                              ? 'إعادة إرسال الكود'
+                                              : 'Resend Code',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                color: AppColors.primary,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-
-                                const SizedBox(height: 40),
-
-                                // Resend OTP
-                                TextButton(
-                                  onPressed: _resendOTP,
-                                  child: Row(
+                                  Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      const Icon(
-                                        Iconsax.refresh,
-                                        size: 18,
-                                        color: AppColors.primary,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'إعادة إرسال الكود',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              color: AppColors.primary,
-                                              fontWeight: FontWeight.w600,
+                                      GestureDetector(
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  const LoginScreen(),
                                             ),
+                                          );
+                                        },
+                                        child: Text(
+                                          lang == 'ar'
+                                              ? 'جرب طريقة أخرى'
+                                              : 'Try another way',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            color: AppColors.primaryLight,
+                                          ),
+                                        ),
+                                      ),
+                                      SizedBox(width: 10),
+                                      Text(
+                                        lang == 'ar'
+                                            ? 'ألم يصلك الكود ؟'
+                                            : "Didn't receive the code?",
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                                       ),
                                     ],
                                   ),
-                                ),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    GestureDetector(
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) =>
-                                                const LoginScreen(),
-                                          ),
-                                        );
-                                      },
-                                      child: Text(
-                                        'جرب طريقة أخرى',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: AppColors.primaryLight,
-                                        ),
-                                      ),
-                                    ),
-                                    SizedBox(width: 10),
-                                    Text(
-                                      'ألم يصلك الكود ؟',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(color: Colors.black),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -406,6 +494,7 @@ class _OTPScreenState extends State<OTPScreen> {
       child: TextField(
         controller: _controllers[index],
         focusNode: _focusNodes[index],
+        textDirection: TextDirection.ltr,
         textAlign: TextAlign.center,
         keyboardType: TextInputType.number,
         maxLength: 1,
@@ -417,7 +506,7 @@ class _OTPScreenState extends State<OTPScreen> {
         decoration: InputDecoration(
           counterText: '',
           filled: true,
-          fillColor: Colors.white,
+          fillColor: context.appSurface,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(color: AppColors.lightGrey, width: 1),

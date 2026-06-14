@@ -1,7 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:MartIt/core/constants/app_constants.dart';
 import 'package:MartIt/core/models/item_model.dart';
+import 'package:MartIt/core/services/onesignal_service.dart';
+import 'package:MartIt/core/services/s3_upload_service.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
@@ -34,6 +38,7 @@ class ApiService {
     String? initialItemId,
     String? category,
     String? country,
+    String? pinnedItemId,
   }) async {
     try {
       final url = Uri.parse('$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}');
@@ -55,6 +60,12 @@ class ApiService {
       // ✅ لو في category، نضيفه للـ body
       if (category != null && category.isNotEmpty) {
         body['category'] = category;
+      }
+
+      if (pinnedItemId != null &&
+          pinnedItemId.isNotEmpty &&
+          page == 0) {
+        body['pinnedItemId'] = pinnedItemId;
       }
 
       print('📦 fetchItems Request: $body');
@@ -84,6 +95,60 @@ class ApiService {
     }
   }
 
+  static Future<ItemModel?> fetchItemById({
+    required String itemId,
+    String? userId,
+    String? country,
+  }) async {
+    try {
+      if (userId != null && userId.isNotEmpty) {
+        final items = await fetchItemsWithLikes(
+          userId: userId,
+          limit: 1,
+          offset: 0,
+          initialItemId: itemId,
+          country: country,
+        );
+        return items.isNotEmpty ? items.first : null;
+      }
+
+      final items = await fetchItems(
+        page: 0,
+        initialItemId: itemId,
+        country: country,
+      );
+      return items.isNotEmpty ? items.first : null;
+    } catch (e) {
+      print('Error fetching item by id: $e');
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateItemMedia({
+    required String itemId,
+    required String media,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        data: FormData.fromMap({
+          'action': 'update_item_media',
+          'item_id': itemId,
+          'media': media,
+        }),
+      );
+      if (response.statusCode == 200) {
+        return Map<String, dynamic>.from(response.data as Map);
+      }
+      return {
+        'success': false,
+        'error': 'Failed to update media: ${response.statusCode}',
+      };
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
   // Search items by name
   static Future<Map<String, dynamic>> searchItems(String query) async {
     try {
@@ -103,12 +168,28 @@ class ApiService {
   }
 
   // Get user profile
-  static Future getUserProfile(int userId) async {
+  static Future getUserProfile(String userId) async {
     try {
-      final response = await Dio().get(
-        '$baseUrl/profile.php?user_id=$userId',
-        
+      print('📤 getUserProfile called with: $userId');
+
+      final payload = <String, dynamic>{
+        'action': 'get_user_profile',
+      };
+      final numericId = int.tryParse(userId);
+      if (numericId != null && numericId > 0) {
+        payload['user_id'] = userId;
+        print('📤 Sending as user_id (numeric)');
+      } else {
+        payload['uid'] = userId;
+        print('📤 Sending as uid (string)');
+      }
+
+      final response = await Dio().post(
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        data: FormData.fromMap(payload),
       );
+
+      print('📥 getUserProfile raw response: ${response.data}');
 
       if (response.statusCode == 200) {
         return response.data;
@@ -116,17 +197,23 @@ class ApiService {
         throw Exception('Failed to load profile: ${response.statusCode}');
       }
     } catch (e) {
+      print('❌ getUserProfile exception: $e');
       throw Exception('Profile error: $e');
     }
   }
 
-  static Future getUserProfileItems(int userId, {int limit = 20, int offset = 0, String sort = 'views'}) async {
+  static Future getUserProfileItems(
+    String uid, {
+    int limit = 20,
+    int offset = 0,
+    String sort = 'views',
+  }) async {
     try {
       final response = await Dio().post(
         '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
         data: FormData.fromMap({
           "action": "fetch_items_one_account",
-          "uid": userId,
+          "uid": uid,
           "limit": limit,
           "offset": offset,
           "sort": sort,
@@ -370,6 +457,105 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> addNotifyRequest({
+    required String itemId,
+    required String userId,
+    required String storeId,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        data: FormData.fromMap({
+          'action': 'add_notify_request',
+          'item_id': itemId,
+          'user_id': userId,
+          'store_id': storeId,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return Map<String, dynamic>.from(response.data as Map);
+      }
+      throw Exception('Failed to add notify request: ${response.statusCode}');
+    } catch (e) {
+      print('❌ addNotifyRequest error: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>> checkNotifyStatus({
+    required String itemId,
+    required String userId,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        data: FormData.fromMap({
+          'action': 'check_notify_status',
+          'item_id': itemId,
+          'user_id': userId,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return Map<String, dynamic>.from(response.data as Map);
+      }
+      throw Exception('Failed to check notify status: ${response.statusCode}');
+    } catch (e) {
+      print('❌ checkNotifyStatus error: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  static Future<List<String>> getUserNotifySubscriptions(String userId) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        data: FormData.fromMap({
+          'action': 'get_user_notify_subscriptions',
+          'user_id': userId,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        if (data is Map &&
+            data['success'] == true &&
+            data['item_ids'] is List) {
+          final list = data['item_ids'] as List<dynamic>;
+          return list.map((e) => e.toString()).toList();
+        }
+      }
+    } catch (e) {
+      print('❌ getUserNotifySubscriptions error: $e');
+    }
+    return [];
+  }
+
+  /// Sends OneSignal alerts for users returned in [response]['notify_users'].
+  static Future<void> dispatchRestockNotifications(
+    Map<String, dynamic> response,
+  ) async {
+    final notifyUsers = response['notify_users'];
+    if (notifyUsers is! List || notifyUsers.isEmpty) return;
+
+    for (final entry in notifyUsers) {
+      if (entry is! Map) continue;
+      final playerId = entry['player_id']?.toString() ?? '';
+      if (playerId.isEmpty) continue;
+
+      await OneSignalService.sendNotificationToUser(
+        playerId: playerId,
+        title: 'المنتج متاح الآن!',
+        message: 'المنتج الذي طلبت إشعاره أصبح متاحاً، تسوق الآن!',
+        data: {
+          'item_id': entry['item_id']?.toString() ?? '',
+          'type': 'restock_notify',
+        },
+      );
+    }
+  }
+
   // Fetch items with likes status
   static Future<List<ItemModel>> fetchItemsWithLikes({
     required String userId,
@@ -378,6 +564,7 @@ class ApiService {
     String? initialItemId,
     String? category,
     String? country,
+    String? pinnedItemId,
   }) async {
     try {
       final Map<String, dynamic> requestData = {
@@ -394,6 +581,12 @@ class ApiService {
         requestData['category'] = category;
       }
 
+      if (pinnedItemId != null &&
+          pinnedItemId.isNotEmpty &&
+          offset == 0) {
+        requestData['pinnedItemId'] = pinnedItemId;
+      }
+
       print('📦 fetchItemsWithLikes Request: $requestData');
 
       final response = await Dio().post(
@@ -406,19 +599,13 @@ class ApiService {
         final data = response.data;
         if (data['success'] == true) {
           final List<dynamic> itemsData = data['data'] ?? [];
-          return itemsData.map((item) {
-            // Create ItemModel with likes data
-            final itemModel = ItemModel.fromJson(item);
-            // Update interactions with server data
-            itemModel.interactions.likes = item['likes_count'] ?? 0;
-            itemModel.interactions.isLiked = item['is_liked'] ?? false;
-            // Update seller following status from seller data
-            if (item['seller'] != null &&
-                item['seller']['isFollowing'] != null) {
-              itemModel.seller.isFollowing = item['seller']['isFollowing'];
-            }
-            return itemModel;
-          }).toList();
+          print(
+            '📦 First item raw: ${itemsData.isNotEmpty ? itemsData[0] : "empty"}',
+          );
+          print('📦 Raw response keys: ${itemsData.isNotEmpty ? (itemsData[0] as Map).keys.toList() : "empty"}');
+          return itemsData
+              .map((item) => ItemModel.fromJson(item))
+              .toList();
         } else {
           throw Exception(data['error'] ?? 'Failed to fetch items');
         }
@@ -433,16 +620,32 @@ class ApiService {
   // Get cart items
   static Future<Map<String, dynamic>> getCartItems({
     required String userId,
+    String? storeId,
   }) async {
     try {
+      final resolvedStoreId = storeId ?? AppConstants.storeId;
+      final payload = <String, dynamic>{
+        'action': 'get_from_cart',
+        'user_id': userId,
+      };
+      if (resolvedStoreId.isNotEmpty) {
+        payload['store_id'] = resolvedStoreId;
+      }
+
       final response = await Dio().post(
         '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
-        data: FormData.fromMap({"action": "get_from_cart", "user_id": userId}),
-        
+        data: FormData.fromMap(payload),
       );
 
       if (response.statusCode == 200) {
-        return response.data;
+        final result = response.data;
+        print('Cart API response: $result');
+        if (result is Map && result['data'] is List) {
+          for (final item in result['data'] as List) {
+            print('Cart item raw JSON: $item');
+          }
+        }
+        return result;
       } else {
         throw Exception('Failed to get cart items: ${response.statusCode}');
       }
@@ -576,26 +779,29 @@ class ApiService {
   // Update user profile
   static Future<Map<String, dynamic>> updateUserProfile({
     required String uid,
-    required String name,
-    required String phone,
+    String? name,
+    String? phone,
     File? avatar,
   }) async {
     try {
-      // First, upload avatar if provided
       if (avatar != null) {
         await _uploadAvatar(uid, avatar);
       }
 
-      // Update user info in database
+      final data = <String, dynamic>{
+        "action": "update_user_profile",
+        "uid": uid,
+      };
+      if (name != null && name.isNotEmpty) {
+        data["name"] = name;
+      }
+      if (phone != null && phone.isNotEmpty) {
+        data["phone"] = phone;
+      }
+
       final response = await Dio().post(
         '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
-        data: FormData.fromMap({
-          "action": "update_user_profile",
-          "uid": uid,
-          "name": name,
-          "phone": phone,
-        }),
-        
+        data: FormData.fromMap(data),
       );
 
       if (response.statusCode == 200) {
@@ -608,21 +814,19 @@ class ApiService {
     }
   }
 
-  // Upload avatar to Bunny.net
   static Future<void> _uploadAvatar(String uid, File avatar) async {
     try {
-      List<int> fileBytes = await avatar.readAsBytes();
-
-      await Dio().put(
-        "https://storage.bunnycdn.com/globee-trading/users/$uid/avatar.jpg",
-        data: Stream.fromIterable([fileBytes]),
-        options: Options(
-          headers: {
-            "AccessKey": "18808acb-f5f1-473e-bd84cf669411-20c0-499c",
-            "Content-Type": "application/octet-stream",
-          },
-        ),
+      final bytes = await avatar.readAsBytes();
+      final pngBytes = await compute(convertImageToPng, bytes);
+      final objectKey = 'Users/store_1/$uid/1.png';
+      final url = await S3UploadService.uploadBytes(
+        bytes: pngBytes,
+        objectKey: objectKey,
+        contentType: 'image/png',
       );
+      if (url == null) {
+        throw Exception('Avatar upload failed');
+      }
     } catch (e) {
       throw Exception('Avatar upload error: $e');
     }
@@ -983,6 +1187,45 @@ class ApiService {
       }
     } catch (e) {
       throw Exception('Get categories error: $e');
+    }
+  }
+
+  static Future<void> trackInteraction(
+    String? userId,
+    String itemId,
+    String action, {
+    int watchSeconds = 0,
+  }) async {
+    if (userId == null) return;
+    try {
+      await Dio().post(
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        data: FormData.fromMap({
+          'action': 'track_interaction',
+          'user_id': userId,
+          'item_id': itemId,
+          'interaction': action,
+          'watch_seconds': watchSeconds.toString(),
+        }),
+      );
+    } catch (_) {}
+  }
+
+  static Future<Map<String, dynamic>> getUserScores(String userId) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        data: FormData.fromMap({
+          'action': 'get_user_scores',
+          'user_id': userId,
+        }),
+      );
+      if (response.statusCode == 200) {
+        return response.data;
+      }
+      return {'success': false};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
     }
   }
 }

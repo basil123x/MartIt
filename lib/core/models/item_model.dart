@@ -1,11 +1,15 @@
+import '../utils/item_media_url_util.dart';
+
 class ItemModel {
   final String id;
   final String idx;
   final String storeid;
   final String name;
+  final String nameEn;
   final String price;
   final int quantity;
   final String description;
+  final String descriptionArb;
   final int views;
   final List<String> media;
   final SellerModel seller;
@@ -16,9 +20,11 @@ class ItemModel {
     required this.idx,
     required this.storeid,
     required this.name,
+    required this.nameEn,
     required this.price,
     required this.quantity,
     required this.description,
+    required this.descriptionArb,
     required this.views,
     required this.media,
     required this.seller,
@@ -26,23 +32,55 @@ class ItemModel {
   });
 
   factory ItemModel.fromJson(Map<String, dynamic> json) {
-    // Parse media from database format (e.g., "1.jpg, 2.jpg, 3.mp4")
-    List<String> mediaList = [];
-    if (json['media'] != null && json['media'].toString().isNotEmpty) {
-      final mediaString = json['media'].toString();
-      final mediaFiles = mediaString
-          .split(', ')
-          .map((file) => file.trim())
-          .toList();
+    final storeId = json['storeid']?.toString() ?? '1';
+    final itemId = json['id'].toString();
+    final itemIdx = json['idx']?.toString() ?? '';
+    final List<String> mediaList = [];
 
-      // Convert to full URLs
-      for (String file in mediaFiles) {
-        if (file.isNotEmpty) {
-          final itemId = json['id'].toString();
-          final fullUrl = 'https://globee.b-cdn.net/$itemId/$file';
-          mediaList.add(fullUrl);
+    if (json['media'] is List) {
+      mediaList.addAll(
+        (json['media'] as List)
+            .map((e) => e.toString())
+            .where((e) => e.isNotEmpty),
+      );
+    } else if (json['media'] != null && json['media'].toString().isNotEmpty) {
+      final mediaValue = json['media'].toString();
+      if (mediaValue.startsWith('http')) {
+        mediaList.addAll(
+          mediaValue
+              .split(',')
+              .map((file) => file.trim())
+              .where((file) => file.isNotEmpty),
+        );
+      } else {
+        var index = 1;
+        for (final file in mediaValue.split(',').map((e) => e.trim())) {
+          if (file.isEmpty) continue;
+          final match = RegExp(r'(\d+)').firstMatch(file);
+          final mediaIndex = match != null
+              ? int.tryParse(match.group(1)!) ?? index
+              : index;
+          mediaList.add(
+            ItemMediaUrlUtil.mediaUrl(
+              storeId: storeId,
+              itemId: itemId,
+              itemIdx: itemIdx,
+              index: mediaIndex,
+            ),
+          );
+          index++;
         }
       }
+    }
+
+    if (mediaList.isEmpty) {
+      mediaList.add(
+        ItemMediaUrlUtil.thumbnail(
+          storeId: storeId,
+          itemId: itemId,
+          itemIdx: itemIdx,
+        ),
+      );
     }
 
     return ItemModel(
@@ -50,21 +88,31 @@ class ItemModel {
       idx: json['idx'].toString(),
       storeid: json['storeid'].toString(),
       name: json['name'] ?? '',
+      nameEn: json['eng']?.toString() ?? '',
       price: json['price']?.toString() ?? '0',
       quantity: int.tryParse(json['quantity']?.toString() ?? '0') ?? 0,
       description: json['description'] ?? '',
+      descriptionArb: json['description_arb']?.toString() ?? '',
       views: int.tryParse(json['views']?.toString() ?? '0') ?? 0,
       media: mediaList,
       seller: SellerModel.fromJson({
         'id': json['seller']['id'] ?? '',
-        'uid': json['seller']['uid'] ?? '',
+        'uid': json['seller']['uid'] ?? json['seller']['id'] ?? '',
         'name': json['seller']['name'] ?? 'مستخدم',
         'avatar': json['seller']['avatar'] ?? '',
         'token': json['seller']['token'] ?? '',
+        'isFollowing': json['seller']['isFollowing'] ?? false,
       }),
       interactions: InteractionsModel.fromJson(json['interactions'] ?? {}),
     );
   }
+
+  String localizedName(String lang) =>
+      lang == 'ar' ? name : (nameEn.isNotEmpty ? nameEn : name);
+
+  String localizedDescription(String lang) => lang == 'ar'
+      ? (descriptionArb.isNotEmpty ? descriptionArb : description)
+      : description;
 
   Map<String, dynamic> toJson() {
     return {
@@ -72,9 +120,11 @@ class ItemModel {
       'idx': idx,
       'storeid': storeid,
       'name': name,
+      'eng': nameEn,
       'price': price,
       'quantity': quantity,
       'description': description,
+      'description_arb': descriptionArb,
       'views': views,
       'media': media,
       'seller': seller.toJson(),
@@ -103,11 +153,11 @@ class SellerModel {
   factory SellerModel.fromJson(Map<String, dynamic> json) {
     return SellerModel(
       id: json['id']?.toString() ?? '',
-      uid: json['uid']?.toString() ?? '',
+      uid: json['uid']?.toString() ?? json['id']?.toString() ?? '',
       name: json['name'] ?? '',
       avatar: json['avatar'] ?? '',
       token: json['token'] ?? '',
-      isFollowing: json['isFollowing'] ?? false,
+      isFollowing: json['isFollowing'] == true || json['isFollowing'] == 1,
     );
   }
 
@@ -137,7 +187,10 @@ class InteractionsModel {
       comments: int.tryParse(json['comments']?.toString() ?? '0') ?? 0,
       shares: int.tryParse(json['shares']?.toString() ?? '0') ?? 0,
       cartQuantity: int.tryParse(json['cartQuantity']?.toString() ?? '0') ?? 0,
-      isLiked: json['isLiked'] == true || json['isLiked'] == 'true',
+      isLiked: (json['isLiked'] == 1 ||
+          json['isLiked'] == true ||
+          json['is_liked'] == 1 ||
+          json['is_liked'] == true),
     );
   }
 
@@ -154,6 +207,7 @@ class InteractionsModel {
 
 class CommentModel {
   final String id;
+  final String userId;
   final String userName;
   final String userAvatar;
   final String comment;
@@ -161,6 +215,7 @@ class CommentModel {
 
   CommentModel({
     required this.id,
+    required this.userId,
     required this.userName,
     required this.userAvatar,
     required this.comment,
@@ -170,6 +225,7 @@ class CommentModel {
   factory CommentModel.fromJson(Map<String, dynamic> json) {
     return CommentModel(
       id: json['id']?.toString() ?? '',
+      userId: json['userId']?.toString() ?? json['uid']?.toString() ?? '',
       userName: json['userName'] ?? '',
       userAvatar: json['userAvatar'] ?? '',
       comment: json['comment'] ?? '',
@@ -205,7 +261,12 @@ class UserProfileModel {
       type: json['type'] ?? '',
       uid: json['uid'] ?? '',
       avatar: json['avatar'] ?? '',
-      itemsCount: int.tryParse(json['itemsCount']?.toString() ?? '0') ?? 0,
+      itemsCount: int.tryParse(
+            json['items_count']?.toString() ??
+                json['itemsCount']?.toString() ??
+                '0',
+          ) ??
+          0,
     );
   }
 }

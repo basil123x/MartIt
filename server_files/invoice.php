@@ -6,7 +6,7 @@ header('Content-Type: text/html; charset=utf-8');
 
 $conn = mysqli_connect("localhost", "cdagvlmy_Globee", "A122%133z.", "cdagvlmy_Globee");
 
-$order_id = isset($_GET['order_id']) ? (int)$_GET['order_id'] : 0;
+$order_id = isset($_GET['order_id']) ? $conn->real_escape_string($_GET['order_id']) : '';
 $user_id  = isset($_GET['user_id'])  ? (int)$_GET['user_id']  : 0;
 $store_id = isset($_GET['store_id']) ? (string)$_GET['store_id'] : 1;
 $view_type = isset($_GET['view']) ? $_GET['view'] : 'seller';
@@ -46,6 +46,34 @@ switch ($store_id) {
             'divider'    => '#F5A623',   // الذهبي (كان نفس الـ accent)
         ];
         break;
+    case '4':
+        $name  = "البدع للخدمات البيطرية";
+        $email = "info@albadaa-qatar.com";
+        $site  = "albadaa-qatar.com";
+        $phone = "+974 30773570";
+        // Albadaa: نيلي داكن + أزرق متوسط + لمسات فاتحة - من الشعار
+        $theme = [
+            'primary'    => '#2D2E8B',   // النيلي الداكن الأساسي من الشعار
+            'secondary'  => '#1B1C6E',   // أعمق درجة للتباين
+            'accent'     => '#5A5CC7',   // أزرق فاتح من الشعار
+            'text_light' => '#FFFFFF',
+            'divider'    => '#7B7EE0',   // لون فاتح للفاصل
+        ];
+        break;
+    case '5':
+        $name  = "Blue Marine Life";
+        $email = "info@bluemarinelife.com";
+        $site  = "bluemarinelife.com";
+        $phone = "66630033";
+        $theme = [
+            'primary'    => '#0D1B3E',
+            'secondary'  => '#1A2F5A',
+            'accent'     => '#C9960C',
+            'text_light' => '#FFFFFF',
+            'divider'    => '#D4A820',
+        ];
+        break;
+
     default:
         $name  = "MartIt";
         $email = "info@martit.com";
@@ -101,7 +129,7 @@ WHERE $d1";
 $result = $conn->query($sql);
 
 if (!$result || $result->num_rows == 0) {
-    die('الطلب غير موجود');
+    die('الطلب غير موجود - oid: ' . $order_id);
 }
 
 $order = $result->fetch_assoc();
