@@ -5,9 +5,25 @@ class OneSignalService {
   // ✅ حط الـ REST API Key من OneSignal Dashboard
   // Settings → Keys & IDs → REST API Key
   static const String _restApiKey =
-      "os_v2_app_3xwdesk7czehbhbsnavharkzwzksqegp7koelde3jo6ubjqvtltgelwepni5foym6bj64gjxvetfz6qxkl67s6rrzjcdxtn6heaad2a";
-  static const String _appId = "ddec3249-5f16-4870-9c32-682a704559b6";
+      "os_v2_app_2ui32pebnnaq7a3xeibrgh5acone5ogktcmekunssgpwr5injkjoul75wux65abkk7bgwasqizp6d3c52lppp67rw7ptk4pos3isuiy";
+  static const String _appId = "d511bd3c-816b-410f-8377-2203131fa013";
   static const String _apiUrl = "https://onesignal.com/api/v1/notifications";
+
+  /// Must match MainActivity NotificationChannel id.
+  static const String androidChannelId = 'globalfarm_crowing_v2';
+  /// Android: res/raw/crowing.mp3 (name without extension)
+  static const String androidSound = 'crowing';
+  /// iOS: Runner/crowing.caf (name with extension)
+  static const String iosSound = 'crowing.caf';
+
+  static Map<String, dynamic> _soundPayload() => {
+        // Channel created in MainActivity → use existing_android_channel_id
+        // (android_channel_id is only for channels created in OneSignal Dashboard)
+        'existing_android_channel_id': androidChannelId,
+        'android_sound': androidSound,
+        'ios_sound': iosSound,
+        'priority': 10,
+      };
 
   /// ✅ بعت notification لـ Player ID واحد
   static Future<bool> sendNotificationToUser({
@@ -29,6 +45,7 @@ class OneSignalService {
           'headings': {'en': title, 'ar': title},
           'contents': {'en': message, 'ar': message},
           'data': data ?? {},
+          ..._soundPayload(),
         }),
       );
 
@@ -59,14 +76,15 @@ class OneSignalService {
         Uri.parse(_apiUrl),
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
-          'Authorization': 'Basic $_restApiKey',
+          'Authorization': 'Key $_restApiKey',
         },
         body: jsonEncode({
           'app_id': _appId,
-          'include_player_ids': playerIds, // ✅ List من الـ Player IDs
+          'include_player_ids': playerIds,
           'headings': {'en': title, 'ar': title},
           'contents': {'en': message, 'ar': message},
           'data': data ?? {},
+          ..._soundPayload(),
         }),
       );
 
@@ -94,14 +112,15 @@ class OneSignalService {
         Uri.parse(_apiUrl),
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
-          'Authorization': 'Basic $_restApiKey',
+          'Authorization': 'Key $_restApiKey',
         },
         body: jsonEncode({
           'app_id': _appId,
-          'included_segments': ['All'], // ✅ لكل المستخدمين
+          'included_segments': ['All'],
           'headings': {'en': title, 'ar': title},
           'contents': {'en': message, 'ar': message},
           'data': data ?? {},
+          ..._soundPayload(),
         }),
       );
 
@@ -131,7 +150,7 @@ class OneSignalService {
         Uri.parse(_apiUrl),
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
-          'Authorization': 'Basic $_restApiKey',
+          'Authorization': 'Key $_restApiKey',
         },
         body: jsonEncode({
           'app_id': _appId,
@@ -146,6 +165,7 @@ class OneSignalService {
           'headings': {'en': title, 'ar': title},
           'contents': {'en': message, 'ar': message},
           'data': data ?? {},
+          ..._soundPayload(),
         }),
       );
 

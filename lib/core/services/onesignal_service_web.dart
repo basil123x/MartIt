@@ -8,6 +8,18 @@ class OneSignalServiceWebSys {
       "os_v2_app_4grlpynt7rawxelgql7kdjjvmyqfvvwui3uulz4xhytvtrrpz5rlcd6qfkqs35tdu5wqrj7z4tkbzt4u2lmmg5ipzjwspolgrurjjoi";
   static const String _appId = "e1a2b7e1-b3fc-416b-9166-82fea1a53566";
   static const String _apiUrl = "https://onesignal.com/api/v1/notifications";
+
+  static const String androidChannelId = 'globalfarm_crowing_v2';
+  static const String androidSound = 'crowing';
+  static const String iosSound = 'crowing.caf';
+
+  static Map<String, dynamic> _soundPayload() => {
+        'existing_android_channel_id': androidChannelId,
+        'android_sound': androidSound,
+        'ios_sound': iosSound,
+        'priority': 10,
+      };
+
   /// ✅ بعت notification لـ Player ID واحد
   static Future<bool> sendNotificationToUser({
     required String playerId,
@@ -24,10 +36,11 @@ class OneSignalServiceWebSys {
         },
         body: jsonEncode({
           'app_id': _appId,
-          'include_player_ids': [playerId], // ✅ الـ Player ID اللي عايز تبعتله
+          'include_player_ids': [playerId],
           'headings': {'en': title, 'ar': title},
           'contents': {'en': message, 'ar': message},
-          'data': data ?? {}, // Extra data (optional)
+          'data': data ?? {},
+          ..._soundPayload(),
         }),
       );
 
@@ -66,6 +79,7 @@ class OneSignalServiceWebSys {
           'headings': {'en': title, 'ar': title},
           'contents': {'en': message, 'ar': message},
           'data': data ?? {},
+          ..._soundPayload(),
         }),
       );
 
@@ -101,6 +115,7 @@ class OneSignalServiceWebSys {
           'headings': {'en': title, 'ar': title},
           'contents': {'en': message, 'ar': message},
           'data': data ?? {},
+          ..._soundPayload(),
         }),
       );
 
@@ -145,6 +160,7 @@ class OneSignalServiceWebSys {
           'headings': {'en': title, 'ar': title},
           'contents': {'en': message, 'ar': message},
           'data': data ?? {},
+          ..._soundPayload(),
         }),
       );
 

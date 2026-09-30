@@ -6,10 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shorebird_code_push/shorebird_code_push.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/constants/app_constants.dart';
-import '../../core/constants/app_strings.dart';
-import '../home/tiktok_feed_screen.dart';
+import 'package:GlobalFarm/core/constants/app_config.dart';
+import 'package:GlobalFarm/core/constants/app_colors.dart';
+import 'package:GlobalFarm/core/constants/app_constants.dart';
+import 'package:GlobalFarm/core/constants/app_strings.dart';
+import 'package:GlobalFarm/core/services/localization_service.dart';
+import 'package:GlobalFarm/features/shell/main_shell.dart';
+import 'package:GlobalFarm/features/onboarding/onboarding_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -57,8 +60,10 @@ class _SplashScreenState extends State<SplashScreen>
         });
       }
 
+      print("platform: $platform");
+
       final response = await dio.get(
-        'https://www.Globee-Trading.com/app2026/get_update_info.php?platform=$platform&k=${DateTime.now().millisecondsSinceEpoch}',
+        '${AppConfig.apiBaseUrl}/get_update_info.php?platform=$platform&store_id=${AppConfig.storeId}&k=${DateTime.now().millisecondsSinceEpoch}',
       );
 
       if (response.statusCode == 200) {
@@ -116,12 +121,12 @@ class _SplashScreenState extends State<SplashScreen>
     );
 
     // Logo Scale Animation
-    _logoAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+    _logoAnimation = Tween<double>(begin: 0.0, end: 1).animate(
       CurvedAnimation(parent: _logoController, curve: Curves.elasticOut),
     );
 
     // Text Fade Animation
-    _textAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+    _textAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
       CurvedAnimation(parent: _textController, curve: Curves.easeInOut),
     );
 
@@ -132,9 +137,10 @@ class _SplashScreenState extends State<SplashScreen>
         );
 
     // Slogan Fade Animation
-    _sloganAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _sloganController, curve: Curves.easeIn),
-    );
+    _sloganAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _sloganController, curve: Curves.easeIn));
 
     // Start animations
     _logoController.forward();
@@ -147,9 +153,20 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   void _navigateToHome() {
-    Future.delayed(AppConstants.splashDuration, () {
+    Future.delayed(AppConstants.splashDuration, () async {
+      if (!mounted) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final onboardingDone = prefs.getBool('onboarding_done') ?? false;
+      if (!onboardingDone) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+        );
+        return;
+      }
+
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const TikTokFeedScreen()),
+        MaterialPageRoute(builder: (context) => const MainShell()),
       );
     });
   }
@@ -164,144 +181,169 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.primary,
-      body: Container(
-        color: AppColors.primary,
-        child: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                flex: 3,
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Animated Rive Logo
-                      // Animated Rive Logo
-                      AnimatedBuilder(
-                        animation: _logoAnimation,
-                        builder: (context, child) {
-                          return Transform.scale(
-                            scale: _logoAnimation.value,
-                            child: Container(
-                              width: 150, // كان 200
-                              height: 150, // كان 200
-                              decoration: BoxDecoration(
-                                color: AppColors.white,
-                                borderRadius: BorderRadius.circular(
-                                  30,
-                                ), // كان 40
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.1),
-                                    blurRadius: 30,
-                                    offset: const Offset(0, 15),
-                                  ),
-                                ],
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(
-                                  30,
-                                ), // كان 40
-                                child: Padding(
-                                  padding: const EdgeInsets.all(30),
-                                  child: Image.asset(
-                                    "assets/images/Logo.png",
-                                    fit: BoxFit.contain,
+    return Directionality(
+      textDirection: LocalizationService.instance.textDirection,
+      child: Scaffold(
+        backgroundColor: AppColors.primary,
+        body: Container(
+          color: AppColors.primary,
+          child: SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Animated Rive Logo
+                        // Animated Rive Logo
+                        AnimatedBuilder(
+                          animation: _logoAnimation,
+                          builder: (context, child) {
+                            return Transform.scale(
+                              scale: _logoAnimation.value,
+                              child: Container(
+                                width: 150, // كان 200
+                                height: 150, // كان 200
+                                decoration: BoxDecoration(
+                                  color: AppColors.white,
+                                  borderRadius: BorderRadius.circular(
+                                    30,
+                                  ), // كان 40
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(
+                                    30,
+                                  ), // كان 40
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(30),
+                                    child: Image.asset(
+                                      "assets/images/Logo.png",
+                                      fit: BoxFit.contain,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          );
-                        },
-                      ),
+                            );
+                          },
+                        ),
 
-                      const SizedBox(height: 30),
+                        const SizedBox(height: 30),
 
-                      // Animated App Name
-                      SlideTransition(
-                        position: _slideAnimation,
-                        child: FadeTransition(
-                          opacity: _textAnimation,
-                          child: Column(
-                            children: [
-                              Text(
-                                AppStrings.appName,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineMedium
-                                    ?.copyWith(
-                                      color: AppColors.white,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 1.2,
-                                    ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'اكتشف • تسوق • تفاعل',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(
-                                      color: AppColors.white.withValues(
-                                        alpha: 0.9,
+                        // Animated App Name
+                        SlideTransition(
+                          position: _slideAnimation,
+                          child: FadeTransition(
+                            opacity: _textAnimation,
+                            child: Column(
+                              children: [
+                                Text(
+                                  AppStrings.appName,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium
+                                      ?.copyWith(
+                                        color: Color(0xFFF08D39),
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 1.2,
                                       ),
-                                      fontWeight: FontWeight.w300,
-                                    ),
-                              ),
-                            ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  tr('splash.tagline_ar'),
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(
+                                        color: AppColors.white.withValues(
+                                          alpha: 0.9,
+                                        ),
+                                        fontWeight: FontWeight.w300,
+                                      ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
 
-                      const SizedBox(height: 14),
+                        const SizedBox(height: 14),
 
-                      // Slogan with fade-in animation
+                        // Slogan with fade-in animation
+                        FadeTransition(
+                          opacity: _sloganAnimation,
+                          child: Text(
+                            tr('splash.tagline_en'),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: AppColors.white.withValues(
+                                    alpha: 0.70,
+                                  ),
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.6,
+                                  fontSize: 16,
+                                ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+
+                        const SizedBox(height: 14),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Loading Indicator
+                Expanded(
+                  flex: 1,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
                       FadeTransition(
-                        opacity: _sloganAnimation,
-                        child: Text(
-                          'Swipe, love it, and MartIt',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: AppColors.white.withValues(alpha: 0.70),
-                                fontStyle: FontStyle.italic,
-                                fontWeight: FontWeight.w300,
-                                letterSpacing: 0.4,
-                              ),
-                          textAlign: TextAlign.center,
+                        opacity: _textAnimation,
+                        child: const CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            AppColors.white,
+                          ),
+                          strokeWidth: 3,
                         ),
                       ),
+                    ],
+                  ),
+                ),
 
-                      const SizedBox(height: 14),
-
+                // Version Info
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 30),
+                  child: Column(
+                    children: [
+                      FadeTransition(
+                        opacity: _textAnimation,
+                        child: Text(
+                          _appVersion.isNotEmpty
+                              ? '$_appVersion v'
+                              : '${AppConstants.appVersion} v',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: AppColors.white.withValues(alpha: 0.6),
+                              ),
+                        ),
+                      ),
                       // Dynamic version + patch
                       FadeTransition(
                         opacity: _sloganAnimation,
                         child: Column(
                           children: [
-                            Text(
-                              _appVersion.isNotEmpty ? 'v$_appVersion' : '',
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.copyWith(
-                                color: AppColors.white.withValues(alpha: 0.65),
-                                fontWeight: FontWeight.w500,
-                                letterSpacing: 0.8,
-                              ),
-                            ),
                             if (_patchNumber != null) ...[
-
-
-
                               const SizedBox(height: 4),
                               Text(
                                 'Patch: #$_patchNumber',
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color: AppColors.white.withValues(alpha: 0.50),
-                                  fontWeight: FontWeight.w400,
-                                  letterSpacing: 0.5,
-                                ),
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: AppColors.white.withValues(
+                                        alpha: 0.50,
+                                      ),
+                                      fontWeight: FontWeight.w400,
+                                      letterSpacing: 0.5,
+                                    ),
                               ),
                             ],
                           ],
@@ -310,53 +352,8 @@ class _SplashScreenState extends State<SplashScreen>
                     ],
                   ),
                 ),
-              ),
-
-              // Loading Indicator
-              Expanded(
-                flex: 1,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    FadeTransition(
-                      opacity: _textAnimation,
-                      child: const CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          AppColors.white,
-                        ),
-                        strokeWidth: 2,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    FadeTransition(
-                      opacity: _textAnimation,
-                      child: Text(
-                        AppStrings.loading,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.white.withValues(alpha: 0.8),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Version Info
-              Padding(
-                padding: const EdgeInsets.only(bottom: 30),
-                child: FadeTransition(
-                  opacity: _textAnimation,
-                  child: Text(
-                    _appVersion.isNotEmpty
-                        ? 'الإصدار $_appVersion'
-                        : 'الإصدار ${AppConstants.appVersion}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.white.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

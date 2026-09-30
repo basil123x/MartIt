@@ -1,61 +1,40 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
-/// Google + Firebase sign-in payload used to persist session locally.
-class GoogleSignInResult {
-  final User firebaseUser;
-  final String? idToken;
-  final String? accessToken;
-
-  const GoogleSignInResult({
-    required this.firebaseUser,
-    this.idToken,
-    this.accessToken,
-  });
-
-  String? get email => firebaseUser.email;
-  String? get displayName => firebaseUser.displayName;
-  String? get photoUrl => firebaseUser.photoURL;
-  String get firebaseUid => firebaseUser.uid;
-}
-
 class GoogleAuthService {
-  Future<GoogleSignInResult?> signInWithGoogle() async {
+  
+  Future<User?> signInWithGoogle() async {
     try {
       await GoogleSignIn.instance.initialize();
-      await GoogleSignIn.instance.signOut().catchError((_) {});
+      
+      final GoogleSignInAccount googleUser = await GoogleSignIn.instance.authenticate();
 
-      final GoogleSignInAccount googleUser =
-          await GoogleSignIn.instance.authenticate();
-
-      final GoogleSignInAuthentication googleAuth =
+      // 2. جيب الـ credentials
+      final GoogleSignInAuthentication googleAuth = 
           googleUser.authentication;
 
+      // 3. ربط مع Firebase
       final credential = GoogleAuthProvider.credential(
         idToken: googleAuth.idToken,
       );
 
-      final UserCredential userCredential =
+      // 4. تسجيل في Firebase
+      final UserCredential userCredential = 
           await FirebaseAuth.instance.signInWithCredential(credential);
-
+      
       final User? user = userCredential.user;
-      if (user == null) return null;
-
-      String? firebaseIdToken;
-      try {
-        firebaseIdToken = await user.getIdToken();
-      } catch (_) {}
-
-      return GoogleSignInResult(
-        firebaseUser: user,
-        idToken: googleAuth.idToken,
-        accessToken: firebaseIdToken,
-      );
+      
+      // 5. اطبع البيانات
+      print('✅ Name: ${user?.displayName}');
+      print('✅ Email: ${user?.email}');
+      print('✅ Photo: ${user?.photoURL}');
+      print('✅ UID: ${user?.uid}');
+      
+      return user;
+      
     } catch (e) {
-      if (e.toString().contains('canceled')) {
-        return null;
-      }
-      throw Exception('فشل تسجيل الدخول، حاول تاني');
+      print('❌ Google Sign In Error: $e');
+      return null;
     }
   }
 

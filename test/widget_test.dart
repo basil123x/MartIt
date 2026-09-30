@@ -12,10 +12,10 @@ import 'package:GlobalFarm/main.dart';
 void main() {
   testWidgets('App starts with splash screen', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const GlobalFarmApp());
+    await tester.pumpWidget(const MartItApp());
 
     // Verify that splash screen is displayed
-    expect(find.text('Globee'), findsOneWidget);
-    expect(find.text('اكتشف • تسوق • تفاعل'), findsOneWidget);
+    expect(find.text('GlobalFarm'), findsOneWidget);
+    expect(find.text('تسوق المنتجات الزراعية الطازجة'), findsOneWidget);
   });
 }

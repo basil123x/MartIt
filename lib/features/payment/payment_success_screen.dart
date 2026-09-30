@@ -1,5 +1,5 @@
 import 'dart:math';
-import 'package:GlobalFarm/features/home/tiktok_feed_screen.dart';
+import 'package:GlobalFarm/features/shell/main_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -10,6 +10,8 @@ import '../../core/models/shipping_address_model.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
 import '../sellers/sellers_contact_screen.dart';
+import '../../core/utils/theme_extensions.dart';
+import '../orders/invoice_webview.dart';
 
 class PaymentSuccessScreen extends StatefulWidget {
   final String userId;
@@ -134,7 +136,7 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
   Future<void> _openInvoice(String orderId) async {
     print("My Bill Order Id ---> $orderId");
     final Uri url = Uri.parse(
-      'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&k=${DateTime.now().millisecondsSinceEpoch}',
+      InvoiceWebView.buildUrl(orderId: orderId),
     );
 
     if (!await launchUrl(
@@ -160,7 +162,7 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       // backgroundColor: const Color(0xFF0A0E27),
-      backgroundColor: const Color(0xFFF5F7FB),
+      backgroundColor: context.appBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -220,11 +222,10 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
                       opacity: _fadeAnimation,
                       child: Column(
                         children: [
-                          const Text(
+                          Text(
                             'تم الدفع بنجاح!',
                             style: TextStyle(
-                              // color: Colors.white,
-                              color: Color(0xFF1A1A2E),
+                              color: context.appTextPrimary,
                               fontSize: 28,
                               fontWeight: FontWeight.bold,
                             ),
@@ -234,7 +235,7 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
                             'شكراً لك، تم تأكيد طلبك بنجاح',
                             style: TextStyle(
                               // color: Colors.white.withOpacity(0.8),
-                              color: const Color(0xFF1A1A2E).withOpacity(0.7),
+                              color: context.appTextPrimary.withOpacity(0.7),
                               fontSize: 16,
                             ),
                             textAlign: TextAlign.center,
@@ -278,11 +279,10 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
                                   size: 24,
                                 ),
                                 const SizedBox(width: 12),
-                                const Text(
+                                Text(
                                   'ملخص الطلب',
                                   style: TextStyle(
-                                    // color: Colors.white,
-                                    color: Color(0xFF1A1A2E),
+                                    color: context.appTextPrimary,
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -398,7 +398,7 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
                             child: OutlinedButton.icon(
                               onPressed: () {
                                 _clearCartAndUpdateOID();
-                                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => TikTokFeedScreen()));
+                                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const MainShell()));
                               },
                               // 31665646
                               style: OutlinedButton.styleFrom(
@@ -489,7 +489,7 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
           label,
           style: TextStyle(
             // color: Colors.white.withOpacity(0.7),
-            color: const Color(0xFF1A1A2E).withOpacity(0.7),
+            color: context.appTextPrimary.withOpacity(0.7),
             fontSize: 14,
           ),
         ),
@@ -497,9 +497,8 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(
-              // color: Colors.white,
-              color: Color(0xFF1A1A2E),
+            style: TextStyle(
+              color: context.appTextPrimary,
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),

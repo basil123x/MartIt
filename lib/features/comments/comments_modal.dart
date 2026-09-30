@@ -3,10 +3,13 @@ import 'package:GlobalFarm/features/auth/login.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:iconsax/iconsax.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/services/api_service.dart';
-import '../../core/services/auth_service.dart';
-import '../../core/models/item_model.dart';
+import 'package:GlobalFarm/core/constants/app_colors.dart';
+import 'package:GlobalFarm/core/services/api_service.dart';
+import 'package:GlobalFarm/core/services/auth_service.dart';
+import 'package:GlobalFarm/core/models/item_model.dart';
+import 'package:GlobalFarm/core/widgets/smart_avatar_widget.dart';
+import 'package:GlobalFarm/core/utils/snackbar_helper.dart';
+import 'package:GlobalFarm/core/utils/theme_extensions.dart';
 
 class CommentsModal extends StatefulWidget {
   final String itemId;
@@ -44,27 +47,22 @@ class _CommentsModalState extends State<CommentsModal> {
 
     try {
       final response = await ApiService.getComments(int.parse(widget.itemId));
-      print('📝 Comments API Response: $response');
 
       if (response['success'] == true) {
-        final List<dynamic> commentsData = response['data'] ?? response['comments'] ?? [];
-        print('📝 Comments Data: $commentsData');
+        final List<dynamic> commentsData = response['data'] ?? [];
         setState(() {
           _comments = commentsData
               .map((comment) => CommentModel.fromJson(comment))
               .toList();
           _isLoading = false;
         });
-        print('📝 Parsed Comments Count: ${_comments.length}');
       } else {
-        print('📝 Comments API returned success=false');
         setState(() {
           _comments = [];
           _isLoading = false;
         });
       }
     } catch (e) {
-      print('📝 Comments Load Error: $e');
       setState(() {
         _comments = [];
         _isLoading = false;
@@ -90,9 +88,11 @@ class _CommentsModalState extends State<CommentsModal> {
     try {
       final currentUserId = await AuthService.getCurrentUserId();
       if (currentUserId == null) {
-        ScaffoldMessenger.of(
+        showAppSnackbar(
           context,
-        ).showSnackBar(const SnackBar(content: Text('يجب تسجيل الدخول أولاً')));
+          message: 'يجب تسجيل الدخول أولاً',
+          type: SnackType.error,
+        );
         setState(() {
           _isSending = false;
         });
@@ -101,7 +101,7 @@ class _CommentsModalState extends State<CommentsModal> {
 
       final response = await ApiService.addComment(
         itemId: int.parse(widget.itemId),
-        userId: int.parse(currentUserId),
+        userId: currentUserId,
         comment: _commentController.text.trim(),
       );
       final user = await FlutterSecureStorage().read(key: 'user_name');
@@ -118,23 +118,25 @@ class _CommentsModalState extends State<CommentsModal> {
 
         // Scroll to bottom
         Future.delayed(const Duration(milliseconds: 100), () {
-          if (mounted && _scrollController.hasClients) {
-            _scrollController.animateTo(
-              _scrollController.position.maxScrollExtent,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOut,
-            );
-          }
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
         });
       } else {
-        ScaffoldMessenger.of(
+        showAppSnackbar(
           context,
-        ).showSnackBar(const SnackBar(content: Text('فشل في إرسال التعليق')));
+          message: 'فشل في إرسال التعليق',
+          type: SnackType.error,
+        );
       }
     } catch (e) {
-      ScaffoldMessenger.of(
+      showAppSnackbar(
         context,
-      ).showSnackBar(const SnackBar(content: Text('حدث خطأ في إرسال التعليق')));
+        message: 'حدث خطأ في إرسال التعليق',
+        type: SnackType.error,
+      );
     }
 
     setState(() {
@@ -152,8 +154,8 @@ class _CommentsModalState extends State<CommentsModal> {
           ? screenHeight *
                 0.9 // عند فتح الكيبورد
           : screenHeight * 0.8, // الحالة العادية
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: context.appSurface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
@@ -186,7 +188,7 @@ class _CommentsModalState extends State<CommentsModal> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+        border: Border(bottom: BorderSide(color: context.appCardBorder)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -248,21 +250,16 @@ class _CommentsModalState extends State<CommentsModal> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // User Avatar
-          CircleAvatar(
-            radius: 20,
-            backgroundImage: comment.userAvatar.isNotEmpty
-                ? NetworkImage(comment.userAvatar)
-                : null,
+          SmartAvatarWidget(
+            userId: comment.userId,
+            name: comment.userName,
+            size: 40,
+            fallbackUrl: comment.userAvatar,
             backgroundColor: AppColors.secondary,
-            child: comment.userAvatar.isEmpty
-                ? Text(
-                    comment.userName.isNotEmpty ? comment.userName[0] : 'U',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  )
-                : null,
+            initialsStyle: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
           ),
 
           const SizedBox(width: 12),
@@ -296,7 +293,7 @@ class _CommentsModalState extends State<CommentsModal> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
+                    color: context.appSurfaceVariant,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -317,7 +314,7 @@ class _CommentsModalState extends State<CommentsModal> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: Colors.grey[200]!)),
+        border: Border(top: BorderSide(color: context.appSurfaceVariant)),
       ),
       child: SafeArea(
         child: Row(
@@ -349,7 +346,7 @@ class _CommentsModalState extends State<CommentsModal> {
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.grey[100],
+                  color: context.appSurfaceVariant,
                   borderRadius: BorderRadius.circular(25),
                 ),
                 child: TextField(
@@ -375,9 +372,24 @@ class _CommentsModalState extends State<CommentsModal> {
     );
   }
 
+  DateTime _parseCommentTime(String timestamp) {
+    final normalized = timestamp.trim();
+    if (normalized.isEmpty) return DateTime.now();
+
+    final iso = normalized.contains('T')
+        ? normalized
+        : normalized.replaceFirst(' ', 'T');
+    if (iso.endsWith('Z') ||
+        iso.contains('+') ||
+        RegExp(r'-\d{2}:\d{2}$').hasMatch(iso)) {
+      return DateTime.parse(iso).toLocal();
+    }
+    return DateTime.parse('${iso}Z').toLocal();
+  }
+
   String _formatTime(String timestamp) {
     try {
-      final DateTime dateTime = DateTime.parse(timestamp);
+      final DateTime dateTime = _parseCommentTime(timestamp);
       final DateTime now = DateTime.now();
       final Duration difference = now.difference(dateTime);
 

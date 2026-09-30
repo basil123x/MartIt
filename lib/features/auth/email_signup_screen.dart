@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:GlobalFarm/core/services/s3_upload_service.dart';
 import 'package:GlobalFarm/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -7,10 +6,15 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/services/auth_service.dart';
+import 'package:GlobalFarm/core/constants/app_config.dart';
+import 'package:GlobalFarm/core/constants/app_colors.dart';
+import 'package:GlobalFarm/core/services/auth_service.dart';
+import 'package:GlobalFarm/core/services/localization_service.dart';
+import 'package:GlobalFarm/core/services/s3_upload_service.dart';
+import 'package:GlobalFarm/core/utils/snackbar_helper.dart';
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
+import 'package:GlobalFarm/core/utils/theme_extensions.dart';
 
 class EmailSignupScreen extends StatefulWidget {
   final String email;
@@ -46,6 +50,7 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
   }
 
   Future<void> _pickImage() async {
+    final lang = LocalizationService.instance.currentLanguage;
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.gallery,
@@ -60,11 +65,14 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
         });
       }
     } catch (e) {
-      _showError('حدث خطأ أثناء اختيار الصورة');
+      _showError(
+        lang == 'ar' ? 'حدث خطأ أثناء اختيار الصورة' : 'Error selecting image',
+      );
     }
   }
 
   Future<void> _takePhoto() async {
+    final lang = LocalizationService.instance.currentLanguage;
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.camera,
@@ -79,17 +87,20 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
         });
       }
     } catch (e) {
-      _showError('حدث خطأ أثناء التقاط الصورة');
+      _showError(
+        lang == 'ar' ? 'حدث خطأ أثناء التقاط الصورة' : 'Error taking photo',
+      );
     }
   }
 
   void _showImagePickerOptions() {
+    final lang = LocalizationService.instance.currentLanguage;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
+        decoration: BoxDecoration(
+          color: context.appSurface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
         ),
         padding: const EdgeInsets.all(20),
@@ -106,7 +117,7 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
             ),
             const SizedBox(height: 20),
             Text(
-              'اختر صورة الملف الشخصي',
+              lang == 'ar' ? 'اختر صورة الملف الشخصي' : 'Choose profile photo',
               style: Theme.of(
                 context,
               ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
@@ -121,8 +132,8 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
                 ),
                 child: const Icon(Iconsax.camera, color: Color(0xFF6366F1)),
               ),
-              title: const Text('التقاط صورة'),
-              subtitle: const Text('استخدم الكاميرا'),
+              title: Text(lang == 'ar' ? 'التقاط صورة' : 'Take photo'),
+              subtitle: Text(lang == 'ar' ? 'استخدم الكاميرا' : 'Use camera'),
               onTap: () {
                 Navigator.pop(context);
                 _takePhoto();
@@ -137,8 +148,12 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
                 ),
                 child: const Icon(Iconsax.gallery, color: Color(0xFF8B5CF6)),
               ),
-              title: const Text('اختيار من المعرض'),
-              subtitle: const Text('اختر صورة موجودة'),
+              title: Text(
+                lang == 'ar' ? 'اختيار من المعرض' : 'Choose from gallery',
+              ),
+              subtitle: Text(
+                lang == 'ar' ? 'اختر صورة موجودة' : 'Choose existing photo',
+              ),
               onTap: () {
                 Navigator.pop(context);
                 _pickImage();
@@ -154,7 +169,7 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
                   ),
                   child: const Icon(Iconsax.trash, color: AppColors.error),
                 ),
-                title: const Text('حذف الصورة'),
+                title: Text(lang == 'ar' ? 'حذف الصورة' : 'Remove photo'),
                 onTap: () {
                   Navigator.pop(context);
                   setState(() {
@@ -176,29 +191,51 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
   }
 
   bool _validateInputs() {
+    final lang = LocalizationService.instance.currentLanguage;
+
     if (_nameController.text.trim().isEmpty) {
-      _showError('يرجى إدخال الاسم الكامل');
+      _showError(
+        lang == 'ar'
+            ? 'يرجى إدخال الاسم الكامل'
+            : 'Please enter your full name',
+      );
       return false;
     }
 
     if (_nameController.text.trim().length < 3) {
-      _showError('الاسم يجب أن يكون 3 أحرف على الأقل');
+      _showError(
+        lang == 'ar'
+            ? 'الاسم يجب أن يكون 3 أحرف على الأقل'
+            : 'Name must be at least 3 characters',
+      );
       return false;
     }
 
     final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
     if (!emailRegex.hasMatch(_emailController.text)) {
-      _showError('يرجى إدخال بريد إلكتروني صحيح');
+      _showError(
+        lang == 'ar'
+            ? 'يرجى إدخال بريد إلكتروني صحيح'
+            : 'Please enter a valid email',
+      );
       return false;
     }
 
     if (_passwordController.text.length < 8) {
-      _showError('كلمة المرور يجب أن تكون 8 أحرف على الأقل');
+      _showError(
+        lang == 'ar'
+            ? 'كلمة المرور يجب أن تكون 8 أحرف على الأقل'
+            : 'Password must be at least 8 characters',
+      );
       return false;
     }
 
     if (_passwordController.text != _confirmPasswordController.text) {
-      _showError('كلمة المرور وتأكيد كلمة المرور غير متطابقين');
+      _showError(
+        lang == 'ar'
+            ? 'كلمة المرور وتأكيد كلمة المرور غير متطابقين'
+            : 'Passwords do not match',
+      );
       return false;
     }
 
@@ -206,6 +243,7 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
   }
 
   Future<void> _createAccount() async {
+    final lang = LocalizationService.instance.currentLanguage;
     if (!_validateInputs()) return;
 
     setState(() {
@@ -213,70 +251,56 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
     });
 
     try {
-      final String emailTrimmed = _emailController.text.trim();
-      final Map<String, dynamic>? alreadyUser =
-          await AuthService.getUserByEmail(emailTrimmed);
-      if (alreadyUser != null) {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-          _showError('البريد مسجل مسبقاً. سجّل الدخول من الشاشة الرئيسية.');
-          Navigator.pop(context);
-        }
-        return;
-      }
-
-      String? userId = OneSignal.User.pushSubscription.id;
-
-      String? avatarUrl;
-      if (_selectedImage != null) {
-        final tempUserId = DateTime.now().millisecondsSinceEpoch.toString();
-        final uploadResult = await S3UploadService.uploadMediaFiles(
-          filePaths: [_selectedImage!.path],
-          folderName: 'users/$tempUserId',
-          useSequentialIdx: false,
-        );
-        if (uploadResult.urls.isNotEmpty) {
-          avatarUrl = uploadResult.urls[0];
-        }
-      }
+      String? playerId = OneSignal.User.pushSubscription.id;
 
       final response = await Dio().post(
-        'https://www.Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        "${AppConfig.apiBaseUrl}/sql.php?k=${DateTime.now().millisecondsSinceEpoch}",
         data: FormData.fromMap({
-          'action': 'create_email_account',
-          'name': _nameController.text.trim(),
-          'email': _emailController.text,
-          'password': _passwordController.text,
-          'player_id': userId,
-          'avatar_url': avatarUrl ?? '',
-          'login_type': 'Email',
-          ...AuthService.registrationStoreFields(),
+          "action": "create_email_account",
+          "name": _nameController.text.trim(),
+          "email": _emailController.text,
+          "password": _passwordController.text,
+          "player_id": playerId,
+          "avatar_url": "",
+          "login_type": "Email",
+          "store_id": AppConfig.storeId,
         }),
       );
 
-      if (response.data['success'] == true) {
-        await FlutterSecureStorage().write(
-          key: "user_uid",
-          value: response.data['data']['id'],
-        );
-        await FlutterSecureStorage().write(
-          key: "user_oid",
-          value: response.data['data']['oid'],
-        );
-        await FlutterSecureStorage().write(
-          key: "user_email",
-          value: response.data['data']['email'],
-        );
-        await FlutterSecureStorage().write(
-          key: "user_name",
-          value: response.data['data']['name'],
-        );
+      if (response.data["success"] == true) {
+        const storage = FlutterSecureStorage();
+        final uid = response.data["data"]["id"]?.toString() ?? "";
 
-        await AuthService.ensureUserStoreId(
-          response.data['data']['id'].toString(),
+        await storage.write(key: "user_uid", value: uid);
+        await storage.write(
+          key: "user_oid",
+          value: response.data["data"]["oid"]?.toString() ?? "",
         );
+        await storage.write(
+          key: "user_email",
+          value: response.data["data"]["email"]?.toString() ?? "",
+        );
+        await storage.write(
+          key: "user_name",
+          value: response.data["data"]["name"]?.toString() ?? "",
+        );
+        await storage.write(key: "login_type", value: "Email");
+
+        if (_selectedImage != null && uid.isNotEmpty) {
+          final storedUid = await storage.read(key: "user_uid");
+          final avatarUrl = await S3UploadService.uploadProfileImage(
+            userId: storedUid ?? uid,
+            filePath: _selectedImage!.path,
+          );
+
+          if (avatarUrl != null) {
+            await AuthService.updateUserAvatarUrl(
+              uid: storedUid ?? uid,
+              avatarUrl: avatarUrl,
+            );
+            await AuthService.updateProfileImage(avatarUrl);
+          }
+        }
 
         if (mounted) {
           Navigator.of(context).pushAndRemoveUntil(
@@ -288,245 +312,248 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
         setState(() {
           _isLoading = false;
         });
-        _showError(response.data['message'] ?? 'حدث خطأ أثناء إنشاء الحساب');
+        _showError(
+          response.data['message'] ??
+              (lang == 'ar'
+                  ? 'حدث خطأ أثناء إنشاء الحساب'
+                  : 'Error creating account'),
+        );
       }
     } catch (e) {
       setState(() {
         _isLoading = false;
       });
-      _showError('حدث خطأ أثناء إنشاء الحساب');
+      _showError(
+        lang == 'ar' ? 'حدث خطأ أثناء إنشاء الحساب' : 'Error creating account',
+      );
     }
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: AppColors.error),
-    );
+    showAppSnackbar(context, message: message, type: SnackType.error);
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-      },
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(
-              Icons.arrow_back_ios,
-              color: AppColors.textPrimary,
+    final lang = LocalizationService.instance.currentLanguage;
+    return Directionality(
+      textDirection: LocalizationService.instance.textDirection,
+      child: GestureDetector(
+        onTap: () {
+          FocusScope.of(context).unfocus();
+        },
+        child: Scaffold(
+          backgroundColor: context.appSurface,
+          appBar: AppBar(
+            backgroundColor: context.appSurface,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(
+                Icons.arrow_back_ios,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              onPressed: () => Navigator.pop(context),
             ),
-            onPressed: () => Navigator.pop(context),
+            title: Text(
+              lang == 'ar' ? 'إنشاء حساب جديد' : 'Create Account',
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+            ),
           ),
-          title: const Text(
-            'إنشاء حساب جديد',
-            style: TextStyle(color: AppColors.textPrimary),
-          ),
-        ),
-        body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              children: [
-                const SizedBox(height: 20),
-
-                GestureDetector(
-                  onTap: _showImagePickerOptions,
-                  child: Stack(
-                    children: [
-                      Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: _selectedImage == null
-                              ? const LinearGradient(
-                                  colors: [
-                                    Color(0xFF6366F1),
-                                    Color(0xFF8B5CF6),
-                                  ],
-                                )
-                              : null,
-                          image: _selectedImage != null
-                              ? DecorationImage(
-                                  image: FileImage(_selectedImage!),
-                                  fit: BoxFit.cover,
-                                )
-                              : null,
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(
-                                0xFF6366F1,
-                              ).withValues(alpha: 0.3),
-                              blurRadius: 20,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        child: _selectedImage == null
-                            ? const Icon(
-                                Iconsax.user,
-                                size: 50,
-                                color: Colors.white,
-                              )
-                            : null,
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                children: [
+                  const SizedBox(height: 20),
+                  GestureDetector(
+                    onTap: _showImagePickerOptions,
+                    child: Stack(
+                      children: [
+                        Container(
+                          width: 120,
+                          height: 120,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF6366F1),
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 3),
-                          ),
-                          child: const Icon(
-                            Iconsax.camera,
-                            size: 20,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                Text(
-                  'اضغط لإضافة صورة',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-
-                const SizedBox(height: 40),
-
-                _buildTextField(
-                  controller: _nameController,
-                  label: 'الاسم الكامل',
-                  icon: Iconsax.user,
-                  hint: 'أدخل اسمك الكامل',
-                ),
-
-                const SizedBox(height: 20),
-
-                _buildTextField(
-                  controller: _emailController,
-                  label: 'البريد الإلكتروني',
-                  icon: Iconsax.sms,
-                  hint: 'example@email.com',
-                  keyboardType: TextInputType.emailAddress,
-                  readOnly: true,
-                ),
-
-                const SizedBox(height: 20),
-
-                _buildTextField(
-                  controller: _passwordController,
-                  label: 'كلمة المرور',
-                  icon: Iconsax.lock,
-                  hint: '••••••••',
-                  obscureText: !_isPasswordVisible,
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _isPasswordVisible ? Iconsax.eye : Iconsax.eye_slash,
-                      color: AppColors.textSecondary,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _isPasswordVisible = !_isPasswordVisible;
-                      });
-                    },
-                  ),
-                  readOnly: true,
-                ),
-
-                const SizedBox(height: 20),
-
-                _buildTextField(
-                  controller: _confirmPasswordController,
-                  label: 'تأكيد كلمة المرور',
-                  icon: Iconsax.lock_1,
-                  hint: '••••••••',
-                  obscureText: !_isConfirmPasswordVisible,
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _isConfirmPasswordVisible
-                          ? Iconsax.eye
-                          : Iconsax.eye_slash,
-                      color: AppColors.textSecondary,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
-                      });
-                    },
-                  ),
-                ),
-
-                const SizedBox(height: 40),
-
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _createAccount,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6366F1),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      elevation: 8,
-                      shadowColor: const Color(
-                        0xFF6366F1,
-                      ).withValues(alpha: 0.3),
-                    ),
-                    child: _isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
-                              ),
-                            ),
-                          )
-                        : Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Iconsax.tick_circle, size: 20),
-                              const SizedBox(width: 8),
-                              Text(
-                                'إنشاء الحساب',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                            gradient: _selectedImage == null
+                                ? const LinearGradient(
+                                    colors: [
+                                      Color(0xFF6366F1),
+                                      Color(0xFF8B5CF6),
+                                    ],
+                                  )
+                                : null,
+                            image: _selectedImage != null
+                                ? DecorationImage(
+                                    image: FileImage(_selectedImage!),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(
+                                  0xFF6366F1,
+                                ).withValues(alpha: 0.3),
+                                blurRadius: 20,
+                                offset: const Offset(0, 10),
                               ),
                             ],
                           ),
+                          child: _selectedImage == null
+                              ? const Icon(
+                                  Iconsax.user,
+                                  size: 50,
+                                  color: Colors.white,
+                                )
+                              : null,
+                        ),
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF6366F1),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 3),
+                            ),
+                            child: const Icon(
+                              Iconsax.camera,
+                              size: 20,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-
-                const SizedBox(height: 24),
-
-                Text(
-                  'بالمتابعة، أنت توافق على شروط الاستخدام وسياسة الخصوصية',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: AppColors.textHint),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  Text(
+                    lang == 'ar' ? 'اضغط لإضافة صورة' : 'Tap to add photo',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondaryColor(context),
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                  _buildTextField(
+                    controller: _nameController,
+                    label: lang == 'ar' ? 'الاسم الكامل' : 'Full Name',
+                    icon: Iconsax.user,
+                    hint: lang == 'ar'
+                        ? 'أدخل اسمك الكامل'
+                        : 'Enter your full name',
+                  ),
+                  const SizedBox(height: 20),
+                  _buildTextField(
+                    controller: _emailController,
+                    label: lang == 'ar' ? 'البريد الإلكتروني' : 'Email',
+                    icon: Iconsax.sms,
+                    hint: 'example@email.com',
+                    keyboardType: TextInputType.emailAddress,
+                    readOnly: true,
+                  ),
+                  const SizedBox(height: 20),
+                  _buildTextField(
+                    controller: _passwordController,
+                    label: lang == 'ar' ? 'كلمة المرور' : 'Password',
+                    icon: Iconsax.lock,
+                    hint: '••••••••',
+                    obscureText: !_isPasswordVisible,
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _isPasswordVisible ? Iconsax.eye : Iconsax.eye_slash,
+                        color: AppColors.textSecondaryColor(context),
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _isPasswordVisible = !_isPasswordVisible;
+                        });
+                      },
+                    ),
+                    readOnly: true,
+                  ),
+                  const SizedBox(height: 20),
+                  _buildTextField(
+                    controller: _confirmPasswordController,
+                    label: lang == 'ar'
+                        ? 'تأكيد كلمة المرور'
+                        : 'Confirm Password',
+                    icon: Iconsax.lock_1,
+                    hint: '••••••••',
+                    obscureText: !_isConfirmPasswordVisible,
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _isConfirmPasswordVisible
+                            ? Iconsax.eye
+                            : Iconsax.eye_slash,
+                        color: AppColors.textSecondaryColor(context),
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _isConfirmPasswordVisible =
+                              !_isConfirmPasswordVisible;
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _createAccount,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6366F1),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        elevation: 8,
+                        shadowColor: const Color(
+                          0xFF6366F1,
+                        ).withValues(alpha: 0.3),
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Iconsax.tick_circle, size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  lang == 'ar'
+                                      ? 'إنشاء الحساب'
+                                      : 'Create Account',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    lang == 'ar'
+                        ? 'بالمتابعة، أنت توافق على شروط الاستخدام وسياسة الخصوصية'
+                        : 'By continuing, you agree to our Terms and Privacy Policy',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: AppColors.textHint),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -550,7 +577,7 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
         Text(
           label,
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            color: AppColors.textPrimary,
+            color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w600,
           ),
         ),

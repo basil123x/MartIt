@@ -1,17 +1,40 @@
+import 'package:awesome_dialog/awesome_dialog.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:shimmer/shimmer.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/services/api_service.dart';
-import '../../core/services/auth_service.dart';
-import '../../core/models/item_model.dart';
-import '../../core/widgets/media_viewer_widget.dart';
-import 'edit_profile_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:GlobalFarm/core/constants/app_colors.dart';
+import 'package:GlobalFarm/core/constants/app_config.dart';
+import 'package:GlobalFarm/core/models/item_model.dart';
+import 'package:GlobalFarm/core/services/api_service.dart';
+import 'package:GlobalFarm/core/services/auth_service.dart';
+import 'package:GlobalFarm/core/services/localization_service.dart';
+import 'package:GlobalFarm/core/utils/snackbar_helper.dart';
+import 'package:GlobalFarm/core/utils/theme_extensions.dart';
+import 'package:GlobalFarm/core/widgets/smart_avatar_widget.dart';
+import 'package:GlobalFarm/features/auth/login.dart';
+import 'package:GlobalFarm/features/chat/conversations_screen.dart';
+import 'package:GlobalFarm/features/orders/customer_orders_screen.dart';
+import 'package:GlobalFarm/features/orders/my_orders_screen.dart';
+import 'package:GlobalFarm/features/profile/edit_profile_screen.dart';
+import 'package:GlobalFarm/features/profile/profile_avatar_preview_screen.dart';
+import 'package:GlobalFarm/features/settings/settings_screen.dart';
 
+enum _ProfileSection { orders, addresses, support }
+
+/// Metrash-style account hub — solid header, icon grid, white content body.
 class ProfileScreen extends StatefulWidget {
   final String userId;
+  final VoidCallback? onOpenWishlist;
+  final VoidCallback? onOpenHome;
 
-  const ProfileScreen({super.key, required this.userId});
+  const ProfileScreen({
+    super.key,
+    required this.userId,
+    this.onOpenWishlist,
+    this.onOpenHome,
+  });
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -19,52 +42,22 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   UserProfileModel? _profile;
-  List<Map<String, dynamic>> _items = [];
   bool _isLoading = true;
-  bool _isLoadingItems = true;
-  bool _isLoadingMore = false;
   bool _hasError = false;
-  bool _hasErrorItems = false;
-  bool _hasMore = true;
-  int _currentOffset = 0;
-  final int _pageSize = 20;
-  String _selectedFilter = 'الرائجة';
-  final List<String> _filters = ['الرائجة', 'الأحدث', 'الأقدم'];
-  final ScrollController _scrollController = ScrollController();
+  bool _isAdmin = false;
+  int _avatarCacheTimestamp = DateTime.now().millisecondsSinceEpoch;
+
+  _ProfileSection _selected = _ProfileSection.orders;
+
+  List<dynamic> _recentOrders = [];
+  bool _ordersLoading = false;
+  List<dynamic> _addresses = [];
+  bool _addressesLoading = false;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
-    _loadItems();
-    _scrollController.addListener(_onScroll);
-  }
-
-  @override
-  void dispose() {
-    _scrollController.removeListener(_onScroll);
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
-      if (!_isLoadingMore && _hasMore) {
-        _loadMoreItems();
-      }
-    }
-  }
-
-  String _getSortParam() {
-    switch (_selectedFilter) {
-      case 'الأحدث':
-        return 'newest';
-      case 'الأقدم':
-        return 'oldest';
-      case 'الرائجة':
-      default:
-        return 'views';
-    }
   }
 
   Future<void> _loadProfile() async {
@@ -74,22 +67,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
 
     try {
-      final response = await ApiService.getUserProfile(
-        int.parse(widget.userId),
-      );
+      final admin = await AuthService.isAdmin();
+      final response = await ApiService.getUserProfile(widget.userId);
+      if (!mounted) return;
 
       if (response['success'] == true) {
         setState(() {
           _profile = UserProfileModel.fromJson(response['data']);
+          _isAdmin = admin;
           _isLoading = false;
+          _avatarCacheTimestamp = DateTime.now().millisecondsSinceEpoch;
         });
+        await _loadFreshUserDetails();
+        _loadRecentOrders();
+        if (!_isAdmin) {
+          _loadAddresses();
+        }
       } else {
         setState(() {
           _hasError = true;
           _isLoading = false;
         });
       }
-    } catch (e) {
+    } catch (_) {
+      if (!mounted) return;
       setState(() {
         _hasError = true;
         _isLoading = false;
@@ -97,588 +98,1070 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _loadItems() async {
-    setState(() {
-      _isLoadingItems = true;
-      _hasErrorItems = false;
-      _currentOffset = 0;
-      _items = [];
-    });
+  Future<void> _loadFreshUserDetails() async {
+    final currentUid = await AuthService.getCurrentUID();
+    if (currentUid == null || currentUid != widget.userId) return;
+
+    const storage = FlutterSecureStorage();
+    final email =
+        await storage.read(key: 'user_email') ??
+        await storage.read(key: 'social_email');
+    if (email == null || email.isEmpty) return;
 
     try {
-      final response = await ApiService.getUserProfileItems(
-        int.parse(widget.userId),
-        limit: _pageSize,
-        offset: 0,
-        sort: _getSortParam(),
+      final response = await Dio().post(
+        '${AuthService.baseUrl}/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        data: FormData.fromMap({'action': 'get_user_details', 'email': email}),
       );
 
-      if (response['success'] == true) {
+      if (response.data['success'] != true || response.data['data'] == null) {
+        return;
+      }
+
+      final data = response.data['data'] as Map<String, dynamic>;
+      final name = data['name']?.toString() ?? '';
+      if (name.isEmpty) return;
+
+      await AuthService.updateUserName(name);
+      if (!mounted || _profile == null) return;
+
+      setState(() {
+        _profile = UserProfileModel(
+          id: _profile!.id,
+          uid: _profile!.uid,
+          name: name,
+          phone: data['phone']?.toString() ?? _profile!.phone,
+          avatar: _profile!.avatar,
+          type: _profile!.type,
+          itemsCount: _profile!.itemsCount,
+        );
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _loadRecentOrders() async {
+    setState(() => _ordersLoading = true);
+    try {
+      final uid = await AuthService.getCurrentUID();
+      if (uid == null) {
+        if (mounted) setState(() => _ordersLoading = false);
+        return;
+      }
+
+      final result = _isAdmin
+          ? await ApiService.getCustomerOrders(
+              uid: uid,
+              storeId: AppConfig.storeId,
+            )
+          : await ApiService.getMyOrders(custId: uid);
+
+      if (!mounted) return;
+      if (result['success'] == true) {
+        final list = (result['data'] as List?) ?? [];
         setState(() {
-          _items = List<Map<String, dynamic>>.from(response['data'] ?? []);
-          _hasMore = response['hasMore'] ?? false;
-          _currentOffset = _pageSize;
-          _isLoadingItems = false;
+          _recentOrders = list.take(5).toList();
+          _ordersLoading = false;
         });
       } else {
         setState(() {
-          _hasErrorItems = true;
-          _isLoadingItems = false;
+          _recentOrders = [];
+          _ordersLoading = false;
         });
       }
-    } catch (e) {
+    } catch (_) {
+      if (!mounted) return;
       setState(() {
-        _hasErrorItems = true;
-        _isLoadingItems = false;
+        _recentOrders = [];
+        _ordersLoading = false;
       });
     }
   }
 
-  Future<void> _loadMoreItems() async {
-    if (_isLoadingMore || !_hasMore) return;
-
-    setState(() {
-      _isLoadingMore = true;
-    });
-
+  Future<void> _loadAddresses() async {
+    setState(() => _addressesLoading = true);
     try {
-      final response = await ApiService.getUserProfileItems(
-        int.parse(widget.userId),
-        limit: _pageSize,
-        offset: _currentOffset,
-        sort: _getSortParam(),
-      );
-
-      if (response['success'] == true) {
-        final newItems = List<Map<String, dynamic>>.from(response['data'] ?? []);
+      final uid = await AuthService.getCurrentUID() ?? widget.userId;
+      final result = await ApiService.getShippingAddresses(uid: uid);
+      if (!mounted) return;
+      if (result['success'] == true) {
         setState(() {
-          _items.addAll(newItems);
-          _hasMore = response['hasMore'] ?? false;
-          _currentOffset += _pageSize;
-          _isLoadingMore = false;
+          _addresses = (result['data'] as List?) ?? [];
+          _addressesLoading = false;
         });
       } else {
         setState(() {
-          _isLoadingMore = false;
+          _addresses = [];
+          _addressesLoading = false;
         });
       }
-    } catch (e) {
+    } catch (_) {
+      if (!mounted) return;
       setState(() {
-        _isLoadingMore = false;
+        _addresses = [];
+        _addressesLoading = false;
       });
     }
   }
 
-  void _onFilterChanged(String filter) {
-    if (_selectedFilter == filter) return;
-    setState(() {
-      _selectedFilter = filter;
-    });
-    _loadItems();
+  Future<void> _openEditProfile() async {
+    final profile = _profile;
+    if (profile == null) return;
+
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditProfileScreen(
+          currentName: profile.name,
+          currentPhone: profile.phone,
+          currentType: profile.type,
+          currentAvatar: profile.avatar,
+          currentUid: profile.uid.isNotEmpty ? profile.uid : widget.userId,
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
+      await _loadProfile();
+    }
+  }
+
+  Future<void> _openSettings() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SettingsScreen(profile: _profile),
+      ),
+    );
+    if (result != null && mounted) {
+      await _loadProfile();
+    }
+  }
+
+  void _openMessages() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ConversationsScreen(userId: widget.userId),
+      ),
+    );
+  }
+
+  void _openAllOrders() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _isAdmin
+            ? const CustomerOrdersScreen()
+            : const MyOrdersScreen(),
+      ),
+    ).then((_) => _loadRecentOrders());
+  }
+
+  void _logout() {
+    AwesomeDialog(
+      context: context,
+      dialogType: DialogType.warning,
+      animType: AnimType.scale,
+      title: tr('profile.logout'),
+      desc: tr('profile.logout_confirm'),
+      btnCancelText: tr('common.cancel'),
+      btnOkText: tr('profile.logout'),
+      btnOkColor: Colors.red,
+      btnCancelOnPress: () {},
+      btnOkOnPress: () async {
+        await AuthService.logout();
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (_) => false,
+        );
+      },
+    ).show();
+  }
+
+  Future<void> _callNumber(String localNumber) async {
+    final uri = Uri(scheme: 'tel', path: '+974$localNumber');
+    try {
+      final ok = await launchUrl(uri);
+      if (!ok && mounted) {
+        showAppSnackbar(
+          context,
+          message: tr('profile.dialer_error'),
+          type: SnackType.error,
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      showAppSnackbar(
+        context,
+        message: tr('profile.dialer_error'),
+        type: SnackType.error,
+      );
+    }
+  }
+
+  void _onGridTap(_ProfileMenuItem item) {
+    switch (item.id) {
+      case 'orders':
+        setState(() => _selected = _ProfileSection.orders);
+        break;
+      case 'addresses':
+        setState(() => _selected = _ProfileSection.addresses);
+        _loadAddresses();
+        break;
+      case 'wishlist':
+        if (widget.onOpenWishlist != null) {
+          widget.onOpenWishlist!();
+        }
+        break;
+      case 'messages':
+        _openMessages();
+        break;
+      case 'edit':
+        _openEditProfile();
+        break;
+      case 'settings':
+        _openSettings();
+        break;
+      case 'support':
+        setState(() => _selected = _ProfileSection.support);
+        break;
+      case 'logout':
+        _logout();
+        break;
+    }
+  }
+
+  List<_ProfileMenuItem> get _menuItems {
+    if (_isAdmin) {
+      return [
+        _ProfileMenuItem(
+          id: 'orders',
+          icon: Iconsax.box,
+          label: tr('profile.customer_orders'),
+          section: _ProfileSection.orders,
+        ),
+        _ProfileMenuItem(
+          id: 'messages',
+          icon: Iconsax.message,
+          label: tr('profile.messages'),
+        ),
+        _ProfileMenuItem(
+          id: 'edit',
+          icon: Iconsax.user_edit,
+          label: tr('profile.edit_account'),
+        ),
+        _ProfileMenuItem(
+          id: 'settings',
+          icon: Iconsax.setting_2,
+          label: tr('profile.settings'),
+        ),
+        _ProfileMenuItem(
+          id: 'logout',
+          icon: Iconsax.logout,
+          label: tr('profile.logout'),
+        ),
+      ];
+    }
+
+    return [
+      _ProfileMenuItem(
+        id: 'orders',
+        icon: Iconsax.box,
+        label: tr('profile.my_orders'),
+        section: _ProfileSection.orders,
+      ),
+      _ProfileMenuItem(
+        id: 'addresses',
+        icon: Iconsax.location,
+        label: tr('profile.my_addresses'),
+        section: _ProfileSection.addresses,
+      ),
+      _ProfileMenuItem(
+        id: 'wishlist',
+        icon: Iconsax.heart,
+        label: tr('profile.wishlist'),
+      ),
+      _ProfileMenuItem(
+        id: 'messages',
+        icon: Iconsax.message,
+        label: tr('profile.messages'),
+      ),
+      _ProfileMenuItem(
+        id: 'edit',
+        icon: Iconsax.user_edit,
+        label: tr('profile.edit_account'),
+      ),
+      _ProfileMenuItem(
+        id: 'settings',
+        icon: Iconsax.setting_2,
+        label: tr('profile.settings'),
+      ),
+      _ProfileMenuItem(
+        id: 'support',
+        icon: Iconsax.headphone,
+        label: tr('profile.support'),
+        section: _ProfileSection.support,
+      ),
+      _ProfileMenuItem(
+        id: 'logout',
+        icon: Iconsax.logout,
+        label: tr('profile.logout'),
+      ),
+    ];
+  }
+
+  String get _sectionTitle {
+    switch (_selected) {
+      case _ProfileSection.orders:
+        return _isAdmin
+            ? tr('profile.customer_orders')
+            : tr('profile.my_orders');
+      case _ProfileSection.addresses:
+        return tr('profile.my_addresses');
+      case _ProfileSection.support:
+        return tr('profile.support');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            )
-          : _hasError
-          ? _buildErrorState()
-          : _buildProfileContent(),
-    );
-  }
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: context.appBackground,
+        body: const Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+    }
 
-  Widget _buildErrorState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Iconsax.warning_2, size: 64, color: Colors.red),
-          const SizedBox(height: 16),
-          const Text(
-            'حدث خطأ في تحميل الملف الشخصي',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+    if (_hasError || _profile == null) {
+      return Scaffold(
+        backgroundColor: context.appBackground,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Iconsax.warning_2, size: 56, color: Colors.grey[400]),
+              const SizedBox(height: 12),
+              Text(
+                tr('profile.profile_error'),
+                style: TextStyle(color: context.appTextSecondary),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _loadProfile,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                ),
+                child: Text(tr('profile.retry')),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () {
-              _loadProfile();
-              _loadItems();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
+        ),
+      );
+    }
+
+    return Scaffold(
+      // One body color under the green header (matches curved sheet).
+      backgroundColor: context.appSurface,
+      body: Column(
+        children: [
+          // Header + avatar + name + icon grid stay fixed.
+          _buildCompactHeader(),
+          // Only the section under the buttons scrolls.
+          Expanded(
+            child: ColoredBox(
+              color: context.appSurface,
+              child: RefreshIndicator(
+                color: AppColors.primary,
+                onRefresh: _loadProfile,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
+                  padding: EdgeInsets.zero,
+                  children: [
+                    _buildSectionContent(),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
             ),
-            child: const Text('إعادة المحاولة'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildProfileContent() {
-    if (_profile == null) return const SizedBox();
+  /// Straight green header + white body with top corner curves.
+  Widget _buildCompactHeader() {
+    final topPad = MediaQuery.of(context).padding.top;
+    const avatarSize = 96.0;
+    const headerBodyHeight = 188.0;
+    const bodyTopRadius = 36.0;
+    const bodyOverlap = 36.0;
 
-    return CustomScrollView(
-      controller: _scrollController,
-      slivers: [
-        // App Bar
-        SliverAppBar(
-          expandedHeight: 300,
-          floating: false,
-          pinned: true,
-          backgroundColor: AppColors.primary,
-          leading: FutureBuilder<String?>(
-            future: AuthService.getCurrentUserId(),
-            builder: (context, snapshot) {
-              if (snapshot.hasData && snapshot.data == widget.userId) {
-                return IconButton(
-                  onPressed: () async {
-                    final result = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => EditProfileScreen(
-                          currentName: _profile?.name ?? '',
-                          currentPhone: _profile?.phone ?? '',
-                          currentType: _profile?.type ?? '',
-                          currentAvatar: _profile?.avatar ?? '',
-                          currentUid: _profile?.uid ?? '',
-                        ),
-                      ),
-                    );
-                    if (result != null && result is Map<String, dynamic>) {
-                      if (result['success'] == true) {
-                        setState(() {
-                          if (_profile != null) {
-                            _profile = UserProfileModel(
-                              id: _profile!.id,
-                              uid: _profile!.uid,
-                              name: result['name'] ?? _profile!.name,
-                              phone: result['phone'] ?? _profile!.phone,
-                              avatar: result['avatar'] ?? _profile!.avatar,
-                              type: _profile!.type,
-                              itemsCount: _profile!.itemsCount,
-                            );
-                          }
-                        });
-                        _loadProfile();
-                      }
-                    } else if (result == true) {
-                      _loadProfile();
-                    }
-                  },
-                  icon: const Icon(Iconsax.edit, color: AppColors.primary),
-                );
-              }
-              return const SizedBox();
-            },
-          ),
-          actions: [
-            IconButton(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Iconsax.arrow_right_3, color: AppColors.primary),
-            ),
-          ],
-          flexibleSpace: FlexibleSpaceBar(
-            background: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0xFFD4D4F0),
-                    Color(0xFFC8D4F5),
-                    Color(0xFFB4D4F0),
-                  ],
-                ),
-              ),
-              child: _buildProfileHeader(),
+    final greenHeight = topPad + headerBodyHeight;
+    final sheetTop = greenHeight - bodyOverlap;
+    final profile = _profile!;
+    final displayName = profile.name.isNotEmpty
+        ? profile.name
+        : tr('profile.user');
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        // Straight green header.
+        Container(
+          height: greenHeight,
+          width: double.infinity,
+          color: AppColors.primary,
+          padding: EdgeInsets.only(top: topPad + 20),
+          alignment: Alignment.topCenter,
+          child: Text(
+            tr('profile.title'),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ),
-
-        // Filter Buttons
-        SliverToBoxAdapter(child: _buildFilterButtons()),
-
-        // Profile Items Grid
-        SliverToBoxAdapter(child: _buildItemsSection()),
+        // White body (rounded top) + name + icon grid.
+        Padding(
+          padding: EdgeInsets.only(top: sheetTop),
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: context.appSurface,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(bodyTopRadius),
+                topRight: Radius.circular(bodyTopRadius),
+              ),
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+            child: Column(
+              children: [
+                SizedBox(height: avatarSize / 2 + 8),
+                Text(
+                  displayName,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: context.appTextPrimary,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    height: 1.15,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                _buildIconGrid(),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
+        // Avatar on the seam.
+        Positioned(
+          top: sheetTop - (avatarSize / 2),
+          left: 0,
+          right: 0,
+          child: Center(
+            child: GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ProfileAvatarPreviewScreen(
+                      userId: widget.userId,
+                      name: profile.name,
+                      fallbackUrl: profile.avatar,
+                      cacheTimestamp: _avatarCacheTimestamp,
+                    ),
+                  ),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.12),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: SmartAvatarWidget(
+                  userId: widget.userId,
+                  name: profile.name,
+                  size: avatarSize - 6,
+                  fallbackUrl: profile.avatar,
+                  cacheTimestamp: _avatarCacheTimestamp,
+                ),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildProfileHeader() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const SizedBox(height: 40),
+  Widget _buildIconGrid() {
+    final items = _menuItems;
 
-          // Profile Avatar
+    if (_isAdmin) {
+      final row1 = items.take(3).toList();
+      final row2 = items.skip(3).toList();
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final item in row1)
+                Expanded(child: _buildGridItem(item)),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var i = 0; i < row2.length; i++) ...[
+                if (i > 0) const SizedBox(width: 28),
+                SizedBox(width: 88, child: _buildGridItem(row2[i])),
+              ],
+            ],
+          ),
+        ],
+      );
+    }
+
+    final row1 = items.take(4).toList();
+    final row2 = items.skip(4).toList();
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final item in row1) Expanded(child: _buildGridItem(item)),
+          ],
+        ),
+        const SizedBox(height: 18),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final item in row2) Expanded(child: _buildGridItem(item)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGridItem(_ProfileMenuItem item) {
+    final selected = item.section != null && item.section == _selected;
+    return GestureDetector(
+      onTap: () => _onGridTap(item),
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
           Container(
-            width: 120,
-            height: 120,
+            width: 50,
+            height: 50,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.primary, width: 4),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
+              color: selected
+                  ? AppColors.primary
+                  : AppColors.primary.withValues(alpha: 0.12),
+            ),
+            child: Icon(
+              item.icon,
+              size: 21,
+              color: selected ? Colors.white : AppColors.primary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            item.label,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: context.appTextPrimary,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              height: 1.1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionContent() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _sectionTitle,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: context.appTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (_selected == _ProfileSection.orders) _buildOrdersSection(),
+          if (_selected == _ProfileSection.addresses) _buildAddressesSection(),
+          if (_selected == _ProfileSection.support) _buildSupportSection(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrdersSection() {
+    if (_ordersLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 40),
+        child: Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+    }
+
+    if (_recentOrders.isEmpty) {
+      return _EmptyCard(
+        icon: Iconsax.box_1,
+        title: _isAdmin
+            ? tr('profile.no_customer_orders')
+            : tr('profile.no_orders_yet'),
+        subtitle: _isAdmin
+            ? tr('profile.customer_orders_empty_hint')
+            : tr('profile.orders_empty_hint'),
+        actionLabel: _isAdmin ? null : tr('profile.browse_products'),
+        onAction: _isAdmin ? null : () => widget.onOpenHome?.call(),
+      );
+    }
+
+    return Column(
+      children: [
+        ..._recentOrders.map((order) {
+          final id = order['oid']?.toString() ??
+              order['order_id']?.toString() ??
+              order['id']?.toString() ??
+              '';
+          final status = order['status']?.toString() ?? '';
+          final total = order['total_amount']?.toString() ??
+              order['total']?.toString() ??
+              order['amount']?.toString() ??
+              '';
+          final date = order['created_at']?.toString() ??
+              order['date']?.toString() ??
+              '';
+          final customerName = order['customer_name']?.toString() ?? '';
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: context.appSurfaceVariant,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: context.appBorder),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Iconsax.box,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
                 ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        id.isEmpty
+                            ? tr('profile.order')
+                            : '${tr('profile.order')} #$id',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          color: context.appTextPrimary,
+                        ),
+                      ),
+                      if (_isAdmin && customerName.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          customerName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.appTextSecondary,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 2),
+                      Text(
+                        [
+                          if (status.isNotEmpty) status,
+                          if (date.isNotEmpty) date,
+                        ].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: context.appTextSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (total.isNotEmpty)
+                  Text(
+                    total,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primary,
+                    ),
+                  ),
               ],
             ),
-            child: CircleAvatar(
-              radius: 56,
-              backgroundImage: NetworkImage(
-                "https://globee.b-cdn.net/users/${_profile?.uid}/1.jpg?k=${DateTime.now().millisecondsSinceEpoch}",
-              ),
-              backgroundColor: Colors.white,
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // User Name
-          Text(
-            _profile!.name,
-            style: const TextStyle(
-              color: AppColors.primary,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-            textAlign: TextAlign.center,
-          ),
-
-          const SizedBox(height: 8),
-          // Items Count
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              '${_profile!.itemsCount} منتج',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterButtons() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: _filters.map((filter) {
-          final isSelected = _selectedFilter == filter;
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: ElevatedButton(
-                onPressed: () => _onFilterChanged(filter),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isSelected
-                      ? AppColors.primary
-                      : Colors.grey[200],
-                  foregroundColor: isSelected ? Colors.white : Colors.black,
-                  elevation: isSelected ? 2 : 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-                child: Text(
-                  filter,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ),
           );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildItemsSection() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          // Skeleton Loading
-          if (_isLoadingItems)
-            _buildSkeletonGrid()
-          // Empty State
-          else if (_items.isEmpty && !_hasErrorItems)
-            _buildEmptyState()
-          // Error State
-          else if (_hasErrorItems)
-            _buildItemsErrorState()
-          // Items Grid
-          else
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 0.8,
-              ),
-              itemCount: _items.length,
-              itemBuilder: (context, index) {
-                return ProfileItemCard(item: _items[index]);
-              },
+        }),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _openAllOrders,
+            icon: const Icon(Iconsax.arrow_left_2, size: 18),
+            label: Text(
+              _isAdmin
+                  ? tr('profile.view_all_customer_orders')
+                  : tr('profile.view_all_orders'),
             ),
-
-          // Loading More Indicator
-          if (_isLoadingMore)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
               ),
             ),
-
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSkeletonGrid() {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 0.8,
-      ),
-      itemCount: 6,
-      itemBuilder: (context, index) {
-        return _buildSkeletonCard();
-      },
-    );
-  }
-
-  Widget _buildSkeletonCard() {
-    return Shimmer.fromColors(
-      baseColor: Colors.grey[300]!,
-      highlightColor: Colors.grey[100]!,
-      child: Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Image placeholder
-            Expanded(
-              flex: 3,
-              child: Container(
+      ],
+    );
+  }
+
+  Widget _buildAddressesSection() {
+    if (_addressesLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 40),
+        child: Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+    }
+
+    if (_addresses.isEmpty) {
+      return _EmptyCard(
+        icon: Iconsax.location,
+        title: tr('profile.no_saved_addresses'),
+        subtitle: tr('profile.addresses_empty_hint'),
+      );
+    }
+
+    return Column(
+      children: _addresses.map((addr) {
+        final name = addr['fullname']?.toString() ??
+            addr['full_name']?.toString() ??
+            '';
+        final phone = addr['mobile']?.toString() ??
+            addr['phone']?.toString() ??
+            '';
+        final city = addr['city']?.toString() ?? '';
+        final country = addr['country']?.toString() ?? '';
+        final line = [
+          if (city.isNotEmpty) city,
+          if (country.isNotEmpty) country,
+        ].join(', ');
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: context.appSurfaceVariant,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: context.appBorder),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(12),
-                  ),
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Iconsax.location,
+                  color: AppColors.primary,
+                  size: 20,
                 ),
               ),
-            ),
-            // Text placeholders
-            Expanded(
-              flex: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(8),
+              const SizedBox(width: 12),
+              Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      height: 14,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(4),
+                    Text(
+                      name.isNotEmpty ? name : tr('profile.shipping_address'),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        color: context.appTextPrimary,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Container(
-                      height: 12,
-                      width: 80,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(4),
+                    if (line.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        line,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: context.appTextSecondary,
+                        ),
                       ),
-                    ),
+                    ],
+                    if (phone.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        phone,
+                        textDirection: TextDirection.ltr,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: context.appTextSecondary,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Iconsax.box_1,
-              size: 80,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'لا توجد منتجات بعد',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'ابدأ بإضافة منتجاتك الآن',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[500],
-              ),
-            ),
-          ],
+  Widget _buildSupportSection() {
+    return Column(
+      children: [
+        Text(
+          tr('profile.support_intro'),
+          style: TextStyle(
+            fontSize: 13,
+            color: context.appTextSecondary,
+          ),
         ),
-      ),
+        const SizedBox(height: 14),
+        _SupportTile(
+          icon: Iconsax.headphone5,
+          color: AppColors.primary,
+          title: tr('profile.support'),
+          subtitle: tr('profile.support_desc'),
+          displayNumber: '3338 0011',
+          onCall: () => _callNumber('33380011'),
+        ),
+        const SizedBox(height: 10),
+        _SupportTile(
+          icon: Iconsax.user,
+          color: AppColors.primary,
+          title: tr('profile.customer_service'),
+          subtitle: tr('profile.customer_service_desc'),
+          displayNumber: '7799 1225',
+          onCall: () => _callNumber('77991225'),
+        ),
+      ],
     );
   }
+}
 
-  Widget _buildItemsErrorState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Iconsax.warning_2,
-              size: 48,
-              color: Colors.red[300],
+class _ProfileMenuItem {
+  final String id;
+  final IconData icon;
+  final String label;
+  final _ProfileSection? section;
+
+  const _ProfileMenuItem({
+    required this.id,
+    required this.icon,
+    required this.label,
+    this.section,
+  });
+}
+
+class _EmptyCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const _EmptyCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+      decoration: BoxDecoration(
+        color: context.appSurfaceVariant,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.appBorder),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 48, color: Colors.grey[400]),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+              color: context.appTextPrimary,
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'فشل في تحميل المنتجات',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12.5,
+              color: context.appTextSecondary,
             ),
-            const SizedBox(height: 12),
+          ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: 14),
             TextButton(
-              onPressed: _loadItems,
-              child: const Text('إعادة المحاولة'),
+              onPressed: onAction,
+              child: Text(actionLabel!),
             ),
           ],
-        ),
+        ],
       ),
     );
   }
 }
 
-class ProfileItemCard extends StatelessWidget {
-  final Map<String, dynamic> item;
+class _SupportTile extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final String displayNumber;
+  final VoidCallback onCall;
 
-  const ProfileItemCard({super.key, required this.item});
+  const _SupportTile({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    required this.displayNumber,
+    required this.onCall,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: Color(0xFFB4D4F0).withAlpha(40),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: AppColors.primary, width: 2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            flex: 3,
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(12),
+    return Material(
+      color: context.appSurfaceVariant,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onCall,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: color, size: 20),
               ),
-              child: MediaViewerWidget(
-                mediaUrls: const [],
-                itmId: "${item["id"] ?? ""}",
-                itmIdx: "${item["idx"] ?? ""}",
-                storeid: "${item["storeid"] ?? "1"}",
-                autoPlayVideo: false,
-                showControls: false,
-                showIndicators: false,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    item['name'] ?? 'غير متوفر',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
-                    textAlign: TextAlign.right,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${item['price']} ريال',
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                    textAlign: TextAlign.right,
-                  ),
-                  const Spacer(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Icon(Iconsax.eye, size: 12, color: Colors.grey),
-                      Text(
-                        item['views']?.toString() ?? "0",
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 10,
-                        ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        color: context.appTextPrimary,
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: context.appTextSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      displayNumber,
+                      textDirection: TextDirection.ltr,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        color: color,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Iconsax.call, color: Colors.white, size: 18),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

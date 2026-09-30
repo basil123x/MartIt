@@ -1,9 +1,11 @@
 import 'package:GlobalFarm/features/orders/invoice_webview.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/services/api_service.dart';
-import '../../core/services/auth_service.dart';
+import 'package:GlobalFarm/core/constants/app_colors.dart';
+import 'package:GlobalFarm/core/services/api_service.dart';
+import 'package:GlobalFarm/core/services/auth_service.dart';
+import 'package:GlobalFarm/core/services/localization_service.dart';
+import 'package:GlobalFarm/core/utils/theme_extensions.dart';
 
 class MyOrdersScreen extends StatefulWidget {
   const MyOrdersScreen({super.key});
@@ -32,7 +34,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     try {
       final uid = await AuthService.getCurrentUID();
       print('🔍 DEBUG MyOrders - UID from AuthService: $uid');
-      
+
       if (uid == null) {
         print('❌ DEBUG MyOrders - UID is null, user not logged in');
         throw Exception('User not logged in');
@@ -50,7 +52,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
           _isLoading = false;
         });
       } else {
-        print('❌ DEBUG MyOrders - API returned success=false: ${result['error']}');
+        print(
+          '❌ DEBUG MyOrders - API returned success=false: ${result['error']}',
+        );
         setState(() {
           _hasError = true;
           _isLoading = false;
@@ -65,38 +69,41 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     }
   }
 
-  Future<void> _openInvoice(String orderId) async {
-    final url =
-        'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&store_id=2&k=${DateTime.now().millisecondsSinceEpoch}';
+  Future<void> _openInvoice(
+    String orderId, {
+    bool isCustomerView = false,
+  }) async {
+    final url = InvoiceWebView.buildUrl(
+      orderId: orderId,
+      view: isCustomerView ? 'customer' : null,
+    );
 
     if (!context.mounted) return;
 
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => InvoiceWebView(url: url),
-      ),
+      MaterialPageRoute(builder: (_) => InvoiceWebView(url: url)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: context.appTextDirection,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF5F7FB),
+        backgroundColor: context.appBackground,
         appBar: AppBar(
           forceMaterialTransparency: true,
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
             onPressed: () => Navigator.pop(context),
-            icon: const Icon(Iconsax.arrow_right, color: Color(0xFF1A1A2E)),
+            icon: Icon(Iconsax.arrow_right, color: context.appTextPrimary),
           ),
-          title: const Text(
-            'طلباتي',
+          title: Text(
+            tr('orders.my_orders_title'),
             style: TextStyle(
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
@@ -132,10 +139,10 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         children: [
           const Icon(Iconsax.warning_2, size: 80, color: Colors.red),
           const SizedBox(height: 16),
-          const Text(
-            'حدث خطأ في تحميل الطلبات',
+          Text(
+            tr('orders.load_error'),
             style: TextStyle(
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 18,
               fontWeight: FontWeight.w500,
             ),
@@ -147,7 +154,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
             ),
-            child: const Text('إعادة المحاولة'),
+            child: Text(tr('orders.retry')),
           ),
         ],
       ),
@@ -173,38 +180,47 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          const Text(
-            'لا توجد طلبات',
+          Text(
+            tr('orders.no_orders'),
             style: TextStyle(
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 24,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 12),
           Text(
-            'لم تقم بأي طلبات حتى الآن',
-            style: TextStyle(
-              color: const Color(0xFF1A1A2E).withOpacity(0.6),
-              fontSize: 16,
-            ),
+            tr('orders.no_orders_hint'),
+            style: TextStyle(color: context.appTextSecondary, fontSize: 16),
           ),
         ],
       ),
     );
   }
 
+  int _sellerCount(dynamic order) {
+    if (order is! Map) return 1;
+
+    final value = order["seller_count"];
+    if (value == null) return 1;
+
+    final count = switch (value) {
+      int v => v,
+      num v => v.toInt(),
+      _ => int.tryParse(value.toString().trim()),
+    };
+
+    if (count == null || count < 1) return 1;
+    return count;
+  }
+
   Widget _buildOrderCard(dynamic order) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFD4D4F0), Color(0xFFC8D4F5)],
-        ),
+        gradient: context.surfaceGradient(),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+        border: Border.all(color: context.appBorder, width: 1),
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -233,18 +249,18 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'رقم الطلب',
+                        Text(
+                          tr('orders.order_number'),
                           style: TextStyle(
-                            color: Color(0xFF1A1A2E),
+                            color: context.appTextPrimary,
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                         Text(
                           '#${order['oid']}',
-                          style: const TextStyle(
-                            color: Color(0xFF1A1A2E),
+                          style: TextStyle(
+                            color: context.appTextPrimary,
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
@@ -298,27 +314,30 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
 
             // Order Details
             _buildDetailRow(
-              Iconsax.user,
-              'البائع',
-              order['seller_name'] ?? 'غير متوفر',
-            ),
-            const SizedBox(height: 12),
-            _buildDetailRow(
-              Iconsax.call,
-              'رقم الهاتف',
-              order['seller_phone'] ?? 'غير متوفر',
+              Iconsax.shop,
+              tr('orders.sellers_count'),
+              '${_sellerCount(order)} ${tr('orders.seller_unit')}',
             ),
             const SizedBox(height: 12),
             _buildDetailRow(
               Iconsax.calendar,
-              'تاريخ الطلب',
+              tr('orders.order_date'),
               _formatDate(order['created_at']),
             ),
             const SizedBox(height: 12),
             _buildDetailRow(
               Iconsax.money,
-              'المبلغ الإجمالي',
-              '${order['total_amount']} ريال',
+              tr('orders.total_amount'),
+              '${order['total_amount']} ${tr('orders.currency')}',
+            ),
+            const SizedBox(height: 8),
+            Text(
+              tr('orders.tap_for_items_hint'),
+              style: TextStyle(
+                color: context.appTextSecondary.withOpacity(0.8),
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+              ),
             ),
 
             const SizedBox(height: 20),
@@ -327,7 +346,8 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () => _openInvoice(order['oid'].toString()),
+                onPressed: () =>
+                    _openInvoice(order['oid'].toString(), isCustomerView: true),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -338,9 +358,12 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                   elevation: 0,
                 ),
                 icon: const Icon(Iconsax.document_text, size: 20),
-                label: const Text(
-                  'عرض الفاتورة',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                label: Text(
+                  tr('orders.view_invoice'),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
@@ -357,16 +380,13 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         const SizedBox(width: 8),
         Text(
           '$label: ',
-          style: TextStyle(
-            color: const Color(0xFF1A1A2E).withOpacity(0.7),
-            fontSize: 14,
-          ),
+          style: TextStyle(color: context.appTextSecondary, fontSize: 14),
         ),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(
-              color: Color(0xFF1A1A2E),
+            style: TextStyle(
+              color: context.appTextPrimary,
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),
@@ -390,14 +410,15 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     }
   }
 
+  /// Maps the raw API status value to its localized label.
   String _getStatusText(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
-        return 'قيد المعالجة';
+        return tr('orders.status_processing');
       case 'completed':
-        return 'مكتمل';
+        return tr('orders.status_completed');
       case 'cancelled':
-        return 'ملغي';
+        return tr('orders.status_cancelled');
       default:
         return status;
     }

@@ -1,11 +1,16 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:iconsax/iconsax.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/models/cart_model.dart';
-import '../../core/models/shipping_address_model.dart';
-import '../../core/services/api_service.dart';
-import '../../core/services/auth_service.dart';
-import '../payment/payment_methods_screen.dart';
+import 'package:GlobalFarm/core/constants/app_colors.dart';
+import 'package:GlobalFarm/core/models/cart_model.dart';
+import 'package:GlobalFarm/core/models/shipping_address_model.dart';
+import 'package:GlobalFarm/core/services/api_service.dart';
+import 'package:GlobalFarm/core/services/auth_service.dart';
+import 'package:GlobalFarm/features/payment/payment_methods_screen.dart';
+import 'package:GlobalFarm/core/utils/snackbar_helper.dart';
+import 'package:GlobalFarm/core/utils/theme_extensions.dart';
 
 class ShippingAddressScreen extends StatefulWidget {
   final String userId;
@@ -28,6 +33,7 @@ class ShippingAddressScreen extends StatefulWidget {
 class _ShippingAddressScreenState extends State<ShippingAddressScreen> {
   List<ShippingAddressModel> _addresses = [];
   bool _isLoading = true;
+  bool _isLocating = false;
   bool _showAddForm = false;
   int? _selectedAddressIndex;
 
@@ -46,7 +52,28 @@ class _ShippingAddressScreenState extends State<ShippingAddressScreen> {
   @override
   void initState() {
     super.initState();
+    _prefillUserData();
     _loadAddresses();
+  }
+
+  Future<void> _prefillUserData() async {
+    const storage = FlutterSecureStorage();
+
+    final name = await AuthService.getCurrentName() ?? '';
+    final phone = await AuthService.getCurrentPhone() ?? '';
+    final email =
+        await storage.read(key: 'user_email') ??
+        await storage.read(key: 'social_email') ??
+        '';
+
+    if (!mounted) return;
+
+    setState(() {
+      if (name.isNotEmpty) _fullnameController.text = name;
+      if (phone.isNotEmpty) _mobileController.text = phone;
+      if (email.isNotEmpty) _emailController.text = email;
+      if (_countryController.text.isEmpty) _countryController.text = 'Qatar';
+    });
   }
 
   @override
@@ -77,21 +104,153 @@ class _ShippingAddressScreenState extends State<ShippingAddressScreen> {
               .map((item) => ShippingAddressModel.fromJson(item))
               .toList();
           _isLoading = false;
+          if (_addresses.isNotEmpty) {
+            _selectedAddressIndex = 0;
+            _showAddForm = false;
+          } else {
+            _selectedAddressIndex = null;
+            _showAddForm = true;
+          }
         });
       } else {
         setState(() {
           _isLoading = false;
+          if (_addresses.isEmpty) _showAddForm = true;
         });
       }
     } catch (e) {
       print('Error loading addresses: $e');
       setState(() {
         _isLoading = false;
+        if (_addresses.isEmpty) _showAddForm = true;
       });
     }
   }
 
+  Future<void> _getLocationAndFill() async {
+    setState(() => _isLocating = true);
+
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (!mounted) return;
+          showAppSnackbar(
+            context,
+            message: 'يجب السماح بالوصول للموقع',
+            type: SnackType.warning,
+          );
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        showAppSnackbar(
+          context,
+          message: 'يجب السماح بالوصول للموقع من الإعدادات',
+          type: SnackType.warning,
+        );
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
+      );
+
+      final url =
+          'https://nominatim.openstreetmap.org/reverse'
+          '?lat=${position.latitude}'
+          '&lon=${position.longitude}'
+          '&format=json'
+          '&accept-language=ar';
+
+      final response = await Dio().get(
+        url,
+        options: Options(headers: {'User-Agent': 'MartItApp/1.0'}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        final address = data['address'] ?? {};
+
+        if (!mounted) return;
+        setState(() {
+          final city =
+              address['city'] ??
+              address['town'] ??
+              address['village'] ??
+              address['municipality'] ??
+              '';
+          if (city.isNotEmpty) _cityController.text = city.toString();
+
+          final country = address['country'] ?? 'Qatar';
+          _countryController.text = country.toString();
+
+          final zone =
+              address['suburb'] ??
+              address['neighbourhood'] ??
+              address['quarter'] ??
+              address['district'] ??
+              '';
+          if (zone.isNotEmpty) _zoneController.text = zone.toString();
+
+          final street = address['road'] ?? address['street'] ?? '';
+          if (street.isNotEmpty) _streetController.text = street.toString();
+
+          final building = address['house_number'] ?? '';
+          if (building.isNotEmpty) {
+            _buildingController.text = building.toString();
+          }
+        });
+
+        if (!mounted) return;
+        showAppSnackbar(
+          context,
+          message: 'تم تحديد موقعك بنجاح ✓',
+          type: SnackType.success,
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      showAppSnackbar(
+        context,
+        message: 'تعذر تحديد الموقع، أدخل العنوان يدوياً',
+        type: SnackType.error,
+      );
+    } finally {
+      if (mounted) setState(() => _isLocating = false);
+    }
+  }
+
+  bool _validateForm() {
+    final required = [
+      (_fullnameController, 'الاسم الكامل'),
+      (_mobileController, 'رقم الهاتف'),
+      (_countryController, 'الدولة'),
+      (_cityController, 'المدينة'),
+      (_zoneController, 'رقم المنطقة'),
+      (_streetController, 'رقم الشارع'),
+      (_buildingController, 'رقم المبنى'),
+    ];
+
+    for (final (controller, name) in required) {
+      if (controller.text.trim().isEmpty) {
+        showAppSnackbar(
+          context,
+          message: '$name مطلوب',
+          type: SnackType.warning,
+        );
+        return false;
+      }
+    }
+    return true;
+  }
+
   Future<void> _addAddress() async {
+    if (!_validateForm()) return;
     if (!_formKey.currentState!.validate()) return;
 
     try {
@@ -111,11 +270,10 @@ class _ShippingAddressScreenState extends State<ShippingAddressScreen> {
       );
 
       if (result['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم إضافة العنوان بنجاح'),
-            backgroundColor: Colors.green,
-          ),
+        showAppSnackbar(
+          context,
+          message: 'تم إضافة العنوان بنجاح',
+          type: SnackType.success,
         );
 
         _clearForm();
@@ -124,19 +282,17 @@ class _ShippingAddressScreenState extends State<ShippingAddressScreen> {
         });
         _loadAddresses();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'فشل في إضافة العنوان'),
-            backgroundColor: Colors.red,
-          ),
+        showAppSnackbar(
+          context,
+          message: result['error'] ?? 'فشل في إضافة العنوان',
+          type: SnackType.error,
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('حدث خطأ أثناء إضافة العنوان'),
-          backgroundColor: Colors.red,
-        ),
+      showAppSnackbar(
+        context,
+        message: 'حدث خطأ أثناء إضافة العنوان',
+        type: SnackType.error,
       );
     }
   }
@@ -150,28 +306,29 @@ class _ShippingAddressScreenState extends State<ShippingAddressScreen> {
     _zoneController.clear();
     _streetController.clear();
     _buildingController.clear();
+    _prefillUserData();
   }
 
   @override
   Widget build(BuildContext context) {
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: context.appTextDirection,
       child: Scaffold(
         // backgroundColor: const Color(0xFF0A0E27),
-        backgroundColor: const Color(0xFFF5F7FB),
+        backgroundColor: context.appBackground,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
             onPressed: () => Navigator.pop(context),
             // icon: const Icon(Iconsax.arrow_right_3, color: Colors.white),
-            icon: const Icon(Iconsax.arrow_right, color: Color(0xFF1A1A2E)),
+            icon: Icon(Iconsax.arrow_right, color: context.appTextPrimary),
           ),
-          title: const Text(
+          title: Text(
             'عناوين الشحن',
             style: TextStyle(
               // color: Colors.white,
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
@@ -227,10 +384,10 @@ class _ShippingAddressScreenState extends State<ShippingAddressScreen> {
 
                           // Existing Addresses
                           if (_addresses.isNotEmpty && !_showAddForm) ...[
-                            const Text(
+                            Text(
                               'العناوين المحفوظة:',
                               style: TextStyle(
-                                color: Colors.black,
+                                color: context.appTextPrimary,
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -241,19 +398,40 @@ class _ShippingAddressScreenState extends State<ShippingAddressScreen> {
                               final address = entry.value;
                               return _buildAddressCard(address, index);
                             }),
+                            if (_addresses.length > 1)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 0,
+                                  vertical: 8,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Iconsax.info_circle,
+                                      size: 14,
+                                      color: Colors.grey[500],
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        'لديك ${_addresses.length - 1} عنوان آخر، اضغط لتغيير العنوان',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey[500],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                           ],
-
-                          // Empty State
-                          if (_addresses.isEmpty && !_showAddForm)
-                            _buildEmptyState(),
                         ],
                       ),
                     ),
                   ),
 
                   // Continue Button
-                  if (_selectedAddressIndex != null && !_showAddForm)
-                    _buildContinueButton(),
+                  if (!_showAddForm) _buildContinueButton(),
                 ],
               ),
       ),
@@ -265,18 +443,9 @@ class _ShippingAddressScreenState extends State<ShippingAddressScreen> {
       padding: const EdgeInsets.all(20),
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            // const Color(0xFF1A1A2E).withOpacity(0.8),
-            // const Color(0xFF16213E).withOpacity(0.6),
-            Color(0xFFD4D4F0),
-            Color(0xFFC8D4F5),
-          ],
-        ),
+        gradient: context.surfaceGradient(),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+        border: Border.all(color: context.appBorder, width: 1),
       ),
       child: Form(
         key: _formKey,
@@ -286,25 +455,57 @@ class _ShippingAddressScreenState extends State<ShippingAddressScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'إضافة عنوان جديد',
                   style: TextStyle(
                     // color: Colors.white,
-                    color: Color(0xFF1A1A2E),
+                    color: context.appTextPrimary,
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 IconButton(
-                  onPressed: () {
-                    setState(() {
-                      _showAddForm = false;
-                      _clearForm();
-                    });
-                  },
-                  icon: const Icon(Iconsax.close_circle, color: Colors.red),
+                  onPressed: _addresses.isEmpty
+                      ? null
+                      : () {
+                          setState(() {
+                            _showAddForm = false;
+                            _clearForm();
+                          });
+                        },
+                  icon: Icon(
+                    Iconsax.close_circle,
+                    color: _addresses.isEmpty ? Colors.grey : Colors.red,
+                  ),
                 ),
               ],
+            ),
+
+            const SizedBox(height: 20),
+
+            ElevatedButton.icon(
+              onPressed: _isLocating ? null : _getLocationAndFill,
+              icon: _isLocating
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Icon(Icons.my_location),
+              label: Text(
+                _isLocating ? 'جاري تحديد الموقع...' : 'استخدم موقعي الحالي',
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 50),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
             ),
 
             const SizedBox(height: 20),
@@ -329,44 +530,46 @@ class _ShippingAddressScreenState extends State<ShippingAddressScreen> {
             ),
             _buildTextField('الدولة', _countryController, Iconsax.global, true),
             _buildTextField('المدينة', _cityController, Iconsax.location, true),
-            _buildTextField('رقم المنطقة', _zoneController, Iconsax.map, false),
+            _buildTextField('رقم المنطقة', _zoneController, Iconsax.map, true),
             _buildTextField(
               'رقم الشارع',
               _streetController,
               Iconsax.routing,
-              false,
+              true,
             ),
             _buildTextField(
               'رقم المبنى',
               _buildingController,
               Iconsax.building,
-              false,
+              true,
             ),
 
             const SizedBox(height: 24),
 
             Row(
               children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _showAddForm = false;
-                        _clearForm();
-                      });
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey[700],
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                if (_addresses.isNotEmpty) ...[
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _showAddForm = false;
+                          _clearForm();
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey[700],
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
+                      child: const Text('إلغاء'),
                     ),
-                    child: const Text('إلغاء'),
                   ),
-                ),
-                const SizedBox(width: 12),
+                  const SizedBox(width: 12),
+                ],
                 Expanded(
                   child: ElevatedButton(
                     onPressed: _addAddress,
@@ -400,24 +603,22 @@ class _ShippingAddressScreenState extends State<ShippingAddressScreen> {
       child: TextFormField(
         controller: controller,
         // style: const TextStyle(color: Colors.white),
-        style: const TextStyle(color: Color(0xFF1A1A2E)),
+        style: TextStyle(color: context.appTextPrimary),
         decoration: InputDecoration(
           labelText: label,
           // labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-          labelStyle: TextStyle(
-            color: const Color(0xFF1A1A2E).withOpacity(0.7),
-          ),
+          labelStyle: TextStyle(color: context.appTextSecondary),
           prefixIcon: Icon(icon, color: AppColors.primary),
           filled: true,
-          // fillColor: Colors.white.withOpacity(0.1),
-          fillColor: Colors.white,
+          // fillColor: context.appSurface.withOpacity(0.1),
+          fillColor: context.appSurface,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+            borderSide: BorderSide(color: context.appBorder),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+            borderSide: BorderSide(color: context.appBorder),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -449,103 +650,71 @@ class _ShippingAddressScreenState extends State<ShippingAddressScreen> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isSelected
-                ? [
-                    AppColors.primary.withOpacity(0.3),
-                    AppColors.primary.withOpacity(0.1),
-                  ]
-                : [
-                    // const Color(0xFF1A1A2E).withOpacity(0.6),
-                    // const Color(0xFF16213E).withOpacity(0.4),
-                    const Color(0xFFD4D4F0),
-                    const Color(0xFFC8D4F5),
-                  ],
-          ),
+          color: isSelected
+              ? AppColors.primary.withOpacity(0.08)
+              : context.appSurface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected
-                ? AppColors.primary
-                : Colors.white.withOpacity(0.1),
+            color: isSelected ? AppColors.primary : context.appCardBorder,
             width: isSelected ? 2 : 1,
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
           children: [
-            Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                isSelected
-                    ? Container(
-                        padding: EdgeInsets.only(right: 10, left: 0),
-                        child: Icon(
-                          Iconsax.tick_circle5,
-                          color: isSelected
-                              ? AppColors.primary
-                              : Color(0xFF1A1A2E),
-                          size: 20,
+                Row(
+                  children: [
+                    Icon(
+                      Iconsax.location,
+                      color: isSelected
+                          ? AppColors.primary
+                          : context.appTextPrimary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        address.fullname,
+                        style: TextStyle(
+                          color: context.appTextPrimary,
+                          fontSize: 16,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.w600,
                         ),
-                      )
-                    : Icon(
-                        Iconsax.location,
-                        color: isSelected
-                            ? AppColors.primary
-                            : Color(0xFF1A1A2E),
-                        size: 20,
                       ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    address.fullname,
-                    style: TextStyle(
-                      // color: Colors.white,
-                      color: const Color(0xFF1A1A2E),
-                      fontSize: 16,
-                      fontWeight: isSelected
-                          ? FontWeight.bold
-                          : FontWeight.w600,
                     ),
-                  ),
+                    if (isSelected) const SizedBox(width: 28),
+                  ],
                 ),
-                if (isSelected)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Text(
-                      'محدد',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                const SizedBox(height: 12),
+                _buildAddressDetail(Iconsax.call, address.mobile),
+                if (address.email.isNotEmpty)
+                  _buildAddressDetail(Iconsax.sms, address.email),
+                _buildAddressDetail(
+                  Iconsax.global,
+                  '${address.city}, ${address.country}',
+                ),
+                if (address.streetNumber.isNotEmpty ||
+                    address.buildingNumber.isNotEmpty)
+                  _buildAddressDetail(
+                    Iconsax.location,
+                    '${address.streetNumber.isNotEmpty ? "شارع ${address.streetNumber}" : ""}'
+                    '${address.buildingNumber.isNotEmpty ? " - مبنى ${address.buildingNumber}" : ""}',
                   ),
               ],
             ),
-
-            const SizedBox(height: 12),
-
-            _buildAddressDetail(Iconsax.call, address.mobile),
-            if (address.email.isNotEmpty)
-              _buildAddressDetail(Iconsax.sms, address.email),
-            _buildAddressDetail(
-              Iconsax.global,
-              '${address.city}, ${address.country}',
-            ),
-            if (address.streetNumber.isNotEmpty ||
-                address.buildingNumber.isNotEmpty)
-              _buildAddressDetail(
-                Iconsax.location,
-                '${address.streetNumber.isNotEmpty ? "شارع ${address.streetNumber}" : ""}'
-                '${address.buildingNumber.isNotEmpty ? " - مبنى ${address.buildingNumber}" : ""}',
+            if (isSelected)
+              Positioned(
+                top: 0,
+                left: 0,
+                child: Icon(
+                  Iconsax.tick_circle5,
+                  color: AppColors.primary,
+                  size: 22,
+                ),
               ),
           ],
         ),
@@ -561,14 +730,14 @@ class _ShippingAddressScreenState extends State<ShippingAddressScreen> {
       child: Row(
         children: [
           // Icon(icon, color: Colors.white.withOpacity(0.6), size: 16),
-          Icon(icon, color: const Color(0xFF1A1A2E).withOpacity(0.6), size: 16),
+          Icon(icon, color: context.appTextSecondary, size: 16),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,
               style: TextStyle(
                 // color: Colors.white.withOpacity(0.8),
-                color: const Color(0xFF1A1A2E).withOpacity(0.8),
+                color: context.appTextSecondary,
                 fontSize: 14,
               ),
             ),
@@ -578,95 +747,53 @@ class _ShippingAddressScreenState extends State<ShippingAddressScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
-    return SizedBox(
-      height: MediaQuery.of(context).size.width,
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(50),
-              ),
-              child: const Icon(
-                Iconsax.location_add,
-                size: 50,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'لا توجد عناوين محفوظة',
-              style: TextStyle(
-                // color: Colors.white,
-                color: Color(0xFF1A1A2E),
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'أضف عنوان شحن لإكمال طلبك',
-              style: TextStyle(
-                // color: Colors.white.withOpacity(0.7),
-                color: const Color(0xFF1A1A2E).withOpacity(0.7),
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildContinueButton() {
+    final hasSelection =
+        _selectedAddressIndex != null &&
+        _selectedAddressIndex! < _addresses.length;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            // const Color(0xFF1A1A2E).withOpacity(0.9),
-            // const Color(0xFF0F3460),
-            Color(0xFFD4D4F0),
-            Color(0xFFC8D4F5),
-            Color(0xFFB4D4F0),
-          ],
-        ),
+        gradient: context.bottomBarGradient(),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+        border: Border.all(color: context.appBorder, width: 1),
       ),
       child: SafeArea(
         child: SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: () {
-              // Navigate to payment methods screen
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => PaymentMethodsScreen(
-                    userId: widget.userId,
-                    cartItems: widget.cartItems,
-                    totalAmount: widget.totalAmount,
-                    shippingAddress: _addresses[_selectedAddressIndex!],
-                  ),
-                ),
-              );
-            },
+            onPressed: hasSelection
+                ? () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PaymentMethodsScreen(
+                          userId: widget.userId,
+                          cartItems: widget.cartItems,
+                          totalAmount: widget.totalAmount,
+                          shippingAddress: _addresses[_selectedAddressIndex!],
+                        ),
+                      ),
+                    );
+                  }
+                : () {
+                    showAppSnackbar(
+                      context,
+                      message: 'اختر أو أضف عنوان شحن أولاً',
+                      type: SnackType.warning,
+                    );
+                  },
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: hasSelection
+                  ? AppColors.primary
+                  : Colors.grey.shade400,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(25),
               ),
-              elevation: 8,
+              elevation: hasSelection ? 8 : 0,
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,

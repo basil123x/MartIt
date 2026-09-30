@@ -1,18 +1,24 @@
 import 'dart:math';
-import 'package:GlobalFarm/features/home/tiktok_feed_screen.dart';
+import 'package:GlobalFarm/features/shell/main_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/app_config.dart';
 import '../../core/models/cart_model.dart';
 import '../../core/models/shipping_address_model.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/localization_service.dart';
 import '../sellers/sellers_contact_screen.dart';
+import '../../core/utils/theme_extensions.dart';
+import '../orders/invoice_webview.dart';
 
 class OrderSuccessScreen extends StatefulWidget {
   final String? transStatus;
+  /// `visa` = Sadad/card, `credit` = cash on delivery
+  final String paymentMode;
   final String userId;
   final List<CartItemModel> cartItems;
   final double totalAmount;
@@ -21,6 +27,7 @@ class OrderSuccessScreen extends StatefulWidget {
   const OrderSuccessScreen({
     super.key,
     this.transStatus,
+    this.paymentMode = 'visa',
     required this.userId,
     required this.cartItems,
     required this.totalAmount,
@@ -95,14 +102,50 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
             .join(',');
         itemsJson = '[$itemsJson]';
 
-        // Create order
-        await ApiService.createOrder(
+        // Create order on Martit
+        final orderResult = await ApiService.createOrder(
           uid: sellerId,
           custId: widget.userId,
           oid: currentOid ?? '',
           shipId: widget.shippingAddress.id.toString(),
           items: itemsJson,
           totalAmount: sellerTotal.toStringAsFixed(2),
+        );
+
+        final martitOrderId = orderResult['order_id']?.toString() ?? '';
+        final address = widget.shippingAddress;
+        final notes =
+            'App order OID: ${currentOid ?? ''} | '
+            '${address.city}, ${address.country} | '
+            '${address.streetNumber} - ${address.buildingNumber}';
+
+        final syncItems = sellerItems.map((cartItem) {
+          final itemId = cartItem.item.idx.isNotEmpty
+              ? cartItem.item.idx
+              : cartItem.item.id;
+          return {
+            'itemid': int.tryParse(itemId) ?? itemId,
+            'qtt': cartItem.cartQuantity,
+            'price': double.tryParse(cartItem.item.price) ?? 0,
+            'discx': 0,
+            'cost': 0,
+            'invtype': 'a14',
+            'branch': int.tryParse(AppConfig.storeId) ?? 2,
+            'notes': cartItem.item.name,
+          };
+        }).toList();
+
+        // Sync invoice to Gfnursery (inv + inv_det)
+        await ApiService.syncOrderToGlobalFarm(
+          oid: currentOid ?? '',
+          customerName: address.fullname,
+          customerPhone: address.mobile,
+          customerUid: widget.userId,
+          notes: notes,
+          total: sellerTotal,
+          paymentMode: widget.paymentMode,
+          items: syncItems,
+          martitOrderId: martitOrderId,
         );
       }
 
@@ -136,7 +179,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
   Future<void> _openInvoice(String orderId) async {
     print("My Bill Order Id ---> $orderId");
     final Uri url = Uri.parse(
-      'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&view=customer&store_id=2&k=${DateTime.now().millisecondsSinceEpoch}',
+      InvoiceWebView.buildUrl(orderId: orderId, view: 'customer'),
     );
 
     if (!await launchUrl(
@@ -147,7 +190,9 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
       if (context.mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('فشل فتح الفاتورة')));
+        ).showSnackBar(
+          SnackBar(content: Text(tr('orders.invoice_open_failed'))),
+        );
       }
     }
   }
@@ -162,9 +207,9 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
   Widget build(BuildContext context) {
     print(widget.transStatus);
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: context.appTextDirection,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF0F2F5),
+        backgroundColor: context.appBackground,
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -234,18 +279,22 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                         child: Column(
                           children: [
                             Text(
-                              widget.transStatus != '3' ? 'لقد فشلت العملية!' : 'تم الدفع بنجاح!',
+                              widget.transStatus != '3'
+                                  ? tr('orders.payment_failed_title')
+                                  : tr('orders.payment_success_title'),
                               style: TextStyle(
-                                color: Color(0xFF1A1A2E),
+                                color: context.appTextPrimary,
                                 fontSize: 28,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             const SizedBox(height: 12),
                             Text(
-                              widget.transStatus != '3' ? 'للاسف, لم تنجح العملية حاول مرة أخرى' : 'شكراً لك، تم تأكيد طلبك بنجاح',
+                              widget.transStatus != '3'
+                                  ? tr('orders.payment_failed_subtitle')
+                                  : tr('orders.payment_success_subtitle'),
                               style: TextStyle(
-                                color: const Color(0xFF1A1A2E).withOpacity(0.7),
+                                color: context.appTextSecondary,
                                 fontSize: 16,
                               ),
                               textAlign: TextAlign.center,
@@ -263,17 +312,10 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                           width: double.infinity,
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                const Color(0xFFD4D4F0),
-                                const Color(0xFFC8D4F5),
-                              ],
-                            ),
+                            color: context.appSurface,
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.3),
+                              color: context.appBorder,
                               width: 1,
                             ),
                           ),
@@ -288,10 +330,10 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                                     size: 24,
                                   ),
                                   const SizedBox(width: 12),
-                                  const Text(
-                                    'ملخص الطلب',
+                                  Text(
+                                    tr('orders.summary_title'),
                                     style: TextStyle(
-                                      color: Color(0xFF1A1A2E),
+                                      color: context.appTextPrimary,
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -303,22 +345,22 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
 
                               // Number of Items
                               _buildSummaryRow(
-                                'عدد العناصر',
-                                '${widget.cartItems.length} عنصر',
+                                tr('orders.items_count'),
+                                '${widget.cartItems.length} ${tr('orders.item_unit')}',
                               ),
                               const SizedBox(height: 12),
                               
                               // Total Amount
                               _buildSummaryRow(
-                                'المبلغ الإجمالي',
-                                '${widget.totalAmount.toStringAsFixed(2)} ريال',
+                                tr('orders.total_amount'),
+                                '${widget.totalAmount.toStringAsFixed(2)} ${tr('orders.currency')}',
                               ),
                               const SizedBox(height: 12),
                               
                               // Address
                               _buildSummaryRow(
-                                'العنوان',
-                                '${widget.shippingAddress.city}, ${widget.shippingAddress.country}, شارع ${widget.shippingAddress.streetNumber}, مبنى ${widget.shippingAddress.buildingNumber}, منطقة ${widget.shippingAddress.zoneNumber}',
+                                tr('orders.address'),
+                                '${widget.shippingAddress.city}, ${widget.shippingAddress.country}, ${tr('orders.street')} ${widget.shippingAddress.streetNumber}, ${tr('orders.building')} ${widget.shippingAddress.buildingNumber}, ${tr('orders.zone')} ${widget.shippingAddress.zoneNumber}',
                               ),
 
 
@@ -329,27 +371,28 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                                   width: double.infinity,
                                   padding: const EdgeInsets.all(16),
                                   decoration: BoxDecoration(
-                                    color: Colors.green.withOpacity(0.1),
+                                    color: AppColors.primary.withValues(alpha: 0.12),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                      color: Colors.green.withOpacity(0.3),
+                                      color: AppColors.primary.withValues(alpha: 0.35),
                                       width: 1,
                                     ),
                                   ),
                                   child: Row(
                                     children: [
-                                      Icon(
+                                      const Icon(
                                         Iconsax.info_circle,
-                                        color: Colors.green,
+                                        color: AppColors.primary,
                                         size: 20,
                                       ),
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Text(
-                                          'سيتم التواصل معك قريباً لتأكيد التسليم',
+                                          tr('orders.contact_soon_note'),
                                           style: TextStyle(
-                                            color: Colors.green.shade700,
+                                            color: AppColors.primary,
                                             fontSize: 14,
+                                            fontWeight: FontWeight.w600,
                                           ),
                                         ),
                                       ),
@@ -395,9 +438,9 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                               elevation: 8,
                             ),
                             icon: const Icon(Iconsax.message),
-                            label: const Text(
-                              'تواصل مع البائعين',
-                              style: TextStyle(
+                            label: Text(
+                              tr('orders.contact_sellers'),
+                              style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -420,24 +463,22 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                                 Navigator.pushReplacement(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => TikTokFeedScreen(),
+                                    builder: (context) => const MainShell(),
                                   ),
                                 );
                               },
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFF1A1A2E),
-                                side: BorderSide(
-                                  color: const Color(0xFF1A1A2E).withOpacity(0.3),
-                                ),
+                                foregroundColor: context.appTextPrimary,
+                                side: BorderSide(color: context.appBorder),
                                 padding: const EdgeInsets.symmetric(vertical: 16),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(25),
                                 ),
                               ),
                               icon: const Icon(Iconsax.home),
-                              label: const Text(
-                                'الرئيسية',
-                                style: TextStyle(
+                              label: Text(
+                                tr('orders.home'),
+                                style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -457,19 +498,17 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
                                 _openInvoice(orderId);
                               },
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFF1A1A2E),
-                                side: BorderSide(
-                                  color: const Color(0xFF1A1A2E).withOpacity(0.3),
-                                ),
+                                foregroundColor: context.appTextPrimary,
+                                side: BorderSide(color: context.appBorder),
                                 padding: const EdgeInsets.symmetric(vertical: 16),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(25),
                                 ),
                               ),
                               icon: const Icon(Iconsax.bill),
-                              label: const Text(
-                                'عرض فاتورتك',
-                                style: TextStyle(
+                              label: Text(
+                                tr('orders.view_your_invoice'),
+                                style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -496,15 +535,15 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
         Text(
           label,
           style: TextStyle(
-            color: const Color(0xFF1A1A2E).withOpacity(0.7),
+            color: context.appTextSecondary,
             fontSize: 14,
           ),
         ),
         const SizedBox(width: 8),
-        const Text(
+        Text(
           '→',
           style: TextStyle(
-            color: Color(0xFF1A1A2E),
+            color: context.appTextPrimary,
             fontSize: 14,
           ),
         ),
@@ -512,8 +551,8 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen>
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(
-              color: Color(0xFF1A1A2E),
+            style: TextStyle(
+              color: context.appTextPrimary,
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),

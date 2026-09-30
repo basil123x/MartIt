@@ -44,15 +44,23 @@ if (isset($data['action']) && $data['action'] === 'insert_empty') {
     exit;
 }
 
-$a1  = isset($data['barcode'])         ? $conn->real_escape_string($data['barcode'])         : '';
-$a3  = isset($data['name'])            ? $conn->real_escape_string($data['name'])            : '';
-$a4  = isset($data['eng'])             ? $conn->real_escape_string($data['eng'])             : '';
-$a5  = isset($data['category'])        ? $conn->real_escape_string($data['category'])        : '';
-$a7  = isset($data['description_arb']) ? $conn->real_escape_string($data['description_arb']) : '';
-$a8  = isset($data['description'])     ? $conn->real_escape_string($data['description'])     : '';
-$a10 = isset($data['price'])           ? $conn->real_escape_string($data['price'])           : '';
-$a30 = isset($data['qtt'])             ? (int)$data['qtt']                                   : 0;
-$explicitId = isset($data['id'])       ? (int)$data['id']                                    : 0;
+$a1  = isset($data['a1'])           ? $conn->real_escape_string($data['a1'])
+     : (isset($data['barcode'])      ? $conn->real_escape_string($data['barcode'])         : '');
+$a3  = isset($data['a3'])           ? $conn->real_escape_string($data['a3'])
+     : (isset($data['name'])         ? $conn->real_escape_string($data['name'])            : '');
+$a4  = isset($data['a4'])           ? $conn->real_escape_string($data['a4'])
+     : (isset($data['eng'])          ? $conn->real_escape_string($data['eng'])             : '');
+$a5  = isset($data['a5'])           ? $conn->real_escape_string($data['a5'])
+     : (isset($data['category'])    ? $conn->real_escape_string($data['category'])        : '');
+$a7  = isset($data['a7'])           ? $conn->real_escape_string($data['a7'])
+     : (isset($data['description_arb']) ? $conn->real_escape_string($data['description_arb']) : '');
+$a8  = isset($data['description'])  ? $conn->real_escape_string($data['description'])
+     : (isset($data['a8'])           ? $conn->real_escape_string($data['a8'])             : '');
+$a10 = isset($data['a10'])          ? $conn->real_escape_string($data['a10'])
+     : (isset($data['price'])        ? $conn->real_escape_string($data['price'])           : '');
+$a30 = isset($data['a30'])          ? (int)$data['a30']
+     : (isset($data['qtt'])          ? (int)$data['qtt']                                   : 0);
+$explicitId = isset($data['id'])    ? (int)$data['id']                                    : 0;
 
 if (empty($a3) || empty($a10)) {
     echo json_encode(['success' => false, 'error' => 'name and price are required']);

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:iconsax/iconsax.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/constants/app_strings.dart';
-import '../../core/services/auth_service.dart';
+import 'package:GlobalFarm/core/constants/app_colors.dart';
+import 'package:GlobalFarm/core/constants/app_strings.dart';
+import 'package:GlobalFarm/core/services/auth_service.dart';
+import 'package:GlobalFarm/core/utils/theme_extensions.dart';
 
 class LoginScreenx extends StatefulWidget {
   const LoginScreenx({super.key});
@@ -61,7 +62,7 @@ class _LoginScreenxState extends State<LoginScreenx> {
         FocusScope.of(context).unfocus();
       },
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: context.appSurface,
         appBar: AppBar(),
         body: SafeArea(
           child: LayoutBuilder(
@@ -127,7 +128,9 @@ class _LoginScreenxState extends State<LoginScreenx> {
                                   'مرحباً بك في عالم التسوق الذكي',
                                   style: Theme.of(context).textTheme.bodyLarge
                                       ?.copyWith(
-                                        color: AppColors.textSecondary,
+                                        color: AppColors.textSecondaryColor(
+                                          context,
+                                        ),
                                       ),
                                 ),
 
@@ -227,7 +230,7 @@ class _LoginScreenxState extends State<LoginScreenx> {
                                         ),
                                       ),
                                       filled: true,
-                                      fillColor: Colors.white,
+                                      fillColor: context.appSurface,
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(16),
                                         borderSide: BorderSide(
@@ -264,7 +267,9 @@ class _LoginScreenxState extends State<LoginScreenx> {
                                   'أدخل رقم هاتفك القطري (8 أرقام)',
                                   style: Theme.of(context).textTheme.bodyMedium
                                       ?.copyWith(
-                                        color: AppColors.textSecondary,
+                                        color: AppColors.textSecondaryColor(
+                                          context,
+                                        ),
                                       ),
                                 ),
 

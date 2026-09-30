@@ -3,10 +3,18 @@ import 'package:GlobalFarm/core/services/onesignal_service.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:geolocator/geolocator.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/services/api_service.dart';
-import '../../core/services/auth_service.dart';
-import '../../core/models/chat_model.dart';
+import 'package:GlobalFarm/core/constants/app_colors.dart';
+import 'package:GlobalFarm/core/services/api_service.dart';
+import 'package:GlobalFarm/core/services/auth_service.dart';
+import 'package:GlobalFarm/core/services/localization_service.dart';
+import 'package:GlobalFarm/core/services/translation_service.dart';
+import 'package:GlobalFarm/core/models/chat_model.dart';
+import 'package:GlobalFarm/core/widgets/chat_location_preview.dart';
+import 'package:GlobalFarm/core/widgets/smart_avatar_widget.dart';
+import 'package:GlobalFarm/core/utils/snackbar_helper.dart';
+import 'package:GlobalFarm/core/utils/theme_extensions.dart';
+import 'package:GlobalFarm/features/profile/profile_screen.dart';
+import 'package:GlobalFarm/features/profile/seller_profile_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -46,6 +54,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Timer? _statusUpdateTimer;
   Timer? _statusCheckTimer;
   Timer? _messagePollingTimer; // ✅ Timer للـ polling
+
+  // ✅ الرسائل التي طلب المستخدم رؤية نصها الأصلي بدلاً من الترجمة
+  final Set<String> _showOriginal = {};
 
   @override
   void initState() {
@@ -97,23 +108,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _currentUserName = await AuthService.getCurrentName();
     _currentUserAvatar = await AuthService.getCurrentProfileImage();
     _currentConversationId = widget.conversationId;
-    
-    // ✅ إذا لم يكن هناك صورة محفوظة، نستخدم رابط CDN
-    if ((_currentUserAvatar == null || _currentUserAvatar!.isEmpty) && _currentUserId != null) {
-      _currentUserAvatar = 'https://globee.b-cdn.net/users/$_currentUserId/avatar.jpg';
-    }
-    
+
     if (_currentUserId != null) {
       // Update own status immediately
       await ApiService.updateOnlineStatus(userId: _currentUserId!);
       await _loadMessages();
       await _checkUserStatus();
-      
+
       // ✅ بدء polling للرسائل كل 3 ثواني
       _startMessagePolling();
     }
   }
-  
+
   // ✅ Polling للرسائل الجديدة
   void _startMessagePolling() {
     _messagePollingTimer = Timer.periodic(const Duration(seconds: 3), (_) {
@@ -152,21 +158,26 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       if (result['success'] == true) {
         final List<dynamic> data = result['data'] ?? [];
-        final newMessages = data.map((item) => ChatMessage.fromJson(item)).toList();
-        
+        final newMessages = data
+            .map((item) => ChatMessage.fromJson(item))
+            .toList();
+
         // ✅ تحقق إذا وصلت رسائل جديدة
         final hadNewMessages = newMessages.length > _messages.length;
-        
+
         setState(() {
           _messages = newMessages;
           _isLoading = false;
           _isFirstLoad = false;
         });
-        
+
         // ✅ scroll للأسفل فقط إذا وصلت رسائل جديدة أو كان التحميل الأول
         if (hadNewMessages || !isPolling) {
           _scrollToBottom();
         }
+
+        // ✅ ترجمة الرسائل التي لغتها مختلفة عن لغة التطبيق (بدون تعطيل العرض)
+        _translateMessages();
       } else {
         setState(() {
           _isLoading = false;
@@ -182,6 +193,32 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         });
       }
     }
+  }
+
+  // ✅ الترجمة التلقائية: أي رسالة نصية لغتها مختلفة عن لغة التطبيق تُترجم
+  // مرة واحدة، والسيرفر يخزّن النتيجة فلا تتكرر التكلفة.
+  Future<void> _translateMessages() async {
+    final targetLang = LocalizationService.instance.currentLanguage;
+
+    // الرسائل الواردة فقط — ما كتبته أنت لا يحتاج ترجمة
+    final candidates = _messages
+        .where(
+          (m) =>
+              m.messageType == 'text' &&
+              m.message.trim().isNotEmpty &&
+              m.senderId != _currentUserId,
+        )
+        .map((m) => (id: m.id, text: m.message))
+        .toList();
+
+    if (candidates.isEmpty) return;
+
+    final changed = await TranslationService.instance.translateMessages(
+      messages: candidates,
+      targetLang: targetLang,
+    );
+
+    if (changed && mounted) setState(() {});
   }
 
   Future<void> _launchUrl(latitude, longitude) async {
@@ -267,19 +304,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           );
         }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'فشل في إرسال الرسالة'),
-            backgroundColor: Colors.red,
-          ),
+        showAppSnackbar(
+          context,
+          message: result['error'] ?? tr('chat.send_failed'),
+          type: SnackType.error,
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('حدث خطأ أثناء إرسال الرسالة'),
-          backgroundColor: Colors.red,
-        ),
+      showAppSnackbar(
+        context,
+        message: tr('chat.send_error'),
+        type: SnackType.error,
       );
     } finally {
       setState(() {
@@ -303,76 +338,53 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: context.appTextDirection,
       child: Scaffold(
         // backgroundColor: const Color(0xFF0A0E27),
-        backgroundColor: const Color(0xFFF5F7FB),
+        backgroundColor: context.appBackground,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
             onPressed: () => Navigator.pop(context),
             // icon: const Icon(Iconsax.arrow_right_3, color: Colors.white),
-            icon: const Icon(Iconsax.arrow_right, color: Color(0xFF1A1A2E)),
+            icon: Icon(Iconsax.arrow_right, color: context.appTextPrimary),
           ),
-          title: Row(
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: AppColors.primary,
-                backgroundImage:
-                    widget.receiverAvatar != null &&
-                        widget.receiverAvatar!.isNotEmpty
-                    ? NetworkImage(widget.receiverAvatar!)
-                    : null,
-                child:
-                    widget.receiverAvatar == null ||
-                        widget.receiverAvatar!.isEmpty
-                    ? Text(
-                        widget.receiverName != null &&
-                                widget.receiverName!.isNotEmpty
-                            ? widget.receiverName![0]
-                            : 'S',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      )
-                    : null,
+          title: GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    SellerProfileScreen(userId: widget.receiverId),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.receiverName ?? 'مستخدم',
-                      style: const TextStyle(
-                        // color: Colors.white,
-                        color: Color(0xFF1A1A2E),
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+            ),
+            child: Row(
+              children: [
+                _buildReceiverAvatar(size: 40),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    widget.receiverName ?? tr('chat.user'),
+                    style: TextStyle(
+                      color: context.appTextPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           actions: [
             IconButton(
               onPressed: () {
-                // TODO: Voice call functionality
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('ميزة المكالمات الصوتية ستكون متاحة قريباً'),
-                    backgroundColor: AppColors.primary,
-                  ),
+                showAppSnackbar(
+                  context,
+                  message: tr('chat.voice_calls_soon'),
+                  type: SnackType.info,
                 );
               },
-              // icon: const Icon(Iconsax.call, color: Colors.white),
-              icon: const Icon(Iconsax.call, color: Color(0xFF1A1A2E)),
+              icon: Icon(Iconsax.call, color: context.appTextPrimary),
             ),
           ],
         ),
@@ -426,21 +438,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ),
           ),
           const SizedBox(height: 16),
-          const Text(
-            'ابدأ محادثة جديدة',
+          Text(
+            tr('chat.start_new_conversation'),
             style: TextStyle(
               // color: Colors.white,
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'أرسل رسالة لبدء المحادثة مع ${widget.receiverName ?? "المستخدم"}',
+            '${tr('chat.send_message_to_start')} '
+            '${widget.receiverName ?? tr('chat.user')}',
             style: TextStyle(
               // color: Colors.white.withOpacity(0.7),
-              color: const Color(0xFF1A1A2E).withOpacity(0.7),
+              color: context.appTextSecondary,
               fontSize: 14,
             ),
             textAlign: TextAlign.center,
@@ -448,6 +461,121 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         ],
       ),
     );
+  }
+
+  Widget _buildReceiverAvatar({required double size}) {
+    return SmartAvatarWidget(
+      userId: widget.receiverId,
+      name: widget.receiverName ?? "",
+      size: size,
+      fallbackUrl: widget.receiverAvatar,
+      backgroundColor: AppColors.primary,
+      initialsStyle: TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
+        fontSize: size * 0.4,
+      ),
+    );
+  }
+
+  // ✅ نص الرسالة: يعرض الترجمة إن وُجدت مع إمكانية الرجوع للنص الأصلي
+  Widget _buildMessageText(ChatMessage message, bool isMyMessage) {
+    final targetLang = LocalizationService.instance.currentLanguage;
+    final translation = TranslationService.instance.cachedTranslation(
+      message.id,
+      targetLang,
+    );
+    final isTranslating = TranslationService.instance.isTranslating(
+      message.id,
+      targetLang,
+    );
+    final showingOriginal = _showOriginal.contains(message.id);
+
+    final displayText = translation != null && !showingOriginal
+        ? translation.text
+        : message.message;
+
+    final textColor = isMyMessage ? Colors.white : context.appTextPrimary;
+    final hintColor = isMyMessage
+        ? Colors.white.withOpacity(0.75)
+        : context.appTextSecondary;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          displayText,
+          textDirection: _textDirectionOf(displayText),
+          style: TextStyle(color: textColor, fontSize: 16),
+        ),
+
+        if (translation != null) ...[
+          const SizedBox(height: 6),
+          InkWell(
+            onTap: () => setState(() {
+              if (showingOriginal) {
+                _showOriginal.remove(message.id);
+              } else {
+                _showOriginal.add(message.id);
+              }
+            }),
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.translate, size: 13, color: hintColor),
+                  const SizedBox(width: 4),
+                  Text(
+                    showingOriginal
+                        ? tr('chat.show_translation')
+                        : tr('chat.show_original'),
+                    style: TextStyle(
+                      color: hintColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      decoration: TextDecoration.underline,
+                      decorationColor: hintColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ] else if (isTranslating) ...[
+          const SizedBox(height: 6),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 10,
+                height: 10,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1.5,
+                  color: hintColor,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                // أول مرة يتم فيها تحميل موديل اللغة تأخذ وقتاً أطول
+                TranslationService.instance.isPreparingModels
+                    ? tr('chat.preparing_translation')
+                    : tr('chat.translating'),
+                style: TextStyle(color: hintColor, fontSize: 11),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  // ✅ اتجاه النص حسب حروفه، لأن الشاشة كلها مثبتة على RTL
+  TextDirection _textDirectionOf(String text) {
+    final lang = TranslationService.guessLanguage(text);
+    if (lang == null) return TextDirection.rtl;
+    return lang == 'ar' ? TextDirection.rtl : TextDirection.ltr;
   }
 
   Widget _buildMessageBubble(ChatMessage message) {
@@ -461,36 +589,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             : MainAxisAlignment.start,
         children: [
           if (!isMyMessage) ...[
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: AppColors.primary,
-              backgroundImage:
-                  widget.receiverAvatar != null &&
-                      widget.receiverAvatar!.isNotEmpty
-                  ? NetworkImage(widget.receiverAvatar!)
-                  : null,
-              child:
-                  widget.receiverAvatar == null ||
-                      widget.receiverAvatar!.isEmpty
-                  ? Text(
-                      widget.receiverName != null &&
-                              widget.receiverName!.isNotEmpty
-                          ? widget.receiverName![0]
-                          : 'S',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    )
-                  : null,
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                    SellerProfileScreen(userId: widget.receiverId),
+                ),
+              ),
+              child: _buildReceiverAvatar(size: 32),
             ),
             const SizedBox(width: 8),
           ],
 
           Flexible(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: message.messageType == 'location'
+                  ? const EdgeInsets.all(4)
+                  : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 // gradient: isMyMessage
                 //     ? LinearGradient(
@@ -514,10 +630,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 //   bottomRight: isMyMessage
                 //       ? const Radius.circular(4)
                 //       : const Radius.circular(16),
-                color:
-                    isMyMessage // ✅ فاتح
+                color: isMyMessage
                     ? AppColors.primary
-                    : const Color(0xFFE8EAF6),
+                    : (context.isDarkMode
+                          ? AppColors.darkSurface
+                          : const Color(0xFFE8EAF6)),
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(16),
                   topRight: const Radius.circular(16),
@@ -529,95 +646,59 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       : const Radius.circular(16),
                 ),
                 border: !isMyMessage
-                    ? Border.all(color: Colors.white.withOpacity(0.1))
+                    ? Border.all(color: context.appBorder)
                     : null,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Check if it's a location message
-                  if (message.messageType == 'location')
-                    GestureDetector(
-                      onTap: () async {
-                        if (message.locationLat != null &&
-                            message.locationLng != null) {
-                          _launchUrl(message.locationLat, message.locationLng);
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          // color: Colors.white.withOpacity(0.1),
-                          color: isMyMessage
-                              ? Colors.white.withOpacity(0.2)
-                              : AppColors.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Iconsax.location,
-                              // color: Colors.white,
-                              color: isMyMessage
-                                  ? Colors.white
-                                  : AppColors.primary,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'عرض الموقع',
-                              style: TextStyle(
-                                // color: Colors.white,
-                                color: isMyMessage
-                                    ? Colors.white
-                                    : AppColors.primary,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
+                  if (message.messageType == 'location' &&
+                      message.locationLat != null &&
+                      message.locationLng != null)
+                    ChatLocationPreview(
+                      latitude: message.locationLat!,
+                      longitude: message.locationLng!,
+                      timeLabel: _formatTime(message.timestamp),
+                      showReadReceipt: isMyMessage,
+                      isRead: message.isRead,
+                      onTap: () => _launchUrl(
+                        message.locationLat,
+                        message.locationLng,
                       ),
                     )
+                  else if (message.messageType == 'location')
+                    const SizedBox.shrink()
                   else
-                    Text(
-                      message.message,
-                      style: TextStyle(
-                        // color: Colors.white,
-                        color: isMyMessage
-                            ? Colors.white
-                            : const Color(0xFF1A1A2E),
-                        fontSize: 16,
-                      ),
-                    ),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _formatTime(message.timestamp),
-                        style: TextStyle(
-                          // color: Colors.white.withOpacity(0.7),
-                          color: isMyMessage
-                              ? Colors.white.withOpacity(0.7)
-                              : const Color(0xFF1A1A2E).withOpacity(0.6),
-                          fontSize: 12,
+                    _buildMessageText(message, isMyMessage),
+                  if (message.messageType != 'location') ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _formatTime(message.timestamp),
+                          style: TextStyle(
+                            color: isMyMessage
+                                ? Colors.white.withOpacity(0.7)
+                                : context.appTextSecondary,
+                            fontSize: 12,
+                          ),
                         ),
-                      ),
-                      if (isMyMessage) ...[
-                        const SizedBox(width: 4),
-                        Icon(
-                          message.isRead
-                              ? Iconsax.tick_circle
-                              : Iconsax.tick_square,
-                          size: 14,
-                          color: message.isRead
-                              ? Colors.blue.shade300
-                              : Colors.white.withOpacity(0.7),
-                        ),
+                        if (isMyMessage) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            message.isRead
+                                ? Iconsax.tick_circle
+                                : Iconsax.tick_square,
+                            size: 14,
+                            color: message.isRead
+                                ? Colors.blue.shade300
+                                : Colors.white.withOpacity(0.7),
+                          ),
+                        ],
                       ],
-                    ],
-                  ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -625,67 +706,54 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
           if (isMyMessage) ...[
             const SizedBox(width: 8),
-            // ✅ صورة المرسل (أنا) مع معالجة الأخطاء
-            _buildSenderAvatar(),
+            GestureDetector(
+              onTap: () {
+                if (_currentUserId != null) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ProfileScreen(userId: _currentUserId!),
+                    ),
+                  );
+                }
+              },
+              child: _buildSenderAvatar(),
+            ),
           ],
         ],
       ),
     );
   }
 
-  // ✅ Widget لصورة المرسل (أنا) مع معالجة الأخطاء
   Widget _buildSenderAvatar() {
-    final avatarUrl = _currentUserAvatar;
-    final hasValidUrl = avatarUrl != null && avatarUrl.isNotEmpty;
-    
-    return CircleAvatar(
-      radius: 16,
+    if (_currentUserId == null) {
+      return CircleAvatar(
+        radius: 16,
+        backgroundColor: AppColors.primary,
+        child: Text(
+          _currentUserName != null && _currentUserName!.isNotEmpty
+              ? _currentUserName![0]
+              : tr('chat.user_initial'),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      );
+    }
+
+    return SmartAvatarWidget(
+      userId: _currentUserId!,
+      name: _currentUserName ?? "",
+      size: 32,
+      loadSocialFromStorage: true,
       backgroundColor: AppColors.primary,
-      child: hasValidUrl
-          ? ClipOval(
-              child: Image.network(
-                avatarUrl,
-                width: 32,
-                height: 32,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  // ✅ إذا فشل تحميل الصورة، نظهر الحرف الأول
-                  return Text(
-                    _currentUserName != null && _currentUserName!.isNotEmpty
-                        ? _currentUserName![0]
-                        : 'أ',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  );
-                },
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return const SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            )
-          : Text(
-              _currentUserName != null && _currentUserName!.isNotEmpty
-                  ? _currentUserName![0]
-                  : 'أ',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+      initialsStyle: const TextStyle(
+        color: Colors.white,
+        fontSize: 12,
+        fontWeight: FontWeight.bold,
+      ),
     );
   }
 
@@ -696,8 +764,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('يجب السماح بالوصول إلى الموقع')),
+          showAppSnackbar(
+            context,
+            message: tr('chat.location_permission_required'),
+            type: SnackType.warning,
           );
           return;
         }
@@ -714,9 +784,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       );
     } catch (e) {
       print('Error getting location: $e');
-      ScaffoldMessenger.of(
+      showAppSnackbar(
         context,
-      ).showSnackBar(const SnackBar(content: Text('فشل في الحصول على الموقع')));
+        message: tr('chat.location_failed'),
+        type: SnackType.error,
+      );
     }
   }
 
@@ -724,19 +796,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            // const Color(0xFF1A1A2E).withOpacity(0.9),
-            // const Color(0xFF0F3460),
-            Color(0xFFD4D4F0),
-            Color(0xFFC8D4F5),
-            Color(0xFFB4D4F0),
-          ],
-        ),
+        gradient: context.bottomBarGradient(),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: context.appBorder),
       ),
       child: SafeArea(
         child: Row(
@@ -748,10 +810,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 width: 45,
                 height: 45,
                 decoration: BoxDecoration(
-                  // color: Colors.white.withOpacity(0.1),
-                  color: Colors.white,
+                  color: context.appSurface,
                   borderRadius: BorderRadius.circular(22.5),
-                  border: Border.all(color: Colors.white.withOpacity(0.2)),
+                  border: Border.all(color: context.appBorder),
                 ),
                 child: const Icon(
                   Iconsax.location,
@@ -765,22 +826,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: context.isDarkMode
+                      ? AppColors.darkElevated.withOpacity(0.6)
+                      : Colors.white.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(25),
-                  border: Border.all(color: Colors.white.withOpacity(0.2)),
+                  border: Border.all(color: context.appBorder),
                 ),
                 child: TextField(
                   controller: _messageController,
                   // style: const TextStyle(color: Colors.white),
-                  style: const TextStyle(color: Color(0xFF1A1A2E)),
+                  style: TextStyle(color: context.appTextPrimary),
                   maxLines: null,
                   textInputAction: TextInputAction.send,
                   onSubmitted: (_) => _sendMessage(),
                   decoration: InputDecoration(
-                    hintText: 'اكتب رسالة...',
+                    hintText: tr('chat.type_message'),
                     hintStyle: TextStyle(
                       // color: Colors.white.withOpacity(0.5)
-                      color: const Color(0xFF1A1A2E).withOpacity(0.5),
+                      color: context.appTextSecondary.withOpacity(0.8),
                     ),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
@@ -849,9 +912,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     } else if (difference.inHours > 0) {
       return '${timestamp.hour}:${timestamp.minute.toString().padLeft(2, '0')}';
     } else if (difference.inMinutes > 0) {
-      return 'منذ ${difference.inMinutes} دقيقة';
+      return tr('chat.minutes_ago', {'n': difference.inMinutes});
     } else {
-      return 'الآن';
+      return tr('chat.now');
     }
   }
 }

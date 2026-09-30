@@ -2,9 +2,14 @@ import 'package:GlobalFarm/core/services/onesignal_service.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/services/api_service.dart';
-import '../../core/services/auth_service.dart';
+import 'package:GlobalFarm/core/constants/app_colors.dart';
+import 'package:GlobalFarm/core/constants/app_config.dart';
+import 'package:GlobalFarm/core/services/api_service.dart';
+import 'package:GlobalFarm/core/services/auth_service.dart';
+import 'package:GlobalFarm/core/services/localization_service.dart';
+import 'package:GlobalFarm/core/utils/snackbar_helper.dart';
+import 'package:GlobalFarm/core/utils/theme_extensions.dart';
+import 'package:GlobalFarm/features/orders/invoice_webview.dart';
 
 class CustomerOrdersScreen extends StatefulWidget {
   const CustomerOrdersScreen({super.key});
@@ -36,7 +41,11 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
         throw Exception('User not logged in');
       }
 
-      final result = await ApiService.getCustomerOrders(uid: uid);
+      final isAdmin = await AuthService.isAdmin();
+      final result = await ApiService.getCustomerOrders(
+        uid: uid,
+        storeId: isAdmin ? AppConfig.storeId : null,
+      );
 
       if (result['success'] == true) {
         setState(() {
@@ -58,17 +67,21 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
     }
   }
 
-  Future<void> _openInvoice(String orderId) async {
-    final url =
-        'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&view=customer&store_id=2&k=${DateTime.now().millisecondsSinceEpoch}';
+  Future<void> _openInvoice(String orderId, String visitorUid) async {
+    // Seller view: pass user_id to filter by seller's uid
+    final uid = await AuthService.getCurrentUID();
+    final url = InvoiceWebView.buildUrl(
+      orderId: orderId,
+      view: 'seller',
+      userId: uid,
+    );
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('فشل في فتح الفاتورة'),
-          backgroundColor: Colors.red,
-        ),
+      showAppSnackbar(
+        context,
+        message: tr('orders.invoice_open_failed'),
+        type: SnackType.error,
       );
     }
   }
@@ -77,31 +90,32 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
     final statuses = [
       {
         'value': 'Pending',
-        'label': 'قيد الانتظار',
+        'label': tr('orders.status_pending'),
         'icon': Iconsax.clock,
+        // Sent as the push-notification body to the customer, not shown here.
         'desc': 'الطلب تم استلامه لكن لم يبدأ معالجته بعد.',
       },
       {
         'value': 'Preparing',
-        'label': 'قيد التحضير',
+        'label': tr('orders.status_preparing'),
         'icon': Iconsax.box,
         'desc': 'الطلب جاري تجهيزه، مثل تجميع المنتجات أو تجهيزها للشحن.',
       },
       {
         'value': 'ReadyToShip',
-        'label': 'جاهز للشحن',
+        'label': tr('orders.status_ready_to_ship'),
         'icon': Iconsax.box_tick,
         'desc': 'الطلب تم تحضيره بالكامل ومستعد للخروج من المخزن للشحن.',
       },
       {
         'value': 'Shipping',
-        'label': 'قيد الشحن',
+        'label': tr('orders.status_shipping'),
         'icon': Iconsax.truck_fast,
         'desc': 'الطلب في طريقه للعميل، تم تسليمه لشركة الشحن.',
       },
       {
         'value': 'Delivered',
-        'label': 'تم التوصيل',
+        'label': tr('orders.status_delivered'),
         'icon': Iconsax.tick_circle,
         'desc': 'الطلب وصل للعميل وتم استلامه بنجاح.',
       },
@@ -112,8 +126,8 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
+        decoration: BoxDecoration(
+          color: context.appSurface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
         ),
         padding: const EdgeInsets.all(20),
@@ -129,12 +143,12 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            const Text(
-              'تغيير حالة الطلب',
+            Text(
+              tr('orders.change_status_title'),
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1A1A2E),
+                color: context.appTextPrimary,
               ),
             ),
             const SizedBox(height: 20),
@@ -177,7 +191,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
             decoration: BoxDecoration(
               color: isCurrentStatus
                   ? AppColors.primary.withOpacity(0.1)
-                  : Colors.grey[100],
+                  : context.appSurfaceVariant,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: isCurrentStatus ? AppColors.primary : Colors.transparent,
@@ -211,7 +225,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
                           : FontWeight.w500,
                       color: isCurrentStatus
                           ? AppColors.primary
-                          : const Color(0xFF1A1A2E),
+                          : context.appTextPrimary,
                     ),
                   ),
                 ),
@@ -246,20 +260,25 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
     );
 
     try {
+      final uid = await AuthService.getCurrentUID();
+      if (uid == null) {
+        throw Exception('User not logged in');
+      }
+
       final result = await ApiService.updateOrderStatus(
         orderId: order['oid'].toString(),
         status: newStatus,
+        uid: uid,
       );
 
       if (!mounted) return;
       Navigator.pop(context); // Close loading
 
       if (result['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم تحديث حالة الطلب بنجاح'),
-            backgroundColor: Colors.green,
-          ),
+        showAppSnackbar(
+          context,
+          message: tr('orders.status_updated'),
+          type: SnackType.success,
         );
         List<String> tokens = [];
         for (var i = 0; i < result['client_token'].length; i++) {
@@ -272,18 +291,19 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
         );
         _loadOrders();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'فشل في تحديث الحالة'),
-            backgroundColor: Colors.red,
-          ),
+        showAppSnackbar(
+          context,
+          message: result['error'] ?? tr('orders.status_update_failed'),
+          type: SnackType.error,
         );
       }
     } catch (e) {
       if (!mounted) return;
       Navigator.pop(context); // Close loading
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('حدث خطأ: $e'), backgroundColor: Colors.red),
+      showAppSnackbar(
+        context,
+        message: '${tr('common.error')}: $e',
+        type: SnackType.error,
       );
     }
   }
@@ -291,21 +311,21 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
   @override
   Widget build(BuildContext context) {
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: context.appTextDirection,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF5F7FB),
+        backgroundColor: context.appBackground,
         appBar: AppBar(
           forceMaterialTransparency: true,
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
             onPressed: () => Navigator.pop(context),
-            icon: const Icon(Iconsax.arrow_right, color: Color(0xFF1A1A2E)),
+            icon: Icon(Iconsax.arrow_right, color: context.appTextPrimary),
           ),
-          title: const Text(
-            'طلبات العملاء',
+          title: Text(
+            tr('orders.customer_orders_title'),
             style: TextStyle(
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
@@ -341,10 +361,10 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
         children: [
           const Icon(Iconsax.warning_2, size: 80, color: Colors.red),
           const SizedBox(height: 16),
-          const Text(
-            'حدث خطأ في تحميل الطلبات',
+          Text(
+            tr('orders.load_error'),
             style: TextStyle(
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 18,
               fontWeight: FontWeight.w500,
             ),
@@ -356,7 +376,7 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
             ),
-            child: const Text('إعادة المحاولة'),
+            child: Text(tr('orders.retry')),
           ),
         ],
       ),
@@ -382,21 +402,18 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          const Text(
-            'لا توجد طلبات',
+          Text(
+            tr('orders.no_orders'),
             style: TextStyle(
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 24,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 12),
           Text(
-            'لم يقم أي عميل بطلب منتجاتك حتى الآن',
-            style: TextStyle(
-              color: const Color(0xFF1A1A2E).withOpacity(0.6),
-              fontSize: 16,
-            ),
+            tr('orders.no_customer_orders_hint'),
+            style: TextStyle(color: context.appTextSecondary, fontSize: 16),
             textAlign: TextAlign.center,
           ),
         ],
@@ -410,13 +427,9 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFD4D4F0), Color(0xFFC8D4F5)],
-        ),
+        gradient: context.surfaceGradient(),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+        border: Border.all(color: context.appBorder, width: 1),
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -445,18 +458,18 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'رقم الطلب',
+                        Text(
+                          tr('orders.order_number'),
                           style: TextStyle(
-                            color: Color(0xFF1A1A2E),
+                            color: context.appTextPrimary,
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                         Text(
                           '#${order['oid']}',
-                          style: const TextStyle(
-                            color: Color(0xFF1A1A2E),
+                          style: TextStyle(
+                            color: context.appTextPrimary,
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
@@ -541,10 +554,10 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
                         size: 18,
                       ),
                       const SizedBox(width: 8),
-                      const Text(
-                        'معلومات العميل',
+                      Text(
+                        tr('orders.customer_info'),
                         style: TextStyle(
-                          color: Color(0xFF1A1A2E),
+                          color: context.appTextPrimary,
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
                         ),
@@ -554,14 +567,14 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
                   const SizedBox(height: 12),
                   _buildDetailRow(
                     Iconsax.personalcard,
-                    'الاسم',
-                    order['customer_name'] ?? 'غير متوفر',
+                    tr('orders.name'),
+                    order['customer_name'] ?? tr('orders.not_available'),
                   ),
                   const SizedBox(height: 8),
                   _buildDetailRow(
                     Iconsax.call,
-                    'الهاتف',
-                    order['customer_phone'] ?? 'غير متوفر',
+                    tr('orders.phone'),
+                    order['customer_phone'] ?? tr('orders.not_available'),
                   ),
                 ],
               ),
@@ -588,10 +601,10 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
                           size: 18,
                         ),
                         const SizedBox(width: 8),
-                        const Text(
-                          'معلومات الشحن',
+                        Text(
+                          tr('orders.shipping_info'),
                           style: TextStyle(
-                            color: Color(0xFF1A1A2E),
+                            color: context.appTextPrimary,
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
                           ),
@@ -601,19 +614,19 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
                     const SizedBox(height: 12),
                     _buildDetailRow(
                       Iconsax.personalcard,
-                      'الاسم',
-                      shippingInfo['fullname'] ?? 'غير متوفر',
+                      tr('orders.name'),
+                      shippingInfo['fullname'] ?? tr('orders.not_available'),
                     ),
                     const SizedBox(height: 8),
                     _buildDetailRow(
                       Iconsax.call,
-                      'الهاتف',
-                      shippingInfo['mobile'] ?? 'غير متوفر',
+                      tr('orders.phone'),
+                      shippingInfo['mobile'] ?? tr('orders.not_available'),
                     ),
                     const SizedBox(height: 8),
                     _buildDetailRow(
                       Iconsax.global,
-                      'العنوان',
+                      tr('orders.address'),
                       '${shippingInfo['city'] ?? ''}, ${shippingInfo['country'] ?? ''}',
                     ),
                   ],
@@ -625,14 +638,14 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
             // Order Details
             _buildDetailRow(
               Iconsax.calendar,
-              'تاريخ الطلب',
+              tr('orders.order_date'),
               _formatDate(order['created_at']),
             ),
             const SizedBox(height: 12),
             _buildDetailRow(
               Iconsax.money,
-              'المبلغ الإجمالي',
-              '${order['total_amount']} ريال',
+              tr('orders.total_amount'),
+              '${order['total_amount']} ${tr('orders.currency')}',
             ),
 
             const SizedBox(height: 20),
@@ -641,7 +654,10 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () => _openInvoice(order['oid'].toString()),
+                onPressed: () => _openInvoice(
+                  order['oid'].toString(),
+                  order['uid'].toString(),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -652,9 +668,12 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
                   elevation: 0,
                 ),
                 icon: const Icon(Iconsax.document_text, size: 20),
-                label: const Text(
-                  'عرض الفاتورة',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                label: Text(
+                  tr('orders.view_invoice'),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
@@ -671,16 +690,13 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
         const SizedBox(width: 6),
         Text(
           '$label: ',
-          style: TextStyle(
-            color: const Color(0xFF1A1A2E).withOpacity(0.7),
-            fontSize: 13,
-          ),
+          style: TextStyle(color: context.appTextSecondary, fontSize: 13),
         ),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(
-              color: Color(0xFF1A1A2E),
+            style: TextStyle(
+              color: context.appTextPrimary,
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
@@ -712,22 +728,23 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
     }
   }
 
+  /// Maps the raw API status value to its localized label.
   String _getStatusText(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
-        return 'قيد الانتظار';
+        return tr('orders.status_pending');
       case 'preparing':
-        return 'قيد التحضير';
+        return tr('orders.status_preparing');
       case 'readytoship':
-        return 'جاهز للشحن';
+        return tr('orders.status_ready_to_ship');
       case 'shipping':
-        return 'قيد الشحن';
+        return tr('orders.status_shipping');
       case 'delivered':
-        return 'تم التوصيل';
+        return tr('orders.status_delivered');
       case 'completed':
-        return 'مكتمل';
+        return tr('orders.status_completed');
       case 'cancelled':
-        return 'ملغي';
+        return tr('orders.status_cancelled');
       default:
         return status;
     }

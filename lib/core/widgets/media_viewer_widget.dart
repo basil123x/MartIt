@@ -4,6 +4,7 @@ import "package:flutter/material.dart";
 import "package:flutter_spinkit/flutter_spinkit.dart";
 import "package:iconsax/iconsax.dart";
 
+import "../utils/item_media_url_util.dart";
 import "../constants/app_colors.dart";
 import "video_player_widget.dart";
 
@@ -17,6 +18,7 @@ class MediaViewerWidget extends StatefulWidget {
   final bool autoPlayVideo;
   final bool showControls;
   final bool showIndicators;
+  final VoidCallback? onMediaUnavailable;
 
   const MediaViewerWidget({
     super.key,
@@ -27,6 +29,7 @@ class MediaViewerWidget extends StatefulWidget {
     this.autoPlayVideo = true,
     this.showControls = false,
     this.showIndicators = true,
+    this.onMediaUnavailable,
   });
 
   @override
@@ -40,6 +43,7 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
   final Dio _dio = Dio();
   int _currentIndex = 0;
   late Future<List<String>> _mediaFuture;
+  bool _unavailableReported = false;
 
   @override
   void initState() {
@@ -52,10 +56,31 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.itmId != widget.itmId ||
         oldWidget.itmIdx != widget.itmIdx ||
-        oldWidget.storeid != widget.storeid) {
+        oldWidget.storeid != widget.storeid ||
+        oldWidget.mediaUrls.length != widget.mediaUrls.length ||
+        !_sameMediaUrls(oldWidget.mediaUrls, widget.mediaUrls)) {
+      _unavailableReported = false;
       _mediaFuture = _resolveMediaUrlsDeferred();
     }
   }
+
+  bool _sameMediaUrls(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  void _reportMediaUnavailable() {
+    if (_unavailableReported || widget.onMediaUnavailable == null) return;
+    _unavailableReported = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onMediaUnavailable?.call();
+    });
+  }
+
+  bool get _hideUnavailablePlaceholder => widget.onMediaUnavailable != null;
 
   Future<List<String>> _resolveMediaUrlsDeferred() async {
     await Future<void>.delayed(Duration.zero);
@@ -66,7 +91,11 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
   }
 
   String _mediaUrl(int index, String ext) {
-    return "${MediaViewerWidget.s3BaseUrl}/store_2/${widget.itmIdx}/$index.png";
+    final pathKey = ItemMediaUrlUtil.resolveItemPathKey(
+      itemIdx: widget.itmIdx,
+      itemId: widget.itmId,
+    );
+    return "${MediaViewerWidget.s3BaseUrl}/store_${ItemMediaUrlUtil.normalizeStoreId(widget.storeid)}/$pathKey/$index.$ext";
   }
 
   Future<bool> _urlExists(String url) async {
@@ -84,34 +113,87 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
     }
   }
 
+  static final RegExp _filePattern = RegExp(
+    r"(\d+)\.(webp|jpg|jpeg|mp4|mov|avi)",
+    caseSensitive: false,
+  );
+
+  List<({int index, String ext})> _parseMediaSlots() {
+    final slots = <({int index, String ext})>[];
+
+    for (final mediaUrl in widget.mediaUrls) {
+      final normalized = mediaUrl.split("]")[0].trim();
+      if (normalized.isEmpty) continue;
+
+      final match = _filePattern.firstMatch(normalized);
+      if (match != null) {
+        var ext = match.group(2)!.toLowerCase();
+        if (ext == "jpeg") ext = "jpg";
+        slots.add((index: int.parse(match.group(1)!), ext: ext));
+        continue;
+      }
+
+      final fileName = normalized.split("/").last.split("?").first;
+      final ext = ItemMediaUrlUtil.extensionFromFileName(fileName);
+      final indexMatch = RegExp(r"^(\d+)\.").firstMatch(fileName);
+      if (ext != null && indexMatch != null) {
+        slots.add((
+          index: int.parse(indexMatch.group(1)!),
+          ext: ext,
+        ));
+      }
+    }
+    return slots;
+  }
+
+  bool _isVideoExt(String ext) {
+    return ext == "mp4" || ext == "mov" || ext == "avi";
+  }
+
+  Future<String> _resolveSlotUrl(({int index, String ext}) slot) async {
+    if (_isVideoExt(slot.ext)) {
+      return _mediaUrl(slot.index, slot.ext);
+    }
+    if (slot.ext == "jpg") {
+      return _mediaUrl(slot.index, "jpg");
+    }
+    // ملفات قديمة webp أو روابط API خاطئة — جرّب jpg ثم webp ثم فيديو
+    final jpgUrl = _mediaUrl(slot.index, "jpg");
+    if (await _urlExists(jpgUrl)) return jpgUrl;
+    final webpUrl = _mediaUrl(slot.index, "webp");
+    if (await _urlExists(webpUrl)) return webpUrl;
+    for (final videoExt in ["mp4", "mov", "avi"]) {
+      final videoUrl = _mediaUrl(slot.index, videoExt);
+      if (await _urlExists(videoUrl)) return videoUrl;
+    }
+    return jpgUrl;
+  }
+
   Future<List<String>> _resolveMediaUrls() async {
+    final slots = _parseMediaSlots();
+
+    if (slots.isNotEmpty) {
+      final urls = <String>[];
+      for (final slot in slots) {
+        urls.add(await _resolveSlotUrl(slot));
+      }
+      if (urls.isNotEmpty) return urls;
+    }
+
+    // fallback: مفيش media في DB — افحص S3 بترتيب الامتدادات الصحيح لكل index
     final urls = <String>[];
-    const extensions = ["png", "mp4", "mov"];
-
     for (int index = 1; index <= _maxImages; index++) {
-      bool foundAny = false;
-
-      for (final ext in extensions) {
+      String? found;
+      for (final ext in ["mp4", "mov", "avi", "jpg", "webp"]) {
         final url = _mediaUrl(index, ext);
         if (await _urlExists(url)) {
-          urls.add(url);
-          foundAny = true;
+          found = url;
           break;
         }
       }
-
-      if (!foundAny) {
-        break;
-      }
+      if (found == null) break;
+      urls.add(found);
     }
-
-    for (final mediaUrl in widget.mediaUrls) {
-      final normalized = mediaUrl.split("]")[0];
-      if (_isVideoUrl(normalized) && !urls.contains(normalized)) {
-        urls.add(normalized);
-      }
-    }
-
     return urls;
   }
 
@@ -142,6 +224,10 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
         final resolvedUrls = snapshot.data ?? [];
 
         if (resolvedUrls.isEmpty) {
+          _reportMediaUnavailable();
+          if (_hideUnavailablePlaceholder) {
+            return const SizedBox.shrink();
+          }
           return Container(
             color: Colors.black,
             child: const Center(
@@ -206,22 +292,28 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
           color: Colors.black,
           child: const Center(child: SpinKitPulse(color: AppColors.white)),
         ),
-        errorWidget: (context, url, error) => Container(
-          color: Colors.grey[300],
-          child: const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Iconsax.image, size: 64, color: Colors.grey),
-                SizedBox(height: 8),
-                Text(
-                  "فشل في تحميل الصورة",
-                  style: TextStyle(color: Colors.grey, fontSize: 14),
-                ),
-              ],
+        errorWidget: (context, url, error) {
+          _reportMediaUnavailable();
+          if (_hideUnavailablePlaceholder) {
+            return const SizedBox.shrink();
+          }
+          return Container(
+            color: Colors.grey[300],
+            child: const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Iconsax.image, size: 64, color: Colors.grey),
+                  SizedBox(height: 8),
+                  Text(
+                    "فشل في تحميل الصورة",
+                    style: TextStyle(color: Colors.grey, fontSize: 14),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       );
     }
   }

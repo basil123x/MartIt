@@ -9,20 +9,27 @@ import 'package:iconsax/iconsax.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
-import '../../core/constants/app_colors.dart';
-import '../add_product/add_product_screen.dart';
+import 'package:GlobalFarm/core/constants/app_colors.dart';
+import 'package:GlobalFarm/core/utils/snackbar_helper.dart';
+import 'package:GlobalFarm/core/utils/theme_extensions.dart';
 
 class CameraScreen extends StatefulWidget {
   final bool isVideo;
 
-  const CameraScreen({super.key, required this.isVideo});
+  const CameraScreen({
+    super.key,
+    required this.isVideo,
+  });
 
   @override
   State<CameraScreen> createState() => _CameraScreenState();
 }
 
 class _CameraScreenState extends State<CameraScreen> {
-  List<String> capturedFiles = [];
+  static const _backCameraKey = ValueKey('product_back_camera');
+
+  final List<String> capturedFiles = [];
+  final ValueNotifier<int> _captureRevision = ValueNotifier(0);
   int videoDuration = 15;
   bool isRecording = false;
   int recordingSeconds = 0;
@@ -32,7 +39,17 @@ class _CameraScreenState extends State<CameraScreen> {
   @override
   void dispose() {
     recordingTimer?.cancel();
+    _captureRevision.dispose();
     super.dispose();
+  }
+
+  Sensor _backSensor(List<Sensor> sensors) {
+    for (final sensor in sensors) {
+      if (sensor.position == SensorPosition.back) {
+        return sensor;
+      }
+    }
+    return sensors.first;
   }
 
   Future<void> requestPermissions() async {
@@ -51,21 +68,10 @@ class _CameraScreenState extends State<CameraScreen> {
     } else {
       // لو المستخدم رفض الأذونات
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'نحتاج أذونات الكاميرا والميكروفون لتسجيل الفيديو بالصوت',
-              style: GoogleFonts.cairo(),
-            ),
-            backgroundColor: Colors.red,
-            action: SnackBarAction(
-              label: 'الإعدادات',
-              textColor: Colors.white,
-              onPressed: () {
-                openAppSettings(); // يفتح إعدادات التطبيق
-              },
-            ),
-          ),
+        showAppSnackbar(
+          context,
+          message: 'نحتاج أذونات الكاميرا والميكروفون لتسجيل الفيديو بالصوت',
+          type: SnackType.error,
         );
         Navigator.pop(context);
       }
@@ -77,7 +83,7 @@ class _CameraScreenState extends State<CameraScreen> {
     final directory = await getTemporaryDirectory();
     final path =
         '${directory.path}/${DateTime.now().millisecondsSinceEpoch}.jpg';
-    return SingleCaptureRequest(path, sensors.first);
+    return SingleCaptureRequest(path, _backSensor(sensors));
   }
 
   // Build capture request for videos
@@ -87,7 +93,7 @@ class _CameraScreenState extends State<CameraScreen> {
     final directory = await getTemporaryDirectory();
     final path =
         '${directory.path}/${DateTime.now().millisecondsSinceEpoch}.mp4';
-    return SingleCaptureRequest(path, sensors.first);
+    return SingleCaptureRequest(path, _backSensor(sensors));
   }
 
   void _startRecordingTimer(CameraState state) {
@@ -127,6 +133,25 @@ class _CameraScreenState extends State<CameraScreen> {
     });
   }
 
+  void _onMediaCaptured(MediaCapture capture) {
+    final path = capture.captureRequest.path;
+    if (path == null || path.isEmpty) return;
+
+    final file = File(path);
+    if (!file.existsSync() || !mounted) return;
+
+    capturedFiles.add(path);
+    _captureRevision.value++;
+    Provider.of<AppProvider>(context, listen: false).setMedia(path);
+
+    final isVideo = path.endsWith('.mp4');
+    showAppSnackbar(
+      context,
+      message: isVideo ? 'تم تسجيل الفيديو ✅' : 'تم التقاط الصورة ✅',
+      type: SnackType.success,
+    );
+  }
+
   @override
   void initState() {
     requestPermissions();
@@ -136,63 +161,34 @@ class _CameraScreenState extends State<CameraScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: context.appBackground,
       body: permissionsGranted
-          ? Consumer<AppProvider>(
-              builder: (context, appProvider, child) {
-                return CameraAwesomeBuilder.awesome(
-                  saveConfig: SaveConfig.photoAndVideo(
-                    initialCaptureMode: widget.isVideo
-                        ? CaptureMode.video
-                        : CaptureMode.photo,
-                    photoPathBuilder: _captureRequestBuilder,
-                    videoPathBuilder: _videoCaptureRequestBuilder,
-                    videoOptions: VideoOptions(
-                      enableAudio: true, // ⭐ده المهم!
-                      quality: VideoRecordingQuality.fhd,
-                    ),
-                  ),
-                  sensorConfig: SensorConfig.single(
-                    sensor: Sensor.position(SensorPosition.back),
-                    aspectRatio: CameraAspectRatios.ratio_16_9,
-                    flashMode: FlashMode.none,
-                  ),
-                  enablePhysicalButton: true,
-                  onMediaCaptureEvent: (MediaCapture capture) {
-                    final file = File(capture.captureRequest.path!);
-
-                    if (file.existsSync() && mounted) {
-                      setState(() {
-                        capturedFiles.add(capture.captureRequest.path!);
-                        appProvider.setMedia(capture.captureRequest.path ?? "");
-                      });
-
-                      // Show success feedback
-                      final isVideo = capture.captureRequest.path!.endsWith(
-                        '.mp4',
-                      );
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            isVideo
-                                ? 'تم تسجيل الفيديو ✅'
-                                : 'تم التقاط الصورة ✅',
-                          ),
-                          backgroundColor: Colors.green,
-                          duration: const Duration(seconds: 1),
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      );
-                    }
-                  },
-                  topActionsBuilder: (state) => _buildTopActions(state),
-                  bottomActionsBuilder: (state) => _buildBottomActions(state),
-                  middleContentBuilder: (state) => _buildMiddleContent(state),
-                );
-              },
+          ? KeyedSubtree(
+              key: _backCameraKey,
+              child: CameraAwesomeBuilder.awesome(
+              saveConfig: SaveConfig.photoAndVideo(
+                initialCaptureMode: widget.isVideo
+                    ? CaptureMode.video
+                    : CaptureMode.photo,
+                mirrorFrontCamera: false,
+                photoPathBuilder: _captureRequestBuilder,
+                videoPathBuilder: _videoCaptureRequestBuilder,
+                videoOptions: VideoOptions(
+                  enableAudio: true,
+                  quality: VideoRecordingQuality.fhd,
+                ),
+              ),
+              sensorConfig: SensorConfig.single(
+                sensor: Sensor.position(SensorPosition.back),
+                aspectRatio: CameraAspectRatios.ratio_16_9,
+                flashMode: FlashMode.none,
+              ),
+              enablePhysicalButton: true,
+              onMediaCaptureEvent: _onMediaCaptured,
+              topActionsBuilder: (state) => _buildTopActions(state),
+              bottomActionsBuilder: (state) => _buildBottomActions(state),
+              middleContentBuilder: (state) => _buildMiddleContent(state),
+            ),
             )
           : Center(
               child: Column(
@@ -256,7 +252,7 @@ class _CameraScreenState extends State<CameraScreen> {
                       width: 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: context.appSurface,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -274,23 +270,7 @@ class _CameraScreenState extends State<CameraScreen> {
             else
               SizedBox(width: 48),
 
-            IconButton(
-              onPressed: () => state.switchCameraSensor(),
-              icon: Container(
-                width: 50,
-                height: 50,
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Iconsax.refresh_circle,
-                  color: Colors.white,
-                  size: 24,
-                ),
-              ),
-            ),
+            SizedBox(width: 48),
           ],
         ),
       ),
@@ -341,55 +321,62 @@ class _CameraScreenState extends State<CameraScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                GestureDetector(
-                  onTap: capturedFiles.isNotEmpty ? _showPreview : null,
-                  child: Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: capturedFiles.isNotEmpty
-                          ? AppColors.primary
-                          : Colors.grey.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: capturedFiles.isNotEmpty
-                        ? Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: _buildMediaPreview(capturedFiles.last),
-                              ),
-                              if (capturedFiles.length > 1)
-                                Positioned(
-                                  top: -7,
-                                  right: -7,
-                                  child: Container(
-                                    width: 20,
-                                    height: 20,
-                                    alignment: Alignment.center,
-                                    decoration: const BoxDecoration(
-                                      color: Colors.red,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Text(
-                                      '${capturedFiles.length}',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                ValueListenableBuilder<int>(
+                  valueListenable: _captureRevision,
+                  builder: (context, _, __) {
+                    return GestureDetector(
+                      onTap: capturedFiles.isNotEmpty ? _showPreview : null,
+                      child: Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: capturedFiles.isNotEmpty
+                              ? AppColors.primary
+                              : Colors.grey.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: capturedFiles.isNotEmpty
+                            ? Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: _buildMediaPreview(
+                                      capturedFiles.last,
                                     ),
                                   ),
-                                ),
-                            ],
-                          )
-                        : const Icon(
-                            Iconsax.gallery,
-                            color: Colors.white,
-                            size: 24,
-                          ),
-                  ),
+                                  if (capturedFiles.length > 1)
+                                    Positioned(
+                                      top: -7,
+                                      right: -7,
+                                      child: Container(
+                                        width: 20,
+                                        height: 20,
+                                        alignment: Alignment.center,
+                                        decoration: const BoxDecoration(
+                                          color: Colors.red,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Text(
+                                          '${capturedFiles.length}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              )
+                            : const Icon(
+                                Iconsax.gallery,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                      ),
+                    );
+                  },
                 ),
 
                 // Capture button
@@ -447,32 +434,31 @@ class _CameraScreenState extends State<CameraScreen> {
                     child: CircularProgressIndicator(color: Colors.white),
                   ),
                 ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) {
-                          return AddProductScreen(mediaFiles: capturedFiles);
-                        },
+                ValueListenableBuilder<int>(
+                  valueListenable: _captureRevision,
+                  builder: (context, _, __) {
+                    return GestureDetector(
+                      onTap: () {
+                        if (capturedFiles.isEmpty) return;
+                        Navigator.pop(context, List<String>.from(capturedFiles));
+                      },
+                      child: Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: capturedFiles.isNotEmpty
+                              ? Colors.green
+                              : Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Iconsax.tick_circle,
+                          color: Colors.white,
+                          size: 24,
+                        ),
                       ),
                     );
                   },
-                  child: Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: capturedFiles.isNotEmpty
-                          ? Colors.green
-                          : Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Iconsax.tick_circle,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
                 ),
               ],
             ),
@@ -515,8 +501,8 @@ class _CameraScreenState extends State<CameraScreen> {
       isScrollControlled: true,
       builder: (context) => Container(
         height: MediaQuery.of(context).size.height * 0.8,
-        decoration: const BoxDecoration(
-          color: Colors.white,
+        decoration: BoxDecoration(
+          color: context.appSurface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Column(
@@ -570,9 +556,8 @@ class _CameraScreenState extends State<CameraScreen> {
                         right: 4,
                         child: GestureDetector(
                           onTap: () {
-                            setState(() {
-                              capturedFiles.removeAt(index);
-                            });
+                            capturedFiles.removeAt(index);
+                            _captureRevision.value++;
                             Navigator.pop(context);
                             if (capturedFiles.isNotEmpty) {
                               _showPreview();

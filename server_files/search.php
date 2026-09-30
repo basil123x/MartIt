@@ -1,85 +1,69 @@
 <?php
 include 'xtras/config.php';
+require_once __DIR__ . '/media_helper.php';
 
-// Get search query parameter
 $searchQuery = isset($_GET['q']) ? trim($_GET['q']) : '';
+$storeId = isset($_GET['store_id']) ? preg_replace('/[^0-9]/', '', $_GET['store_id']) : '';
 
 try {
     if (empty($searchQuery)) {
-        echo json_encode(array(
-            'success' => true,
-            'data' => array()
-        ));
+        echo json_encode(['success' => true, 'data' => []]);
         exit;
     }
-    
-    // SQL query to search items by name
-    $searchQuery = $conn->real_escape_string($searchQuery);
+
+    $searchQuery = $conx->real_escape_string($searchQuery);
+    $storeClause = $storeId !== '' ? " AND Items.store_id = '$storeId'" : '';
+
     $sql = "SELECT
         Items.id,
+        Items.idx,
         Items.`name`,
         Items.price,
         Items.media,
+        Items.store_id AS storeid,
         Users.Fullname,
         Users.id AS user_id
-    FROM
-        Items
-    LEFT JOIN Users
-        ON Items.uid = Users.uid
-    WHERE Items.Visibility = 'Public' 
-        AND Items.`name` LIKE '%$searchQuery%'
+    FROM Items
+    LEFT JOIN Users ON Items.uid = Users.uid
+    WHERE Items.Visibility = 'Public' AND Items.`name` LIKE '%$searchQuery%' $storeClause
     ORDER BY Items.`name` ASC
     LIMIT 20";
 
-    $result = $conn->query($sql);
-    
-    if ($result->num_rows > 0) {
-        $items = array();
-        
-        while($row = $result->fetch_assoc()) {
-            // Get first media file for thumbnail
-            $thumbnail = '';
-            if (!empty($row['media'])) {
-                $mediaArray = explode(',', $row['media']);
-                $firstMedia = trim($mediaArray[0]);
-                if (!empty($firstMedia)) {
-                    $thumbnail = "https://globee.b-cdn.net/" . $row['id'] . "/" . $firstMedia;
-                }
-            }
-            
-            // Build search result object
-            $item = array(
-                'id' => $row['id'],
-                'name' => $row['name'],
-                'price' => $row['price'],
-                'thumbnail' => $thumbnail,
-                'seller' => array(
-                    'id' => $row['user_id'],
+    $result = $conx->query($sql);
+
+    if ($result && $result->num_rows > 0) {
+        $items = [];
+
+        while ($row = $result->fetch_assoc()) {
+            $storeid = !empty($row['storeid']) ? (string)$row['storeid'] : '1';
+            $itemId  = (string)$row['id'];
+            $idx     = (string)($row['idx'] ?? '');
+            $itemIdx = (string)($row['idx'] ?? '');
+            $thumbnail = item_thumbnail_url($storeid, $itemId, $itemIdx, $row['media']);
+
+            $items[] = [
+                'id'       => $itemId,
+                'idx'      => $idx,
+                'store_id' => $storeid,
+                'storeid'  => $storeid,
+                'name'     => $row['name'],
+                'price'    => $row['price'],
+                'thumbnail'=> $thumbnail,
+                'seller'   => [
+                    'id'   => $row['user_id'],
                     'name' => $row['Fullname']
-                )
-            );
-            
-            $items[] = $item;
+                ]
+            ];
         }
-        
-        echo json_encode(array(
-            'success' => true,
-            'data' => $items
-        ));
-        
+
+        echo json_encode(['success' => true, 'data' => $items]);
     } else {
-        echo json_encode(array(
-            'success' => true,
-            'data' => array()
-        ));
+        echo json_encode(['success' => true, 'data' => []]);
     }
-    
+
 } catch (Exception $e) {
-    echo json_encode(array(
-        'success' => false,
-        'error' => 'Search error: ' . $e->getMessage()
-    ));
+    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
 }
 
-$conn->close();
+$conx->close();
 ?>

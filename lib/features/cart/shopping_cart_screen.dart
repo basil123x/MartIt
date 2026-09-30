@@ -1,14 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/services/api_service.dart';
-import '../../core/models/cart_model.dart';
-import '../order/order_summary_screen.dart';
+import 'package:GlobalFarm/core/constants/app_colors.dart';
+import 'package:GlobalFarm/core/services/api_service.dart';
+import 'package:GlobalFarm/core/models/cart_model.dart';
+import 'package:GlobalFarm/core/services/localization_service.dart';
+import 'package:GlobalFarm/core/widgets/item_thumbnail_widget.dart';
+import 'package:GlobalFarm/core/utils/app_responsive.dart';
+import 'package:GlobalFarm/core/utils/snackbar_helper.dart';
+import 'package:GlobalFarm/core/utils/theme_extensions.dart';
+import 'package:GlobalFarm/features/order/order_summary_screen.dart';
 
 class ShoppingCartScreen extends StatefulWidget {
   final String userId;
+  /// When true (tab selected), cart reloads so new adds appear immediately.
+  final bool isActive;
+  /// Switch to Home/products inside the shell — avoids black screen from pop.
+  final VoidCallback? onBrowseProducts;
+  final bool showBackButton;
 
-  const ShoppingCartScreen({super.key, required this.userId});
+  const ShoppingCartScreen({
+    super.key,
+    required this.userId,
+    this.isActive = true,
+    this.onBrowseProducts,
+    this.showBackButton = true,
+  });
 
   @override
   State<ShoppingCartScreen> createState() => _ShoppingCartScreenState();
@@ -26,23 +42,57 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
     _loadCartItems();
   }
 
-  Future<void> _loadCartItems() async {
-    setState(() {
-      _isLoading = true;
-      _hasError = false;
-    });
+  @override
+  void didUpdateWidget(covariant ShoppingCartScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.userId != oldWidget.userId) {
+      _loadCartItems();
+      return;
+    }
+    // Reload whenever the cart tab becomes visible again
+    if (widget.isActive && !oldWidget.isActive) {
+      _loadCartItems(silent: true);
+    }
+  }
+
+  void _goBrowseProducts() {
+    if (widget.onBrowseProducts != null) {
+      widget.onBrowseProducts!();
+      return;
+    }
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Future<void> _loadCartItems({bool silent = false}) async {
+    if (!silent || _cartItems.isEmpty) {
+      setState(() {
+        _isLoading = true;
+        _hasError = false;
+      });
+    }
 
     try {
+      print('Loading cart for userId: ${widget.userId}');
       final result = await ApiService.getCartItems(userId: widget.userId);
+      print('Cart result: $result');
+
+      if (!mounted) return;
 
       if (result['success'] == true) {
         final List<dynamic> data = result['data'] ?? [];
         setState(() {
-          _cartItems = data
-              .map((item) => CartItemModel.fromJson(item))
-              .toList();
+          _cartItems = data.map((item) {
+            print('Parsing cart item: $item');
+            final map = item is Map<String, dynamic>
+                ? item
+                : Map<String, dynamic>.from(item as Map);
+            return CartItemModel.fromJson(map);
+          }).toList();
           _calculateTotal();
           _isLoading = false;
+          _hasError = false;
         });
       } else {
         setState(() {
@@ -52,6 +102,7 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
       }
     } catch (e) {
       print('Error loading cart items: $e');
+      if (!mounted) return;
       setState(() {
         _hasError = true;
         _isLoading = false;
@@ -93,29 +144,25 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
           });
         }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              newQuantity == 0 ? 'تم حذف العنصر' : 'تم تحديث الكمية',
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 1),
-          ),
-        );
+        if (newQuantity == 0) {
+          showAppSnackbar(
+            context,
+            message: tr('cart.item_removed'),
+            type: SnackType.success,
+          );
+        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['error'] ?? 'فشل في التحديث'),
-            backgroundColor: Colors.red,
-          ),
+        showAppSnackbar(
+          context,
+          message: result['error'] ?? tr('cart.update_failed'),
+          type: SnackType.error,
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('حدث خطأ أثناء التحديث'),
-          backgroundColor: Colors.red,
-        ),
+      showAppSnackbar(
+        context,
+        message: tr('cart.update_error'),
+        type: SnackType.error,
       );
     }
   }
@@ -123,29 +170,56 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
   @override
   Widget build(BuildContext context) {
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: context.appTextDirection,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF5F7FB),
+        backgroundColor: context.appBackground,
         // backgroundColor: const Color(0xFF0A0E27),
         appBar: AppBar(
           forceMaterialTransparency: true,
           backgroundColor: Colors.transparent,
           elevation: 0,
-          leading: IconButton(
-            onPressed: () => Navigator.pop(context),
-            // icon: const Icon(Iconsax.arrow_right_3, color: Colors.white),
-            icon: const Icon(Iconsax.arrow_right, color: Color(0xFF1A1A2E)),
-          ),
-          title: const Text(
-            'سلة التسوق',
+          automaticallyImplyLeading: false,
+          leading: widget.showBackButton
+              ? IconButton(
+                  onPressed: _goBrowseProducts,
+                  icon: Icon(Iconsax.arrow_right, color: context.appTextPrimary),
+                )
+              : null,
+          title: Text(
+            tr('cart.title'),
             style: TextStyle(
-              // color: Colors.white,
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
           ),
           centerTitle: true,
+          actions: [
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: 12),
+              child: Material(
+                color: context.appSurface,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  onTap: _loadCartItems,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: context.appBorder),
+                    ),
+                    child: Icon(
+                      Iconsax.refresh,
+                      size: 20,
+                      color: context.appTextPrimary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
         body: _isLoading
             ? const Center(
@@ -158,15 +232,38 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
             : Column(
                 children: [
                   Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _cartItems.length,
-                      itemBuilder: (context, index) {
-                        return _buildCartItem(_cartItems[index]);
-                      },
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: AppResponsive.isTablet(context)
+                              ? 720
+                              : double.infinity,
+                        ),
+                        child: RefreshIndicator(
+                          color: AppColors.primary,
+                          onRefresh: _loadCartItems,
+                          child: ListView.builder(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _cartItems.length,
+                            itemBuilder: (context, index) {
+                              return _buildCartItem(_cartItems[index]);
+                            },
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                  _buildBottomSummary(),
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: AppResponsive.isTablet(context)
+                            ? 720
+                            : double.infinity,
+                      ),
+                      child: _buildBottomSummary(),
+                    ),
+                  ),
                 ],
               ),
       ),
@@ -180,11 +277,10 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
         children: [
           const Icon(Iconsax.warning_2, size: 80, color: Colors.red),
           const SizedBox(height: 16),
-          const Text(
-            'حدث خطأ في تحميل السلة',
+          Text(
+            tr('cart.load_error'),
             style: TextStyle(
-              // color: Colors.white,
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 18,
               fontWeight: FontWeight.w500,
             ),
@@ -196,7 +292,7 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
             ),
-            child: const Text('إعادة المحاولة'),
+            child: Text(tr('cart.retry')),
           ),
         ],
       ),
@@ -222,27 +318,27 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          const Text(
-            'سلة التسوق فارغة',
+          Text(
+            tr('cart.empty'),
             style: TextStyle(
               // color: Colors.white,
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 24,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 12),
           Text(
-            'ابدأ بإضافة المنتجات إلى سلتك',
+            tr('cart.empty_message'),
             style: TextStyle(
               // color: Colors.white.withOpacity(0.7),
-              color: const Color(0xFF1A1A2E).withOpacity(0.6),
+              color: context.appTextSecondary,
               fontSize: 16,
             ),
           ),
           const SizedBox(height: 32),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: _goBrowseProducts,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
@@ -251,9 +347,9 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                 borderRadius: BorderRadius.circular(25),
               ),
             ),
-            child: const Text(
-              'تصفح المنتجات',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            child: Text(
+              tr('cart.browse_products'),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -261,34 +357,13 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
     );
   }
 
-// id ===> itmid
-// a1 ===> barcode
-// a3 ===> arabic name
-// a4 ===> eng name
-// a5 ===> group
-// a7 ===> arabic description
-// a8 ===> eng description
-// a10 ===> price
-// a30 ===> stock
-
-
   Widget _buildCartItem(CartItemModel cartItem) {
-    String thumbnail = "https://martit.s3.ap-south-1.amazonaws.com/store_2/${cartItem.item.idx}/1.png";
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            // const Color(0xFF1A1A2E).withOpacity(0.8),
-            // const Color(0xFF16213E).withOpacity(0.6),
-            const Color(0xFFD4D4F0),
-            const Color(0xFFC8D4F5),
-          ],
-        ),
+        gradient: context.surfaceGradient(),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+        border: Border.all(color: context.appBorder, width: 1),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -305,31 +380,21 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                   width: 2,
                 ),
               ),
-              child: ClipRRect(
+              child: ItemThumbnailWidget(
+                itemId: cartItem.item.id,
+                itemIdx: cartItem.item.idx,
+                storeId: cartItem.item.store_id,
+                mediaValue: cartItem.item.media.isNotEmpty
+                    ? cartItem.item.media
+                    : null,
+                thumbnailUrl: cartItem.item.thumbnail.isNotEmpty
+                    ? cartItem.item.thumbnail
+                    : null,
+                width: 80,
+                height: 80,
+                fit: BoxFit.cover,
                 borderRadius: BorderRadius.circular(13),
-                child: cartItem.item.idx.isNotEmpty
-                    ? Image.network(
-                        thumbnail,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            color: Colors.grey[800],
-                            child: const Icon(
-                              Iconsax.image,
-                              color: Colors.grey,
-                              size: 30,
-                            ),
-                          );
-                        },
-                      )
-                    : Container(
-                        color: Colors.grey[800],
-                        child: const Icon(
-                          Iconsax.image,
-                          color: Colors.grey,
-                          size: 30,
-                        ),
-                      ),
+                placeholderColor: Colors.grey[800],
               ),
             ),
 
@@ -342,9 +407,9 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                 children: [
                   Text(
                     cartItem.item.name,
-                    style: const TextStyle(
+                    style: TextStyle(
                       // color: Colors.white,
-                      color: Color(0xFF1A1A2E),
+                      color: context.appTextPrimary,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -353,10 +418,10 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'البائع: ${cartItem.seller.name}',
+                    '${tr('product.seller')}: ${cartItem.seller.name}',
                     style: TextStyle(
                       // color: Colors.white.withOpacity(0.7),
-                      color: const Color(0xFF1A1A2E).withOpacity(0.6),
+                      color: context.appTextSecondary,
                       fontSize: 14,
                     ),
                   ),
@@ -377,7 +442,7 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                           ),
                         ),
                         child: Text(
-                          '${cartItem.item.price} ريال',
+                          '${cartItem.item.price} ${tr('common.currency')}',
                           style: const TextStyle(
                             color: AppColors.primary,
                             fontSize: 14,
@@ -436,8 +501,7 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    // color: Colors.white.withOpacity(0.1),
-                    color: Colors.white,
+                    color: context.appSurface,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       // color: Colors.white.withOpacity(0.2),
@@ -447,9 +511,9 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                   ),
                   child: Text(
                     cartItem.cartQuantity.toString(),
-                    style: const TextStyle(
+                    style: TextStyle(
                       // color: Colors.white,
-                      color: Color(0xFF1A1A2E),
+                      color: context.appTextPrimary,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -490,19 +554,9 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            // const Color(0xFF1A1A2E).withOpacity(0.9),
-            // const Color(0xFF0F3460),
-            Color(0xFFD4D4F0),
-            Color(0xFFC8D4F5),
-            Color(0xFFB4D4F0),
-          ],
-        ),
+        gradient: context.bottomBarGradient(),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+        border: Border.all(color: context.appBorder, width: 1),
       ),
       child: SafeArea(
         child: Column(
@@ -511,11 +565,11 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'المجموع الكلي:',
+                Text(
+                  '${tr('cart.grand_total')}:',
                   style: TextStyle(
                     // color: Colors.white,
-                    color: Color(0xFF1A1A2E),
+                    color: context.appTextPrimary,
                     fontSize: 17,
                     fontWeight: FontWeight.w600,
                   ),
@@ -534,7 +588,7 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                     ),
                   ),
                   child: Text(
-                    '${_totalAmount.toStringAsFixed(2)} ريال',
+                    '${_totalAmount.toStringAsFixed(2)} ${tr('common.currency')}',
                     style: const TextStyle(
                       color: AppColors.primary,
                       fontSize: 15,
@@ -577,9 +631,9 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
-                      'ملخص الطلب',
-                      style: TextStyle(
+                    Text(
+                      tr('cart.order_summary'),
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),

@@ -1,84 +1,65 @@
 import 'dart:io';
 import 'dart:math' as math;
-import 'package:GlobalFarm/core/services/onesignal_service.dart';
-import 'package:GlobalFarm/core/services/s3_upload_service.dart';
-import 'package:GlobalFarm/features/home/tiktok_feed_screen.dart';
 import 'package:GlobalFarm/shared/providers/app_provider.dart';
+import 'package:awesome_dialog/awesome_dialog.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:geocoding/geocoding.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/widgets/video_player_widget.dart';
-import '../../core/services/auth_service.dart';
-import '../../core/services/database_service.dart';
-import '../camera/camera_screen.dart';
+import 'package:GlobalFarm/core/constants/app_config.dart';
+import 'package:GlobalFarm/core/constants/app_colors.dart';
+import 'package:GlobalFarm/core/utils/country_code_util.dart';
+import 'package:GlobalFarm/core/widgets/video_player_widget.dart';
+import 'package:GlobalFarm/core/services/api_service.dart';
+import 'package:GlobalFarm/core/services/database_service.dart';
+import 'package:GlobalFarm/core/services/localization_service.dart';
+import 'package:GlobalFarm/core/utils/snackbar_helper.dart';
+import 'package:GlobalFarm/core/services/s3_upload_service.dart';
+import 'package:GlobalFarm/features/camera/camera_screen.dart';
+import 'package:GlobalFarm/core/utils/app_responsive.dart';
+import 'package:GlobalFarm/core/utils/theme_extensions.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
-// LOGO THEME COLORS - MATCHING APP LOGO
+// THEME COLORS — aligned with GlobalFarm green (AppColors.primary)
 // ══════════════════════════════════════════════════════════════════════════════
 class _LuxuryColors {
-  // Light theme backgrounds
-  static const Color bgLight = Color(0xFFF5F5F5);
-  static const Color bgCard = Color(0xFFFFFFFF);
   static const Color cardBorder = Color(0xFFE0E0E0);
-  
-  // Deep Navy/Indigo (from logo)
-  static const Color navyPrimary = Color(0xFF2D2B6B);
-  static const Color navyDark = Color(0xFF1E1B5E);
-  
-  // Orange accents (from logo)
-  static const Color orangePrimary = Color(0xFFFF8C00);
-  static const Color orangeLight = Color(0xFFFFB347);
-  static const Color orangeDark = Color(0xFFFF6B00);
-  
-  // Toggle/Card tint
-  static const Color orangeTint = Color(0xFFFFF4E6);
-  
-  // Text colors for light theme
-  static const Color textPrimary = Color(0xFF1A1A2E);
-  static const Color textSecondary = Color(0xFF6B7280);
-  static const Color textHint = Color(0xFF9CA3AF);
-  
+
+  // Green accents (app theme)
+  static const Color orangePrimary = AppColors.primary;
+  static const Color orangeLight = AppColors.primaryLight;
+  static const Color orangeDark = AppColors.primaryDark;
+
+  // Soft green tint for cards / add tile
+  static const Color orangeTint = Color(0xFFEAF3E8);
+
   // Input field colors
-  static const Color inputBg = Color(0xFFFFFFFF);
   static const Color inputBorder = Color(0xFFD1D5DB);
-  
+
   // Toggle colors
   static const Color toggleOff = Color(0xFFD1D5DB);
   static const Color toggleTrackOff = Color(0xFFE5E7EB);
 
-  // Orange gradient (primary accent)
+  // Green gradient (primary accent)
   static const LinearGradient orangeGradient = LinearGradient(
     colors: [orangeLight, orangePrimary, orangeDark],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  // Navy gradient
+  // Dark green gradient (secondary accents / scanner btn)
   static const LinearGradient navyGradient = LinearGradient(
-    colors: [navyPrimary, navyDark],
+    colors: [AppColors.primaryDark, AppColors.secondaryDark],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  static const LinearGradient shimmerGradient = LinearGradient(
-    colors: [
-      Color(0x00FFFFFF),
-      Color(0x55FFFFFF),
-      Color(0x00FFFFFF),
-    ],
-    stops: [0.0, 0.5, 1.0],
-    begin: Alignment(-1.0, -0.3),
-    end: Alignment(1.0, 0.3),
-  );
+  static const Color navyPrimary = AppColors.primaryDark;
 }
 
 class AddProductScreen extends StatefulWidget {
@@ -93,8 +74,12 @@ class AddProductScreen extends StatefulWidget {
 
 class _AddProductScreenState extends State<AddProductScreen>
     with TickerProviderStateMixin {
+  static const _storage = FlutterSecureStorage();
+  static const _draftItemIdKey = 'add_product_draft_item_id';
+  static const _draftClientIdKey = 'add_product_draft_client_id';
+  static const _draftMediaKey = 'add_product_draft_media';
+
   final PageController _mediaController = PageController();
-  final ScrollController _scrollController = ScrollController();
 
   final TextEditingController _barcodeController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
@@ -107,72 +92,232 @@ class _AddProductScreenState extends State<AddProductScreen>
   final TextEditingController _categoryController = TextEditingController();
 
   List<String> _mediaFiles = [];
+  final List<String> _pendingUploadPaths = [];
+  /// Local path → upload progress 0..1 while actively uploading.
+  final Map<String, double> _uploadProgressByPath = {};
+  /// Local paths waiting in the upload queue (dimmed).
+  final Set<String> _queuedUploadPaths = {};
   int _currentMediaIndex = 0;
   bool _isPublic = true;
   bool _commentsEnabled = true;
   bool _isUploading = false;
+  bool _isMediaUploading = false;
+  bool _initialMediaUploaded = false;
   String? _currentItemId;
-  int _clientItemId = 0;
+  String? _globalFarmClientId;
+  String _savedMediaString = '';
+  int _uploadedMediaCount = 0;
+  Future<void>? _initRecordFuture;
 
   // Categories for autocomplete
   List<String> _categories = [];
   bool _isLoadingCategories = true;
 
+  String get _lang => LocalizationService.instance.currentLanguage;
+
+  Color get _onSurface => Theme.of(context).colorScheme.onSurface;
+
+  Color get _onSurfaceSecondary => AppColors.textSecondaryColor(context);
+
+  Color get _outline => Theme.of(context).colorScheme.outline;
+
   // Animation controllers
   late AnimationController _glowController;
-  late AnimationController _shimmerController;
   late AnimationController _pulseController;
   late Animation<double> _glowAnimation;
-  late Animation<double> _shimmerAnimation;
   late Animation<double> _pulseAnimation;
 
   // Focus nodes for glow effect
   final Map<String, FocusNode> _focusNodes = {};
   final Map<String, bool> _fieldFocused = {};
-  
-  Future<String> getUserCountry() async {
+
+  int _maxMediaIndexFromString(String media) {
+    var maxIndex = 0;
+    for (final part in media.split(',')) {
+      final trimmed = part.trim();
+      if (trimmed.isEmpty) continue;
+      final match = RegExp(r'^(\d+)').firstMatch(trimmed);
+      if (match != null) {
+        maxIndex = math.max(maxIndex, int.parse(match.group(1)!));
+      }
+    }
+    return maxIndex;
+  }
+
+  int get _nextUploadStartIndex => _maxMediaIndexFromString(_savedMediaString);
+
+  void _syncUploadedMediaCount() {
+    _uploadedMediaCount = _nextUploadStartIndex;
+  }
+
+  Future<void> _clearDraft() async {
+    await _storage.delete(key: _draftItemIdKey);
+    await _storage.delete(key: _draftClientIdKey);
+    await _storage.delete(key: _draftMediaKey);
+  }
+
+  Future<void> _loadExistingItemState() async {
+    if (_currentItemId == null || _currentItemId!.isEmpty) return;
+
+    final item = await ApiService.fetchItemById(itemId: _currentItemId!);
+    if (!mounted) return;
+
+    final existingNames = <String>[];
+    if (item != null) {
+      for (final url in item.media) {
+        final name = url.split('/').last.split('?').first.trim();
+        if (name.isNotEmpty && RegExp(r'^\d+\.').hasMatch(name)) {
+          existingNames.add(name);
+        }
+      }
+      if (item.idx.isNotEmpty) {
+        _globalFarmClientId = item.idx;
+      }
+      for (final url in item.media) {
+        if (url.startsWith('http') && !_mediaFiles.contains(url)) {
+          _mediaFiles.insert(0, url);
+        }
+      }
+    }
+
+    if (existingNames.isNotEmpty) {
+      _savedMediaString = existingNames.join(', ');
+      _syncUploadedMediaCount();
+    }
+
+    if (mounted) setState(() {});
+  }
+
+  bool _isNetworkMediaPath(String path) => path.startsWith('http');
+
+  bool _isVideoMediaPath(String path) {
+    final lower = path.toLowerCase();
+    return lower.contains('.mp4') ||
+        lower.contains('.mov') ||
+        lower.contains('.avi');
+  }
+
+  Widget _buildMediaImage(
+    String path, {
+    BoxFit fit = BoxFit.cover,
+    double? width,
+    double? height,
+  }) {
+    if (_isVideoMediaPath(path)) {
+      return ColoredBox(
+        color: _LuxuryColors.navyPrimary,
+        child: const Center(
+          child: Icon(Iconsax.video_play, color: Colors.white, size: 28),
+        ),
+      );
+    }
+    if (_isNetworkMediaPath(path)) {
+      return Image.network(
+        path,
+        fit: fit,
+        width: width,
+        height: height,
+        errorBuilder: (context, error, stackTrace) => ColoredBox(
+          color: _LuxuryColors.navyPrimary,
+          child: const Center(
+            child: Icon(Iconsax.image, color: Colors.white54, size: 28),
+          ),
+        ),
+      );
+    }
+    return Image.file(
+      File(path),
+      fit: fit,
+      width: width,
+      height: height,
+    );
+  }
+
+  Future<void> insertOneRecord() async {
     try {
-      // 1. اطلب permission
-      LocationPermission permission = await Geolocator.requestPermission();
-      
-      // 2. جيب الموقع
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+      // 1) سجل فاضي جديد على Gfnursery — UPDATE عند النشر
+      final emptyId = await ApiService.insertEmptyGlobalFarmItem();
+      if (emptyId == null || emptyId <= 0) {
+        print('insert_empty failed — no Gfnursery client id');
+        return;
+      }
+      final clientId = emptyId.toString();
+      print('✅ insert_empty Gfnursery id: $clientId');
+
+      final country = getCountryCode();
+      final uid = await _storage.read(key: 'user_uid');
+      final request = await Dio().post(
+        '${AppConfig.apiBaseUrl}/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        data: FormData.fromMap({
+          'action': 'insertNewOne',
+          'country': country,
+          'store_id': AppConfig.storeId,
+          if (uid != null && uid.isNotEmpty) 'uid': uid,
+        }),
       );
-      
-      // 3. حوّل لاسم دولة
-      List<Placemark> placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
-      
-      return placemarks.first.country ?? 'Unknown'; // "EG"
+
+      final data = request.data;
+      if (data is! Map || data['item_id'] == null) {
+        print('insertNewOne failed: $data');
+        return;
+      }
+
+      final martitItemId = data['item_id'].toString();
+      print('✅ insertNewOne Martit item_id: $martitItemId');
+
+      await DatabaseService.updateItemIdx(itemId: martitItemId, idx: clientId);
+
+      if (!mounted) return;
+
+      _savedMediaString = '';
+      _uploadedMediaCount = 0;
+      _initialMediaUploaded = false;
+
+      setState(() {
+        _currentItemId = martitItemId;
+        _globalFarmClientId = clientId;
+      });
+
+      await _uploadInitialMediaIfNeeded();
     } catch (e) {
-      return 'Unknown';
+      print('insertOneRecord error: $e');
     }
   }
 
-  Future insertOneRecord() async {
-    var request = await Dio().post(
-      'https://Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
-      data: FormData.fromMap({'action': 'insertNewOne', 'country': 'QA', 'store_id': '2'}),
-    );
-    setState(() {
-      _currentItemId = request.data['item_id'].toString();
-      _clientItemId =
-          int.tryParse(request.data['client_id']?.toString() ?? '') ?? 0;
-    });
-    print('insertNewOne — item_id: $_currentItemId, client_id: $_clientItemId');
+  Future<void> _initProductRecord() async {
+    if (widget.itemId != null && widget.itemId!.isNotEmpty) {
+      _currentItemId = widget.itemId;
+      await _loadExistingItemState();
+      await _uploadInitialMediaIfNeeded();
+      return;
+    }
+
+    await _clearDraft();
+    await insertOneRecord();
+  }
+
+  Future<void> _ensureProductRecordReady() async {
+    if (_currentItemId != null &&
+        _globalFarmClientId != null &&
+        _globalFarmClientId!.isNotEmpty) {
+      return;
+    }
+    _initRecordFuture ??= _initProductRecord();
+    await _initRecordFuture;
   }
 
   Future<void> _fetchCategories() async {
     try {
       final response = await Dio().post(
-        'https://Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
-        data: FormData.fromMap({'action': 'get_categories', 'store_id': '2'}),
+        '${AppConfig.apiBaseUrl}/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        data: FormData.fromMap({
+          'action': 'get_categories',
+          'store_id': AppConfig.storeId,
+        }),
       );
-      
-      if (response.data['status'] == 'success' && response.data['categories'] != null) {
+
+      if (response.data['status'] == 'success' &&
+          response.data['categories'] != null) {
         setState(() {
           _categories = List<String>.from(response.data['categories']);
           _isLoadingCategories = false;
@@ -189,10 +334,13 @@ class _AddProductScreenState extends State<AddProductScreen>
   void initState() {
     super.initState();
     _mediaFiles = List.from(widget.mediaFiles);
-    insertOneRecord();
+    _initRecordFuture = _initProductRecord();
     _fetchCategories();
     _initAnimations();
     _initFocusNodes();
+    _categoryController.addListener(() {
+      if (mounted) setState(() {});
+    });
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -201,16 +349,174 @@ class _AddProductScreenState extends State<AddProductScreen>
     );
   }
 
+  Future<void> _uploadInitialMediaIfNeeded() async {
+    if (_currentItemId == null || _initialMediaUploaded) return;
+
+    final paths = widget.mediaFiles.isNotEmpty
+        ? List<String>.from(widget.mediaFiles)
+        : List<String>.from(_mediaFiles);
+    if (paths.isEmpty) return;
+
+    _initialMediaUploaded = true;
+    await _ensureProductRecordReady();
+    await _uploadMediaImmediately(paths);
+  }
+
+  Future<void> _addMediaPaths(List<String> paths) async {
+    if (paths.isEmpty) return;
+    final newPaths = paths.where((path) => !_mediaFiles.contains(path)).toList();
+    if (newPaths.isEmpty) return;
+    setState(() {
+      _mediaFiles.addAll(newPaths);
+      _queuedUploadPaths.addAll(newPaths);
+    });
+    await _ensureProductRecordReady();
+    await _uploadMediaImmediately(newPaths);
+  }
+
+  Future<void> _uploadMediaImmediately(List<String> filePaths) async {
+    if (filePaths.isEmpty) return;
+
+    await _ensureProductRecordReady();
+
+    if (_currentItemId == null ||
+        _globalFarmClientId == null ||
+        _globalFarmClientId!.isEmpty) {
+      _pendingUploadPaths.addAll(filePaths);
+      if (mounted) {
+        setState(() => _queuedUploadPaths.addAll(filePaths));
+      } else {
+        _queuedUploadPaths.addAll(filePaths);
+      }
+      return;
+    }
+
+    if (_isMediaUploading) {
+      _pendingUploadPaths.addAll(filePaths);
+      if (mounted) {
+        setState(() => _queuedUploadPaths.addAll(filePaths));
+      } else {
+        _queuedUploadPaths.addAll(filePaths);
+      }
+      return;
+    }
+
+    setState(() {
+      _isMediaUploading = true;
+      _queuedUploadPaths.addAll(filePaths);
+    });
+    try {
+      await _performMediaUpload(filePaths);
+
+      while (_pendingUploadPaths.isNotEmpty) {
+        final batch = List<String>.from(_pendingUploadPaths);
+        _pendingUploadPaths.clear();
+        if (mounted) {
+          setState(() => _queuedUploadPaths.addAll(batch));
+        }
+        await _performMediaUpload(batch);
+      }
+    } catch (e) {
+      print('Media upload error: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isMediaUploading = false;
+          _uploadProgressByPath.clear();
+          _queuedUploadPaths.clear();
+        });
+      }
+    }
+  }
+
+  Future<void> _performMediaUpload(List<String> filePaths) async {
+    if (filePaths.isEmpty ||
+        _currentItemId == null ||
+        _globalFarmClientId == null ||
+        _globalFarmClientId!.isEmpty) {
+      return;
+    }
+
+    final uploadedUrls = <String>[];
+
+    for (var i = 0; i < filePaths.length; i++) {
+      final path = filePaths[i];
+      if (mounted) {
+        setState(() {
+          _queuedUploadPaths.remove(path);
+          _uploadProgressByPath[path] = 0.0;
+        });
+      } else {
+        _queuedUploadPaths.remove(path);
+        _uploadProgressByPath[path] = 0.0;
+      }
+
+      final startIndex = _nextUploadStartIndex;
+      final urls = await S3UploadService.uploadMediaFiles(
+        filePaths: [path],
+        clientItemId: _globalFarmClientId!,
+        startIndex: startIndex,
+        uploadToGlobalFarmNursery: true,
+        onProgress: (current, total, progress) {
+          if (!mounted) return;
+          setState(() {
+            _uploadProgressByPath[path] = progress.clamp(0.0, 1.0);
+          });
+        },
+      );
+
+      if (urls.isNotEmpty) {
+        uploadedUrls.addAll(urls);
+        final newNames = urls.map((url) => url.split('/').last).toList();
+        final newMediaChunk = newNames.join(', ');
+        _savedMediaString = _savedMediaString.isEmpty
+            ? newMediaChunk
+            : '$_savedMediaString, $newMediaChunk';
+        _syncUploadedMediaCount();
+
+        await ApiService.updateItemMedia(
+          itemId: _currentItemId!,
+          media: _savedMediaString,
+        );
+      }
+
+      if (mounted) {
+        setState(() => _uploadProgressByPath.remove(path));
+      } else {
+        _uploadProgressByPath.remove(path);
+      }
+    }
+
+    if (uploadedUrls.isNotEmpty) {
+      await _ensureGlobalFarmPrimaryImage();
+    }
+
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _ensureGlobalFarmPrimaryImage() async {
+    if (_globalFarmClientId == null || _globalFarmClientId!.isEmpty) return;
+
+    String? localPath;
+    for (final path in _mediaFiles) {
+      if (!_isNetworkMediaPath(path) && !_isVideoMediaPath(path)) {
+        localPath = path;
+        break;
+      }
+    }
+    if (localPath == null) return;
+
+    await S3UploadService.uploadGlobalFarmPrimaryImage(
+      clientItemId: _globalFarmClientId!,
+      filePath: localPath,
+    );
+  }
+
   void _initAnimations() {
     _glowController = AnimationController(
       duration: const Duration(milliseconds: 2000),
       vsync: this,
     )..repeat(reverse: true);
-
-    _shimmerController = AnimationController(
-      duration: const Duration(milliseconds: 2500),
-      vsync: this,
-    )..repeat();
 
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 1500),
@@ -221,10 +527,6 @@ class _AddProductScreenState extends State<AddProductScreen>
       CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
     );
 
-    _shimmerAnimation = Tween<double>(begin: -1.0, end: 2.0).animate(
-      CurvedAnimation(parent: _shimmerController, curve: Curves.linear),
-    );
-
     _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
@@ -232,7 +534,14 @@ class _AddProductScreenState extends State<AddProductScreen>
 
   void _initFocusNodes() {
     final fields = [
-      'barcode', 'nameAr', 'nameEn', 'descAr', 'descEn', 'category', 'price', 'quantity'
+      'barcode',
+      'nameAr',
+      'nameEn',
+      'descAr',
+      'descEn',
+      'category',
+      'price',
+      'quantity',
     ];
     for (final field in fields) {
       _focusNodes[field] = FocusNode();
@@ -246,14 +555,15 @@ class _AddProductScreenState extends State<AddProductScreen>
   @override
   void dispose() {
     _mediaController.dispose();
-    _scrollController.dispose();
+    _barcodeController.dispose();
     _nameController.dispose();
+    _engnameController.dispose();
     _descriptionController.dispose();
+    _description_arb_Controller.dispose();
     _priceController.dispose();
     _quantityController.dispose();
     _categoryController.dispose();
     _glowController.dispose();
-    _shimmerController.dispose();
     _pulseController.dispose();
     for (final node in _focusNodes.values) {
       node.dispose();
@@ -261,159 +571,277 @@ class _AddProductScreenState extends State<AddProductScreen>
     super.dispose();
   }
 
+  void _selectCategory(String category) {
+    setState(() => _categoryController.text = category);
+  }
+
+  void _removeMediaAt(int index) {
+    if (index < 0 || index >= _mediaFiles.length) return;
+
+    final removedPath = _mediaFiles[index];
+    setState(() {
+      _mediaFiles.removeAt(index);
+      _uploadProgressByPath.remove(removedPath);
+      _queuedUploadPaths.remove(removedPath);
+      _pendingUploadPaths.remove(removedPath);
+
+      if (_currentMediaIndex >= _mediaFiles.length) {
+        _currentMediaIndex = _mediaFiles.isEmpty ? 0 : _mediaFiles.length - 1;
+      }
+
+      if (index < _uploadedMediaCount && _savedMediaString.isNotEmpty) {
+        final parts = _savedMediaString
+            .split(',')
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toList();
+        if (index < parts.length) {
+          parts.removeAt(index);
+          _savedMediaString = parts.join(', ');
+          _syncUploadedMediaCount();
+          if (_currentItemId != null) {
+            ApiService.updateItemMedia(
+              itemId: _currentItemId!,
+              media: _savedMediaString,
+            );
+          }
+        }
+      } else if (index < _uploadedMediaCount) {
+        _uploadedMediaCount = math.max(0, _uploadedMediaCount - 1);
+      }
+    });
+
+    if (_mediaFiles.isNotEmpty && _mediaController.hasClients) {
+      _mediaController.jumpToPage(
+        _currentMediaIndex.clamp(0, _mediaFiles.length - 1),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    _isUploading = false;
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: LocalizationService.instance.textDirection,
       child: Scaffold(
-        backgroundColor: _LuxuryColors.bgLight,
+        backgroundColor: context.appBackground,
         appBar: _buildLuxuryAppBar(),
         body: SafeArea(
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildCinematicMediaPreview(),
-                    const SizedBox(height: 28),
-                    _buildAnimatedSection(
-                      delay: 0,
-                      child: _buildGlassSection(
-                        title: 'معلومات المنتج',
-                        icon: Iconsax.box,
-                        children: [
-                          _buildBarcodeField(),
-                          const SizedBox(height: 20),
-                          _buildLuxuryTextField(
-                            controller: _nameController,
-                            label: 'اسم المنتج بالعربي',
-                            hint: 'أدخل اسم المنتج',
-                            icon: Iconsax.text,
-                            focusKey: 'nameAr',
-                            textDirection: TextDirection.rtl,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(RegExp(r'[\u0600-\u06FF\s0-9٠-٩]')),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          _buildLuxuryTextField(
-                            controller: _engnameController,
-                            label: 'اسم المنتج بالإنجليزي',
-                            hint: 'Enter product name',
-                            icon: Iconsax.text,
-                            focusKey: 'nameEn',
-                            textDirection: TextDirection.ltr,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\s.,!?"-]')),
-                            ],
+          child: Column(
+            children: [
+              Expanded(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: AppResponsive.formMaxWidth(context),
+                    ),
+                    child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildSectionTitle(
+                        _lang == 'ar' ? 'صور المنتج' : 'Product photos',
+                      ),
+                      const SizedBox(height: 12),
+                      _buildCinematicMediaPreview(fullHeight: false),
+                      const SizedBox(height: 12),
+                      _buildMediaThumbnailsRow(),
+                      const SizedBox(height: 28),
+                      _buildSectionTitle(
+                        _lang == 'ar'
+                            ? 'الباركود (اختياري)'
+                            : 'Barcode (optional)',
+                      ),
+                      const SizedBox(height: 12),
+                      _buildBarcodeField(),
+                      const SizedBox(height: 28),
+                      _buildSectionTitle(
+                        _lang == 'ar' ? 'اسم المنتج' : 'Product name',
+                      ),
+                      const SizedBox(height: 12),
+                      _buildLuxuryTextField(
+                        controller: _nameController,
+                        label: _lang == 'ar'
+                            ? 'اسم المنتج بالعربي'
+                            : 'Product Name (Arabic)',
+                        hint: _lang == 'ar'
+                            ? 'أدخل اسم المنتج'
+                            : 'Enter product name',
+                        icon: Iconsax.text,
+                        focusKey: 'nameAr',
+                        // مقصود: هذا حقل الاسم العربي، يبقى RTL دائماً
+                        // مهما كانت لغة الواجهة
+                        textDirection: TextDirection.rtl,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r'[\u0600-\u06FF\s0-9٠-٩]'),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    _buildAnimatedSection(
-                      delay: 100,
-                      child: _buildGlassSection(
-                        title: 'الوصف',
-                        icon: Iconsax.document_text,
-                        children: [
-                          _buildLuxuryTextField(
-                            controller: _description_arb_Controller,
-                            label: 'الوصف بالعربي',
-                            hint: 'أدخل وصف المنتج بالعربي',
-                            icon: Iconsax.edit_2,
-                            maxLines: 3,
-                            focusKey: 'descAr',
-                            textDirection: TextDirection.rtl,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(RegExp(r'[\u0600-\u06FF\s0-9٠-٩]')),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          _buildLuxuryTextField(
-                            controller: _descriptionController,
-                            label: 'الوصف بالإنجليزي',
-                            hint: 'Enter product description',
-                            icon: Iconsax.edit_2,
-                            maxLines: 3,
-                            focusKey: 'descEn',
-                            textDirection: TextDirection.ltr,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\s.,!?"-]')),
-                            ],
+                      const SizedBox(height: 16),
+                      _buildLuxuryTextField(
+                        controller: _engnameController,
+                        label: _lang == 'ar'
+                            ? 'اسم المنتج بالإنجليزي'
+                            : 'Product Name (English)',
+                        hint: 'Enter product name',
+                        icon: Iconsax.text,
+                        focusKey: 'nameEn',
+                        textDirection: TextDirection.ltr,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r'[a-zA-Z0-9\s.,!?"-]'),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    _buildAnimatedSection(
-                      delay: 200,
-                      child: _buildGlassSection(
-                        title: 'التصنيف',
-                        icon: Iconsax.category,
-                        children: [
-                          _buildCategoryAutocomplete(),
-                        ],
+                      const SizedBox(height: 28),
+                      _buildSectionTitle(
+                        _lang == 'ar' ? 'الوصف' : 'Description',
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    _buildAnimatedSection(
-                      delay: 300,
-                      child: _buildGlassSection(
-                        title: 'السعر والكمية',
-                        icon: Iconsax.money,
-                        children: [
-                          _buildPriceQuantityRow(),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    _buildAnimatedSection(
-                      delay: 400,
-                      child: _buildGlassSection(
-                        title: 'إعدادات الخصوصية',
-                        icon: Iconsax.shield_tick,
-                        children: [
-                          _buildPremiumToggle(
-                            title: 'منتج عام',
-                            subtitle: 'يمكن لجميع المستخدمين رؤية هذا المنتج',
-                            value: _isPublic,
-                            onChanged: (v) => setState(() => _isPublic = v),
-                            activeIcon: Iconsax.global,
-                            inactiveIcon: Iconsax.lock,
-                          ),
-                          const SizedBox(height: 16),
-                          _buildPremiumToggle(
-                            title: 'تفعيل التعليقات',
-                            subtitle: 'السماح للمستخدمين بالتعليق على المنتج',
-                            value: _commentsEnabled,
-                            onChanged: (v) => setState(() => _commentsEnabled = v),
-                            activeIcon: Iconsax.message,
-                            inactiveIcon: Iconsax.message_minus,
+                      const SizedBox(height: 12),
+                      _buildLuxuryTextField(
+                        controller: _description_arb_Controller,
+                        label: _lang == 'ar'
+                            ? 'الوصف بالعربي'
+                            : 'Description (Arabic)',
+                        hint: _lang == 'ar'
+                            ? 'أدخل وصف المنتج بالعربي'
+                            : 'Enter Arabic description',
+                        icon: Iconsax.edit_2,
+                        maxLines: 4,
+                        focusKey: 'descAr',
+                        // مقصود: هذا حقل الوصف العربي، يبقى RTL دائماً
+                        textDirection: TextDirection.rtl,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r'[\u0600-\u06FF\s0-9٠-٩]'),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 36),
-                    _buildAnimatedSection(
-                      delay: 500,
-                      child: _buildShimmerButton(),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
+                      const SizedBox(height: 16),
+                      _buildLuxuryTextField(
+                        controller: _descriptionController,
+                        label: _lang == 'ar'
+                            ? 'الوصف بالإنجليزي'
+                            : 'Description (English)',
+                        hint: 'Enter product description',
+                        icon: Iconsax.edit_2,
+                        maxLines: 4,
+                        focusKey: 'descEn',
+                        textDirection: TextDirection.ltr,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r'[a-zA-Z0-9\s.,!?"-]'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 28),
+                      _buildSectionTitle(
+                        _lang == 'ar' ? 'التصنيف' : 'Category',
+                      ),
+                      const SizedBox(height: 12),
+                      _buildCategoryAutocomplete(),
+                      const SizedBox(height: 28),
+                      _buildSectionTitle(
+                        _lang == 'ar' ? 'السعر والكمية' : 'Price & quantity',
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            flex: 5,
+                            child: _buildPriceQuantityInput(
+                              controller: _priceController,
+                              focusKey: 'price',
+                              label: _lang == 'ar' ? 'السعر' : 'Price',
+                              icon: Iconsax.money_4,
+                              suffixText: 'ر.ق',
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                decimal: true,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            flex: 3,
+                            child: _buildPriceQuantityInput(
+                              controller: _quantityController,
+                              focusKey: 'quantity',
+                              label: _lang == 'ar' ? 'الكمية' : 'Qty',
+                              icon: Iconsax.box_1,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              showStepper: true,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 28),
+                      _buildSectionTitle(
+                        _lang == 'ar' ? 'الإعدادات' : 'Settings',
+                      ),
+                      const SizedBox(height: 12),
+                      _buildPremiumToggle(
+                        title: _lang == 'ar' ? 'منتج عام' : 'Public Product',
+                        subtitle: _lang == 'ar'
+                            ? 'يمكن لجميع المستخدمين رؤية هذا المنتج'
+                            : 'All users can see this product',
+                        value: _isPublic,
+                        onChanged: (v) {
+                          setState(() => _isPublic = v);
+                        },
+                        activeIcon: Iconsax.global,
+                        inactiveIcon: Iconsax.lock,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildPremiumToggle(
+                        title: _lang == 'ar'
+                            ? 'تفعيل التعليقات'
+                            : 'Enable Comments',
+                        subtitle: _lang == 'ar'
+                            ? 'السماح للمستخدمين بالتعليق على المنتج'
+                            : 'Allow users to comment on product',
+                        value: _commentsEnabled,
+                        onChanged: (v) {
+                          setState(() => _commentsEnabled = v);
+                        },
+                        activeIcon: Iconsax.message,
+                        inactiveIcon: Iconsax.message_minus,
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                ),
+                  ),
                 ),
               ),
-            ),
+              _buildBottomPublishBar(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: TextStyle(
+        color: _onSurface,
+        fontSize: 17,
+        fontWeight: FontWeight.w800,
       ),
     );
   }
 
   PreferredSizeWidget _buildLuxuryAppBar() {
     return AppBar(
-      backgroundColor: _LuxuryColors.bgLight,
+      backgroundColor: context.appBackground,
       elevation: 0,
       centerTitle: true,
       leading: Container(),
@@ -425,144 +853,601 @@ class _AddProductScreenState extends State<AddProductScreen>
             icon: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: _LuxuryColors.bgCard,
+                color: context.appSurface,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: _LuxuryColors.cardBorder),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              child: const Icon(Iconsax.arrow_right_3, color: _LuxuryColors.textPrimary, size: 20),
+              child: Icon(Iconsax.arrow_right_3, color: _onSurface, size: 20),
             ),
           ),
         ),
       ],
       title: ShaderMask(
-        shaderCallback: (bounds) => _LuxuryColors.orangeGradient.createShader(bounds),
-        child: const Text(
-          'إضافة منتج جديد',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: 0.5),
+        shaderCallback: (bounds) =>
+            _LuxuryColors.orangeGradient.createShader(bounds),
+        child: Text(
+          _lang == 'ar' ? 'إضافة منتج' : 'Add Product',
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+            letterSpacing: 0.5,
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildAnimatedSection({required int delay, required Widget child}) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: Duration(milliseconds: 600 + delay),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, _) {
-        return Transform.translate(
-          offset: Offset(0, 30 * (1 - value)),
-          child: Opacity(opacity: value, child: child),
+  Widget _buildBottomPublishBar() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
+      decoration: BoxDecoration(
+        color: context.appBackground,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        child: _buildNavButton(
+          label: _lang == 'ar' ? 'نشر المنتج' : 'Publish product',
+          onPressed: _isUploading ? null : _submitProduct,
+          outlined: false,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavButton({
+    required String label,
+    required VoidCallback? onPressed,
+    required bool outlined,
+  }) {
+    final enabled = onPressed != null;
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.4,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            width: double.infinity,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              gradient: outlined || !enabled
+                  ? null
+                  : _LuxuryColors.orangeGradient,
+              color: outlined ? context.appSurface : null,
+              border: outlined
+                  ? Border.all(
+                      color: enabled
+                          ? _LuxuryColors.orangePrimary
+                          : _LuxuryColors.inputBorder,
+                    )
+                  : null,
+              boxShadow: !outlined && enabled
+                  ? [
+                      BoxShadow(
+                        color: _LuxuryColors.orangePrimary.withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: _isUploading && !outlined
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: Colors.white,
+                    ),
+                  )
+                : Text(
+                    label,
+                    style: TextStyle(
+                      color: outlined
+                          ? (enabled
+                                ? _LuxuryColors.orangePrimary
+                                : _onSurfaceSecondary)
+                          : Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool _isMediaDone(String path, int index) {
+    if (_isNetworkMediaPath(path)) return true;
+    if (_uploadProgressByPath.containsKey(path)) return false;
+    if (_queuedUploadPaths.contains(path)) return false;
+    if (_pendingUploadPaths.contains(path)) return false;
+    return index < _uploadedMediaCount;
+  }
+
+  Widget _buildMediaThumbnailsRow() {
+    const gap = 10.0;
+    const size = 80.0;
+
+    return SizedBox(
+      height: size,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.zero,
+        children: [
+          ...List.generate(_mediaFiles.length, (index) {
+            final path = _mediaFiles[index];
+            final isSelected = index == _currentMediaIndex;
+            final progress = _uploadProgressByPath[path];
+            final isUploading = progress != null;
+            final isQueued = !isUploading &&
+                (_queuedUploadPaths.contains(path) ||
+                    _pendingUploadPaths.contains(path));
+            final isDone = _isMediaDone(path, index);
+            final opacity = isQueued ? 0.45 : 1.0;
+
+            return Padding(
+              padding: const EdgeInsetsDirectional.only(end: gap),
+              child: GestureDetector(
+                onTap: () {
+                  setState(() => _currentMediaIndex = index);
+                  if (_mediaController.hasClients) {
+                    _mediaController.animateToPage(
+                      index,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                  }
+                },
+                child: SizedBox(
+                  width: size,
+                  height: size,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Opacity(
+                        opacity: opacity,
+                        child: Container(
+                          width: size,
+                          height: size,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isSelected
+                                  ? _LuxuryColors.orangePrimary
+                                  : _LuxuryColors.inputBorder,
+                              width: isSelected ? 2.5 : 1,
+                            ),
+                            boxShadow: isSelected
+                                ? [
+                                    BoxShadow(
+                                      color: _LuxuryColors.orangePrimary
+                                          .withOpacity(0.25),
+                                      blurRadius: 8,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(11),
+                            child: _buildMediaImage(
+                              path,
+                              width: size,
+                              height: size,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (isUploading || isQueued)
+                        Positioned.fill(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: ColoredBox(
+                              color: Colors.black.withValues(
+                                alpha: isUploading ? 0.45 : 0.25,
+                              ),
+                              child: isUploading
+                                  ? Center(
+                                      child: SizedBox(
+                                        width: 34,
+                                        height: 34,
+                                        child: CustomPaint(
+                                          painter: _ApplePieProgressPainter(
+                                            progress: progress.clamp(0.02, 1.0),
+                                            color: AppColors.primary,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                          ),
+                        ),
+                      if (isDone || (!isUploading && !isQueued))
+                        Positioned(
+                          top: -2,
+                          right: -2,
+                          child: GestureDetector(
+                            onTap: () => _removeMediaAt(index),
+                            child: Container(
+                              width: 22,
+                              height: 22,
+                              decoration: const BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.close,
+                                color: Colors.white,
+                                size: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+          Padding(
+            padding: const EdgeInsetsDirectional.only(end: gap),
+            child: GestureDetector(
+              onTap: _showAddMoreMediaBottomSheet,
+              child: Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _LuxuryColors.orangePrimary,
+                    width: 1.5,
+                  ),
+                  color: _LuxuryColors.orangeTint,
+                ),
+                child: const Icon(
+                  Iconsax.add,
+                  color: _LuxuryColors.orangePrimary,
+                  size: 28,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryAutocomplete() {
+    final focusNode = _focusNodes['category']!;
+    final isFocused = _fieldFocused['category'] ?? false;
+
+    if (_isLoadingCategories) {
+      return Container(
+        height: 56,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: context.appSurface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _LuxuryColors.inputBorder),
+        ),
+        child: const SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              _LuxuryColors.orangePrimary,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return RawAutocomplete<String>(
+      textEditingController: _categoryController,
+      focusNode: focusNode,
+      optionsBuilder: (TextEditingValue value) {
+        final q = value.text.trim().toLowerCase();
+        if (q.isEmpty) {
+          return _categories.take(12);
+        }
+        return _categories.where(
+          (c) => c.toLowerCase().contains(q),
+        );
+      },
+      onSelected: (String selection) {
+        _selectCategory(selection);
+      },
+      fieldViewBuilder: (
+        context,
+        textEditingController,
+        fieldFocusNode,
+        onFieldSubmitted,
+      ) {
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: isFocused
+                ? [
+                    BoxShadow(
+                      color: _LuxuryColors.orangePrimary.withOpacity(0.2),
+                      blurRadius: 12,
+                    ),
+                  ]
+                : [],
+          ),
+          child: TextField(
+            controller: textEditingController,
+            focusNode: fieldFocusNode,
+            onSubmitted: (_) => onFieldSubmitted(),
+            style: TextStyle(color: _onSurface, fontSize: 16),
+            decoration: InputDecoration(
+              labelText: _lang == 'ar' ? 'التصنيف' : 'Category',
+              hintText: _lang == 'ar'
+                  ? 'ابحث أو اكتب تصنيفاً جديداً'
+                  : 'Search or type a new category',
+              hintStyle: TextStyle(color: _onSurfaceSecondary),
+              labelStyle: TextStyle(
+                color: isFocused
+                    ? _LuxuryColors.orangePrimary
+                    : _onSurfaceSecondary,
+                fontWeight: isFocused ? FontWeight.w600 : FontWeight.normal,
+              ),
+              prefixIcon: Icon(
+                Iconsax.tag,
+                color: isFocused
+                    ? _LuxuryColors.orangePrimary
+                    : _onSurfaceSecondary,
+                size: 22,
+              ),
+              suffixIcon: _isLoadingCategories
+                  ? const Padding(
+                      padding: EdgeInsets.all(14),
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : Icon(
+                      Iconsax.arrow_down_1,
+                      size: 18,
+                      color: _onSurfaceSecondary,
+                    ),
+              filled: true,
+              fillColor: context.appSurface,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(
+                  color: _LuxuryColors.inputBorder,
+                  width: 1,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(
+                  color: _LuxuryColors.orangePrimary,
+                  width: 2,
+                ),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 18,
+              ),
+            ),
+          ),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        final opts = options.toList();
+        if (opts.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return Align(
+          alignment: AlignmentDirectional.topStart,
+          child: Material(
+            elevation: 6,
+            borderRadius: BorderRadius.circular(14),
+            color: context.appSurface,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 220, minWidth: 280),
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                shrinkWrap: true,
+                itemCount: opts.length,
+                separatorBuilder: (_, __) => Divider(
+                  height: 1,
+                  color: context.appBorder,
+                ),
+                itemBuilder: (context, index) {
+                  final option = opts[index];
+                  return InkWell(
+                    onTap: () => onSelected(option),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Iconsax.tag,
+                            size: 16,
+                            color: AppColors.primary,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              option,
+                              style: TextStyle(
+                                color: context.appTextPrimary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
         );
       },
     );
   }
 
-  Widget _buildCinematicMediaPreview() {
-    return Consumer<AppProvider>(
-      builder: (context, appProvider, child) {
-        return AnimatedBuilder(
-          animation: _glowAnimation,
-          builder: (context, child) {
-            return Container(
-              height: 380,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: _LuxuryColors.orangePrimary.withOpacity(0.2 * _glowAnimation.value),
-                    blurRadius: 25,
-                    spreadRadius: 0,
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
+  Widget _buildCinematicMediaPreview({bool fullHeight = false}) {
+    return AnimatedBuilder(
+      animation: _glowAnimation,
+      builder: (context, child) {
+        final preview = Container(
+          height: fullHeight ? null : (AppResponsive.isTablet(context) ? 420 : 380),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: _LuxuryColors.orangePrimary.withOpacity(
+                  0.2 * _glowAnimation.value,
+                ),
+                blurRadius: 25,
+                spreadRadius: 0,
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: Stack(
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(24),
-                        gradient: LinearGradient(
-                          colors: [
-                            _LuxuryColors.orangeLight.withOpacity(0.9 + 0.1 * _glowAnimation.value),
-                            _LuxuryColors.orangePrimary.withOpacity(0.85 + 0.15 * _glowAnimation.value),
-                            _LuxuryColors.orangeDark.withOpacity(0.9 + 0.1 * _glowAnimation.value),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: Stack(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    gradient: LinearGradient(
+                      colors: [
+                        _LuxuryColors.orangeLight.withOpacity(
+                          0.9 + 0.1 * _glowAnimation.value,
                         ),
-                      ),
-                      padding: const EdgeInsets.all(3),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(21),
-                          color: _LuxuryColors.bgCard,
+                        _LuxuryColors.orangePrimary.withOpacity(
+                          0.85 + 0.15 * _glowAnimation.value,
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(21),
-                          child: appProvider.allMedia.isEmpty
-                              ? _buildEmptyMediaState()
-                              : PageView.builder(
-                                  controller: _mediaController,
-                                  onPageChanged: (index) => setState(() => _currentMediaIndex = index),
-                                  itemCount: appProvider.allMedia.length,
-                                  itemBuilder: (context, index) {
-                                    final file = File(appProvider.allMedia[index]);
-                                    final isVideo = appProvider.allMedia[index].toLowerCase().contains('.mp4');
-                                    return isVideo
-                                        ? VideoPlayerWidget(filePath: appProvider.allMedia[index], autoPlay: false, showControls: true)
-                                        : Image.file(file, fit: BoxFit.cover);
-                                  },
-                                ),
+                        _LuxuryColors.orangeDark.withOpacity(
+                          0.9 + 0.1 * _glowAnimation.value,
                         ),
-                      ),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                    Positioned(top: 16, left: 16, child: _buildGlowingAddButton()),
-                    if (appProvider.allMedia.length > 1)
-                      Positioned(
-                        bottom: 20,
-                        left: 0,
-                        right: 0,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(
-                            appProvider.allMedia.length,
-                            (index) => AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                              width: _currentMediaIndex == index ? 24 : 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(4),
-                                gradient: _currentMediaIndex == index ? _LuxuryColors.orangeGradient : null,
-                                color: _currentMediaIndex == index ? null : Colors.white.withOpacity(0.5),
-                              ),
+                  ),
+                  padding: const EdgeInsets.all(3),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(21),
+                      color: context.appSurface,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(21),
+                      child: _mediaFiles.isEmpty
+                          ? _buildEmptyMediaState()
+                          : PageView.builder(
+                              controller: _mediaController,
+                              onPageChanged: (index) =>
+                                  setState(() => _currentMediaIndex = index),
+                              itemCount: _mediaFiles.length,
+                              itemBuilder: (context, index) {
+                                final path = _mediaFiles[index];
+                                if (_isVideoMediaPath(path)) {
+                                  return VideoPlayerWidget(
+                                    filePath: _isNetworkMediaPath(path)
+                                        ? null
+                                        : path,
+                                    networkUrl: _isNetworkMediaPath(path)
+                                        ? path
+                                        : null,
+                                    autoPlay: false,
+                                    showControls: true,
+                                  );
+                                }
+                                return _buildMediaImage(path, fit: BoxFit.cover);
+                              },
                             ),
+                    ),
+                  ),
+                ),
+                Positioned(top: 16, left: 16, child: _buildGlowingAddButton()),
+                if (_mediaFiles.length > 1)
+                  Positioned(
+                    bottom: 20,
+                    left: 0,
+                    right: 0,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        _mediaFiles.length,
+                        (index) => AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          width: _currentMediaIndex == index ? 24 : 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(4),
+                            gradient: _currentMediaIndex == index
+                                ? _LuxuryColors.orangeGradient
+                                : null,
+                            color: _currentMediaIndex == index
+                                ? null
+                                : Colors.white.withOpacity(0.5),
                           ),
                         ),
                       ),
-                  ],
-                ),
-              ),
-            );
-          },
+                    ),
+                  ),
+              ],
+            ),
+          ),
         );
+        if (fullHeight) {
+          return SizedBox.expand(child: preview);
+        }
+        return preview;
       },
     );
   }
 
   Widget _buildEmptyMediaState() {
     return Container(
-      decoration: BoxDecoration(
-        color: _LuxuryColors.bgLight,
-      ),
+      decoration: BoxDecoration(color: context.appBackground),
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -577,20 +1462,45 @@ class _AddProductScreenState extends State<AddProductScreen>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: _LuxuryColors.orangeGradient,
-                      boxShadow: [BoxShadow(color: _LuxuryColors.orangePrimary.withOpacity(0.3), blurRadius: 20, spreadRadius: 2)],
+                      boxShadow: [
+                        BoxShadow(
+                          color: _LuxuryColors.orangePrimary.withOpacity(0.3),
+                          blurRadius: 20,
+                          spreadRadius: 2,
+                        ),
+                      ],
                     ),
-                    child: const Icon(Iconsax.camera, color: Colors.white, size: 40),
+                    child: const Icon(
+                      Iconsax.camera,
+                      color: Colors.white,
+                      size: 40,
+                    ),
                   ),
                 );
               },
             ),
             const SizedBox(height: 20),
             ShaderMask(
-              shaderCallback: (bounds) => _LuxuryColors.orangeGradient.createShader(bounds),
-              child: const Text('أضف صور أو فيديو للمنتج', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
+              shaderCallback: (bounds) =>
+                  _LuxuryColors.orangeGradient.createShader(bounds),
+              child: Text(
+                _lang == 'ar'
+                    ? 'أضف صور أو فيديو للمنتج'
+                    : 'Add photos or video',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
             const SizedBox(height: 8),
-            Text('اضغط على زر الإضافة للبدء', style: TextStyle(color: _LuxuryColors.textSecondary, fontSize: 14)),
+            Text(
+              _lang == 'ar'
+                  ? 'اضغط على زر الإضافة للبدء'
+                  : 'Tap the add button to start',
+              style: TextStyle(color: _onSurfaceSecondary, fontSize: 14),
+            ),
           ],
         ),
       ),
@@ -609,40 +1519,20 @@ class _AddProductScreenState extends State<AddProductScreen>
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(15),
               gradient: _LuxuryColors.orangeGradient,
-              boxShadow: [BoxShadow(color: _LuxuryColors.orangePrimary.withOpacity(0.5 * _pulseAnimation.value), blurRadius: 15, spreadRadius: 1)],
+              boxShadow: [
+                BoxShadow(
+                  color: _LuxuryColors.orangePrimary.withOpacity(
+                    0.5 * _pulseAnimation.value,
+                  ),
+                  blurRadius: 15,
+                  spreadRadius: 1,
+                ),
+              ],
             ),
             child: const Icon(Iconsax.add, color: Colors.white, size: 26),
           ),
         );
       },
-    );
-  }
-
-  Widget _buildGlassSection({required String title, required IconData icon, required List<Widget> children}) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: _LuxuryColors.bgCard,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              ShaderMask(shaderCallback: (bounds) => _LuxuryColors.orangeGradient.createShader(bounds), child: Icon(icon, color: Colors.white, size: 22)),
-              const SizedBox(width: 10),
-              ShaderMask(
-                shaderCallback: (bounds) => _LuxuryColors.orangeGradient.createShader(bounds),
-                child: Text(title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 0.3)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          ...children,
-        ],
-      ),
     );
   }
 
@@ -665,18 +1555,32 @@ class _AddProductScreenState extends State<AddProductScreen>
             duration: const Duration(milliseconds: 300),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              boxShadow: isFocused ? [BoxShadow(color: _LuxuryColors.orangePrimary.withOpacity(0.2), blurRadius: 12)] : [],
+              boxShadow: isFocused
+                  ? [
+                      BoxShadow(
+                        color: _LuxuryColors.orangePrimary.withOpacity(0.2),
+                        blurRadius: 12,
+                      ),
+                    ]
+                  : [],
             ),
             child: TextField(
               controller: _barcodeController,
               focusNode: _focusNodes['barcode'],
               keyboardType: TextInputType.number,
-              style: const TextStyle(color: _LuxuryColors.textPrimary, fontSize: 16),
+              style: TextStyle(color: _onSurface, fontSize: 16),
               decoration: InputDecoration(
-                labelText: 'الباركود',
-                hintText: 'أدخل باركود المنتج',
-                hintStyle: const TextStyle(color: _LuxuryColors.textHint),
-                labelStyle: TextStyle(color: isFocused ? _LuxuryColors.orangePrimary : _LuxuryColors.textSecondary, fontWeight: isFocused ? FontWeight.w600 : FontWeight.normal),
+                labelText: _lang == 'ar' ? 'الباركود' : 'Barcode',
+                hintText: _lang == 'ar'
+                    ? 'أدخل باركود المنتج'
+                    : 'Enter product barcode',
+                hintStyle: TextStyle(color: _onSurfaceSecondary),
+                labelStyle: TextStyle(
+                  color: isFocused
+                      ? _LuxuryColors.orangePrimary
+                      : _onSurfaceSecondary,
+                  fontWeight: isFocused ? FontWeight.w600 : FontWeight.normal,
+                ),
                 prefixIcon: GestureDetector(
                   onTap: () {
                     setState(() {
@@ -689,15 +1593,37 @@ class _AddProductScreenState extends State<AddProductScreen>
                       borderRadius: BorderRadius.circular(10),
                       gradient: _LuxuryColors.orangeGradient,
                     ),
-                    child: const Icon(Iconsax.refresh, color: Colors.white, size: 20),
+                    child: const Icon(
+                      Iconsax.refresh,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                   ),
                 ),
                 filled: true,
-                fillColor: _LuxuryColors.inputBg,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _LuxuryColors.inputBorder, width: 1)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _LuxuryColors.orangePrimary, width: 2)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                fillColor: context.appSurface,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(
+                    color: _LuxuryColors.inputBorder,
+                    width: 1,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(
+                    color: _LuxuryColors.orangePrimary,
+                    width: 2,
+                  ),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 18,
+                ),
               ),
             ),
           ),
@@ -721,10 +1647,20 @@ class _AddProductScreenState extends State<AddProductScreen>
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('مسح الباركود', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                          Text(
+                            _lang == 'ar' ? 'مسح الباركود' : 'Scan Barcode',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                           TextButton(
                             onPressed: () => Navigator.pop(context, '-1'),
-                            child: Text('إلغاء', style: TextStyle(color: Color(0xFFD4AF37))),
+                            child: Text(
+                              _lang == 'ar' ? 'إلغاء' : 'Cancel',
+                              style: const TextStyle(color: AppColors.primary),
+                            ),
                           ),
                         ],
                       ),
@@ -757,9 +1693,18 @@ class _AddProductScreenState extends State<AddProductScreen>
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
                   gradient: _LuxuryColors.navyGradient,
-                  boxShadow: [BoxShadow(color: _LuxuryColors.navyPrimary.withOpacity(0.4), blurRadius: 12)],
+                  boxShadow: [
+                    BoxShadow(
+                      color: _LuxuryColors.navyPrimary.withOpacity(0.4),
+                      blurRadius: 12,
+                    ),
+                  ],
                 ),
-                child: const Icon(Iconsax.scan_barcode, color: Colors.white, size: 24),
+                child: const Icon(
+                  Iconsax.scan_barcode,
+                  color: Colors.white,
+                  size: 24,
+                ),
               );
             },
           ),
@@ -780,12 +1725,19 @@ class _AddProductScreenState extends State<AddProductScreen>
     List<TextInputFormatter>? inputFormatters,
   }) {
     final isFocused = _fieldFocused[focusKey] ?? false;
-    
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        boxShadow: isFocused ? [BoxShadow(color: _LuxuryColors.orangePrimary.withOpacity(0.2), blurRadius: 12)] : [],
+        boxShadow: isFocused
+            ? [
+                BoxShadow(
+                  color: _LuxuryColors.orangePrimary.withOpacity(0.2),
+                  blurRadius: 12,
+                ),
+              ]
+            : [],
       ),
       child: TextField(
         controller: controller,
@@ -794,299 +1746,292 @@ class _AddProductScreenState extends State<AddProductScreen>
         keyboardType: keyboardType,
         textDirection: textDirection,
         inputFormatters: inputFormatters,
-        style: const TextStyle(color: _LuxuryColors.textPrimary, fontSize: 16),
+        style: TextStyle(color: _onSurface, fontSize: 16),
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
-          hintStyle: const TextStyle(color: _LuxuryColors.textHint),
-          labelStyle: TextStyle(color: isFocused ? _LuxuryColors.orangePrimary : _LuxuryColors.textSecondary, fontWeight: isFocused ? FontWeight.w600 : FontWeight.normal),
+          hintStyle: TextStyle(color: _onSurfaceSecondary),
+          labelStyle: TextStyle(
+            color: isFocused
+                ? _LuxuryColors.orangePrimary
+                : _onSurfaceSecondary,
+            fontWeight: isFocused ? FontWeight.w600 : FontWeight.normal,
+          ),
           prefixIcon: ShaderMask(
-            shaderCallback: (bounds) => isFocused ? _LuxuryColors.orangeGradient.createShader(bounds) : LinearGradient(colors: [_LuxuryColors.textSecondary, _LuxuryColors.textSecondary]).createShader(bounds),
+            shaderCallback: (bounds) => isFocused
+                ? _LuxuryColors.orangeGradient.createShader(bounds)
+                : LinearGradient(
+                    colors: [_onSurfaceSecondary, _onSurfaceSecondary],
+                  ).createShader(bounds),
             child: Icon(icon, color: Colors.white, size: 22),
           ),
           filled: true,
-          fillColor: _LuxuryColors.inputBg,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _LuxuryColors.inputBorder, width: 1)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _LuxuryColors.orangePrimary, width: 2)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          fillColor: context.appSurface,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: _LuxuryColors.inputBorder, width: 1),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(
+              color: _LuxuryColors.orangePrimary,
+              width: 2,
+            ),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 18,
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildCategoryAutocomplete() {
-    final isFocused = _fieldFocused['category'] ?? false;
-    
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: isFocused ? [BoxShadow(color: _LuxuryColors.orangePrimary.withOpacity(0.2), blurRadius: 12)] : [],
-      ),
-      child: Autocomplete<String>(
-        optionsBuilder: (TextEditingValue textEditingValue) {
-          if (_isLoadingCategories) return const Iterable<String>.empty();
-          if (textEditingValue.text.isEmpty) return _categories;
-          
-          final query = textEditingValue.text.toLowerCase();
-          return _categories.where((category) => 
-            category.toLowerCase().contains(query)
-          );
-        },
-        onSelected: (String selection) {
-          _categoryController.text = selection;
-        },
-        fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-          // Sync with our controller
-          if (_categoryController.text.isNotEmpty && textEditingController.text.isEmpty) {
-            textEditingController.text = _categoryController.text;
-          }
-          textEditingController.addListener(() {
-            _categoryController.text = textEditingController.text;
-          });
-          
-          // Track focus for styling
-          focusNode.addListener(() {
-            setState(() => _fieldFocused['category'] = focusNode.hasFocus);
-          });
-          
-          return TextField(
-            controller: textEditingController,
-            focusNode: focusNode,
-            style: const TextStyle(color: _LuxuryColors.textPrimary, fontSize: 16),
-            decoration: InputDecoration(
-              labelText: 'التصنيف',
-              hintText: 'أدخل تصنيف المنتج',
-              hintStyle: const TextStyle(color: _LuxuryColors.textHint),
-              labelStyle: TextStyle(
-                color: isFocused ? _LuxuryColors.orangePrimary : _LuxuryColors.textSecondary,
-                fontWeight: isFocused ? FontWeight.w600 : FontWeight.normal,
-              ),
-              prefixIcon: ShaderMask(
-                shaderCallback: (bounds) => isFocused 
-                  ? _LuxuryColors.orangeGradient.createShader(bounds) 
-                  : LinearGradient(colors: [_LuxuryColors.textSecondary, _LuxuryColors.textSecondary]).createShader(bounds),
-                child: const Icon(Iconsax.tag, color: Colors.white, size: 22),
-              ),
-              suffixIcon: _isLoadingCategories 
-                ? const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(_LuxuryColors.orangePrimary),
-                      ),
-                    ),
-                  )
-                : null,
-              filled: true,
-              fillColor: _LuxuryColors.inputBg,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _LuxuryColors.inputBorder, width: 1)),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _LuxuryColors.orangePrimary, width: 2)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-            ),
-          );
-        },
-        optionsViewBuilder: (context, onSelected, options) {
-          return Align(
-            alignment: Alignment.topLeft,
-            child: Material(
-              elevation: 4,
-              borderRadius: BorderRadius.circular(12),
-              color: _LuxuryColors.bgCard,
-              child: Container(
-                constraints: const BoxConstraints(maxHeight: 200),
-                width: MediaQuery.of(context).size.width - 72,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: _LuxuryColors.inputBorder),
-                ),
-                child: ListView.builder(
-                  padding: EdgeInsets.zero,
-                  shrinkWrap: true,
-                  itemCount: options.length,
-                  itemBuilder: (context, index) {
-                    final option = options.elementAt(index);
-                    return InkWell(
-                      onTap: () => onSelected(option),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        decoration: BoxDecoration(
-                          border: index < options.length - 1 
-                            ? Border(bottom: BorderSide(color: _LuxuryColors.inputBorder.withOpacity(0.5)))
-                            : null,
-                        ),
-                        child: Row(
-                          children: [
-                            ShaderMask(
-                              shaderCallback: (bounds) => _LuxuryColors.orangeGradient.createShader(bounds),
-                              child: const Icon(Iconsax.tag, color: Colors.white, size: 18),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                option,
-                                style: const TextStyle(
-                                  color: _LuxuryColors.textPrimary,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildPriceQuantityRow() {
-    return Row(
-      children: [
-        Expanded(child: _buildNumericField(controller: _priceController, label: 'السعر', icon: Iconsax.money_4, focusKey: 'price', suffix: 'ر.ق')),
-        const SizedBox(width: 16),
-        Expanded(child: _buildQuantityField()),
-      ],
-    );
-  }
-
-  Widget _buildNumericField({required TextEditingController controller, required String label, required IconData icon, required String focusKey, String? suffix}) {
+  /// Shared style for price + quantity so they sit flush in one row.
+  Widget _buildPriceQuantityInput({
+    required TextEditingController controller,
+    required String focusKey,
+    required String label,
+    required IconData icon,
+    required TextInputType keyboardType,
+    String? suffixText,
+    List<TextInputFormatter>? inputFormatters,
+    bool showStepper = false,
+  }) {
     final isFocused = _fieldFocused[focusKey] ?? false;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), boxShadow: isFocused ? [BoxShadow(color: _LuxuryColors.orangePrimary.withOpacity(0.2), blurRadius: 12)] : []),
-      child: TextField(
-        controller: controller,
-        focusNode: _focusNodes[focusKey],
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        textAlign: TextAlign.center,
-        style: const TextStyle(color: _LuxuryColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w600),
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(color: isFocused ? _LuxuryColors.orangePrimary : _LuxuryColors.textSecondary),
-          suffixText: suffix,
-          suffixStyle: TextStyle(color: _LuxuryColors.orangePrimary, fontWeight: FontWeight.w600),
-          prefixIcon: ShaderMask(
-            shaderCallback: (bounds) => isFocused ? _LuxuryColors.orangeGradient.createShader(bounds) : LinearGradient(colors: [_LuxuryColors.textSecondary, _LuxuryColors.textSecondary]).createShader(bounds),
-            child: Icon(icon, color: Colors.white, size: 22),
+    const fieldHeight = 58.0;
+
+    Widget stepperBtn({
+      required IconData iconData,
+      required VoidCallback onTap,
+      required bool accent,
+    }) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          width: 28,
+          height: 28,
+          child: Icon(
+            iconData,
+            size: 15,
+            color: accent ? AppColors.primary : _onSurfaceSecondary,
           ),
-          filled: true,
-          fillColor: _LuxuryColors.inputBg,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _LuxuryColors.inputBorder, width: 1)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: _LuxuryColors.orangePrimary, width: 2)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: fieldHeight,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: isFocused
+              ? [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.18),
+                    blurRadius: 10,
+                  ),
+                ]
+              : [],
+        ),
+        child: TextField(
+          controller: controller,
+          focusNode: _focusNodes[focusKey],
+          keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: _onSurface,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            height: 1.2,
+          ),
+          decoration: InputDecoration(
+            labelText: label,
+            floatingLabelBehavior: FloatingLabelBehavior.auto,
+            labelStyle: TextStyle(
+              color: isFocused ? AppColors.primary : _onSurfaceSecondary,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+            floatingLabelStyle: const TextStyle(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+            prefixIcon: showStepper
+                ? stepperBtn(
+                    iconData: Iconsax.minus,
+                    accent: false,
+                    onTap: () {
+                      final current =
+                          int.tryParse(_quantityController.text) ?? 1;
+                      if (current > 0) {
+                        _quantityController.text = (current - 1).toString();
+                        setState(() {});
+                      }
+                    },
+                  )
+                : Icon(
+                    icon,
+                    size: 20,
+                    color: isFocused ? AppColors.primary : _onSurfaceSecondary,
+                  ),
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 40,
+              minHeight: 40,
+            ),
+            suffixIcon: showStepper
+                ? stepperBtn(
+                    iconData: Iconsax.add,
+                    accent: true,
+                    onTap: () {
+                      final current =
+                          int.tryParse(_quantityController.text) ?? 0;
+                      _quantityController.text = (current + 1).toString();
+                      setState(() {});
+                    },
+                  )
+                : (suffixText != null
+                    ? Padding(
+                        padding: const EdgeInsetsDirectional.only(end: 12),
+                        child: Center(
+                          widthFactor: 1,
+                          child: Text(
+                            suffixText,
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      )
+                    : null),
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 40,
+              minHeight: 40,
+            ),
+            filled: true,
+            fillColor: context.appSurface,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 16,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(
+                color: _LuxuryColors.inputBorder,
+                width: 1,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(
+                color: AppColors.primary,
+                width: 2,
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildQuantityField() {
-    final isFocused = _fieldFocused['quantity'] ?? false;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: _LuxuryColors.inputBg,
-        border: Border.all(color: isFocused ? _LuxuryColors.orangePrimary : _LuxuryColors.inputBorder, width: isFocused ? 2 : 1),
-        boxShadow: isFocused ? [BoxShadow(color: _LuxuryColors.orangePrimary.withOpacity(0.2), blurRadius: 12)] : [],
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildQuantityButton(icon: Iconsax.minus, onTap: () {
-                final current = int.tryParse(_quantityController.text) ?? 1;
-                if (current > 1) { _quantityController.text = (current - 1).toString(); setState(() {}); }
-              }),
-              SizedBox(
-                width: 40,
-                height: 40,
-                child: Center(
-                  child: TextField(
-                    controller: _quantityController,
-                    focusNode: _focusNodes['quantity'],
-                    keyboardType: TextInputType.number,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    decoration: const InputDecoration(fillColor: Colors.transparent,border: InputBorder.none, contentPadding: EdgeInsets.zero, isDense: true, focusedBorder: OutlineInputBorder(borderSide: BorderSide.none)),
-
-                  ),
-                ),
-              ),
-              _buildQuantityButton(icon: Iconsax.add, onTap: () {
-                final current = int.tryParse(_quantityController.text) ?? 0;
-                _quantityController.text = (current + 1).toString();
-                setState(() {});
-              }),
-            ],
-          ),
-        ],
-      ),
+  Widget _buildNumericField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    required String focusKey,
+    String? suffix,
+  }) {
+    return _buildPriceQuantityInput(
+      controller: controller,
+      focusKey: focusKey,
+      label: label,
+      icon: icon,
+      suffixText: suffix,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
     );
   }
 
-  Widget _buildQuantityButton({required IconData icon, required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), gradient: _LuxuryColors.navyGradient),
-        child: Icon(icon, color: Colors.white, size: 20),
-      ),
-    );
-  }
+  Widget _buildPremiumToggle({
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+    required IconData activeIcon,
+    required IconData inactiveIcon,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = Theme.of(context).colorScheme.surface;
 
-  Widget _buildPremiumToggle({required String title, required String subtitle, required bool value, required ValueChanged<bool> onChanged, required IconData activeIcon, required IconData inactiveIcon}) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        color: value ? _LuxuryColors.orangeTint : _LuxuryColors.inputBg,
-        border: Border.all(color: value ? _LuxuryColors.orangePrimary.withOpacity(0.3) : _LuxuryColors.inputBorder, width: 1),
+        color: value
+            ? (isDark ? AppColors.darkElevated : _LuxuryColors.orangeTint)
+            : surface,
+        border: Border.all(
+          color: value
+              ? _LuxuryColors.orangePrimary.withOpacity(0.3)
+              : _outline,
+          width: 1,
+        ),
       ),
       child: Row(
         children: [
-         
-          // Icon
           AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               gradient: value ? _LuxuryColors.orangeGradient : null,
-              color: value ? null : _LuxuryColors.bgLight,
-              border: value ? null : Border.all(color: _LuxuryColors.inputBorder),
+              color: value ? null : surface,
+              border: value ? null : Border.all(color: _outline),
             ),
-            child: Icon(value ? activeIcon : inactiveIcon, color: value ? Colors.white : _LuxuryColors.textSecondary, size: 22),
+            child: Icon(
+              value ? activeIcon : inactiveIcon,
+              color: value ? Colors.white : _onSurfaceSecondary,
+              size: 22,
+            ),
           ),
           const SizedBox(width: 14),
-          // Text
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(color: value ? _LuxuryColors.orangePrimary : _LuxuryColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: value
+                        ? (isDark ? Colors.white : _LuxuryColors.orangePrimary)
+                        : _onSurface,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(subtitle, style: TextStyle(color: _LuxuryColors.textSecondary, fontSize: 12)),
+                Text(
+                  subtitle,
+                  style: TextStyle(color: _onSurfaceSecondary, fontSize: 12),
+                ),
               ],
             ),
           ),
           const SizedBox(width: 12),
-           // Toggle switch on the LEFT (RTL layout)
           Transform.scale(
             scale: 1.1,
             child: Switch(
@@ -1094,73 +2039,32 @@ class _AddProductScreenState extends State<AddProductScreen>
               onChanged: onChanged,
               activeThumbColor: _LuxuryColors.orangePrimary,
               activeTrackColor: _LuxuryColors.orangePrimary.withOpacity(0.4),
-              inactiveThumbColor: Colors.white,
-              inactiveTrackColor: _LuxuryColors.toggleTrackOff,
+              inactiveThumbColor: surface,
+              inactiveTrackColor: isDark
+                  ? AppColors.darkElevated
+                  : _LuxuryColors.toggleTrackOff,
               trackOutlineColor: WidgetStateProperty.resolveWith((states) {
                 if (states.contains(WidgetState.selected)) {
                   return Colors.transparent;
                 }
-                return _LuxuryColors.toggleOff;
+                return isDark ? AppColors.darkBorder : _LuxuryColors.toggleOff;
               }),
             ),
           ),
-          
         ],
       ),
     );
   }
 
-  Widget _buildShimmerButton() {
-    return AnimatedBuilder(
-      animation: _shimmerAnimation,
-      builder: (context, child) {
-        return GestureDetector(
-          onTap: _isUploading ? null : _submitProduct,
-          child: Container(
-            height: 60,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              gradient: _LuxuryColors.orangeGradient,
-              boxShadow: [BoxShadow(color: _LuxuryColors.orangePrimary.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8))],
-            ),
-            child: Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: Transform.translate(
-                    offset: Offset(MediaQuery.of(context).size.width * _shimmerAnimation.value, 0),
-                    child: Container(width: 100, decoration: BoxDecoration(gradient: _LuxuryColors.shimmerGradient)),
-                  ),
-                ),
-                Center(
-                  child: _isUploading
-                      ? Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5)),
-                          const SizedBox(width: 12),
-                          const Text('جاري الرفع...', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                        ])
-                      : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          const Icon(Iconsax.send_1, color: Colors.white, size: 24),
-                          const SizedBox(width: 10),
-                          const Text('نشر المنتج', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                        ]),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   void _showAddMoreMediaBottomSheet() {
+    final lang = _lang;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      builder: (sheetContext) => Container(
+        decoration: BoxDecoration(
+          color: context.appSurface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -1175,43 +2079,34 @@ class _AddProductScreenState extends State<AddProductScreen>
               ),
             ),
             const SizedBox(height: 20),
-            Text('إضافة وسائط', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              lang == 'ar' ? 'إضافة منتج جديد' : 'Add New Product',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 20),
             ListTile(
               leading: const Icon(Iconsax.camera, color: AppColors.primary),
-              title: const Text('التقاط صورة'),
+              title: Text(lang == 'ar' ? 'إضافة صورة' : 'Add Photo'),
+              subtitle: Text(
+                lang == 'ar' ? 'التقط صورة للمنتج' : 'Take a product photo',
+              ),
               onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CameraScreen(isVideo: false),
-                  ),
-                );
+                Navigator.pop(sheetContext);
+                _showImageSourceBottomSheet();
               },
             ),
             ListTile(
               leading: const Icon(
-                Iconsax.video_circle,
+                Iconsax.video_play,
                 color: AppColors.secondary,
               ),
-              title: const Text('تسجيل فيديو'),
+              title: Text(lang == 'ar' ? 'إضافة فيديو' : 'Add Video'),
+              subtitle: Text(
+                lang == 'ar' ? 'سجل فيديو للمنتج' : 'Record a product video',
+              ),
               onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CameraScreen(isVideo: true),
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Iconsax.gallery, color: Colors.green),
-              title: const Text('اختيار من المعرض'),
-              onTap: () {
-                Navigator.pop(context);
-                _pickFromGallery();
+                Navigator.pop(sheetContext);
+                _showVideoSourceBottomSheet();
               },
             ),
             const SizedBox(height: 20),
@@ -1221,247 +2116,355 @@ class _AddProductScreenState extends State<AddProductScreen>
     );
   }
 
-  void _pickFromGallery() async {
-    final ImagePicker picker = ImagePicker();
-
-    showDialog(
+  void _showImageSourceBottomSheet() {
+    final lang = _lang;
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('اختيار نوع الوسائط'),
-        content: Consumer<AppProvider>(
-          builder: (context, appProvider, child) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Iconsax.image),
-                  title: const Text('صور'),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    final List<XFile> images = await picker.pickMultiImage();
-                    if (images.isNotEmpty) {
-                      setState(() {
-                        appProvider.allMedia.addAll(
-                          images.map((image) => image.path),
-                        );
-                      });
-                    }
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Iconsax.video_play),
-                  title: const Text('فيديو'),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    final XFile? video = await picker.pickVideo(
-                      source: ImageSource.gallery,
-                    );
-                    if (video != null) {
-                      setState(() {
-                        appProvider.allMedia.add(video.path);
-                      });
-                    }
-                  },
-                ),
-              ],
-            );
-          },
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => Container(
+        decoration: BoxDecoration(
+          color: context.appSurface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 50,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              lang == 'ar' ? 'إضافة صورة' : 'Add Photo',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Iconsax.camera, color: AppColors.primary),
+              title: Text(lang == 'ar' ? 'التقاط صورة' : 'Take Photo'),
+              subtitle: Text(
+                lang == 'ar'
+                    ? 'استخدم الكاميرا لالتقاط صورة جديدة'
+                    : 'Use camera to take a new photo',
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _openCameraForAppend(isVideo: false);
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Iconsax.gallery,
+                color: AppColors.secondary,
+              ),
+              title: Text(
+                lang == 'ar' ? 'اختيار من المعرض' : 'Choose from Gallery',
+              ),
+              subtitle: Text(
+                lang == 'ar'
+                    ? 'اختر صورة من معرض الصور'
+                    : 'Choose from photo gallery',
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _pickImagesFromGallery();
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
         ),
       ),
     );
   }
 
-  void _submitProduct() async {
-    // Validate fields
-    if (_nameController.text.trim().isEmpty) {
-      _showError('يرجى إدخال اسم المنتج');
-      return;
+  void _showVideoSourceBottomSheet() {
+    final lang = _lang;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => Container(
+        decoration: BoxDecoration(
+          color: context.appSurface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 50,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              lang == 'ar' ? 'إضافة فيديو' : 'Add Video',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(
+                Iconsax.video_circle,
+                color: AppColors.primary,
+              ),
+              title: Text(lang == 'ar' ? 'تسجيل فيديو' : 'Record Video'),
+              subtitle: Text(
+                lang == 'ar'
+                    ? 'استخدم الكاميرا لتسجيل فيديو جديد'
+                    : 'Use camera to record a new video',
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _openCameraForAppend(isVideo: true);
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Iconsax.video_play,
+                color: AppColors.secondary,
+              ),
+              title: Text(
+                lang == 'ar' ? 'اختيار من المعرض' : 'Choose from Gallery',
+              ),
+              subtitle: Text(
+                lang == 'ar'
+                    ? 'اختر فيديو من معرض الفيديوهات'
+                    : 'Choose from video gallery',
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _pickVideoFromGallery();
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openCameraForAppend({required bool isVideo}) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CameraScreen(
+          isVideo: isVideo,
+        ),
+      ),
+    ).then((result) async {
+      if (result != null && result is List<String> && result.isNotEmpty) {
+        await _addMediaPaths(result);
+      }
+    });
+  }
+
+  Future<void> _pickImagesFromGallery() async {
+    final picker = ImagePicker();
+    final result = await picker.pickMultiImage();
+    final paths = result.map((image) => image.path).toList();
+    if (paths.isNotEmpty) {
+      await _addMediaPaths(paths);
+    }
+  }
+
+  Future<void> _pickVideoFromGallery() async {
+    final picker = ImagePicker();
+    final video = await picker.pickVideo(source: ImageSource.gallery);
+    if (video != null) {
+      await _addMediaPaths([video.path]);
+    }
+  }
+
+  void _showValidationError(String message) {
+    AwesomeDialog(
+      context: context,
+      dialogType: DialogType.error,
+      animType: AnimType.scale,
+      title: _lang == 'ar' ? 'خطأ' : 'Error',
+      desc: message,
+      btnOkOnPress: () {},
+      btnOkText: _lang == 'ar' ? 'حسناً' : 'OK',
+    ).show();
+  }
+
+  bool _validateProductForm() {
+    if (_mediaFiles.isEmpty) {
+      _showValidationError(
+        _lang == 'ar'
+            ? 'يجب إضافة صورة واحدة على الأقل للمنتج'
+            : 'Add at least one photo',
+      );
+      return false;
     }
 
-    if (_descriptionController.text.trim().isEmpty) {
-      _showError('يرجى إدخال وصف المنتج');
-      return;
+    final name = _nameController.text.trim();
+    if (name.isEmpty || name.length < 3) {
+      _showValidationError(
+        _lang == 'ar' ? 'يجب إدخال اسم المنتج' : 'Product name is required',
+      );
+      return false;
     }
 
-    if (_priceController.text.trim().isEmpty) {
-      _showError('يرجى إدخال سعر المنتج');
-      return;
+    final priceText = _priceController.text.trim();
+    final price = double.tryParse(priceText);
+    if (priceText.isEmpty || price == null || price <= 0) {
+      _showValidationError(
+        _lang == 'ar' ? 'يجب إدخال سعر صحيح للمنتج' : 'Enter a valid price',
+      );
+      return false;
     }
 
-    if (_quantityController.text.trim().isEmpty) {
-      _showError('يرجى إدخال كمية المنتج');
-      return;
+    final quantityText = _quantityController.text.trim();
+    final quantity = int.tryParse(quantityText);
+    if (quantityText.isEmpty || quantity == null || quantity <= 0) {
+      _showValidationError(
+        _lang == 'ar'
+            ? 'يجب إدخال كمية صحيحة للمنتج'
+            : 'Enter a valid quantity',
+      );
+      return false;
     }
 
     if (_categoryController.text.trim().isEmpty) {
-      _showError('يرجى إدخال تصنيف المنتج');
-      return;
+      _showValidationError(
+        _lang == 'ar' ? 'يجب اختيار تصنيف للمنتج' : 'Select a category',
+      );
+      return false;
     }
 
-    // if (_currentItemId == null) {
-    //   _showError('خطأ في إنشاء المنتج');
-    //   return;
-    // }
+    return true;
+  }
+
+  void _submitProduct() async {
+    if (!_validateProductForm()) {
+      return;
+    }
 
     setState(() {
       _isUploading = true;
     });
 
-    final appProvider = Provider.of<AppProvider>(context, listen: false);
-    String? uid = await FlutterSecureStorage().read(key: "user_uid");
-    String? userName = await AuthService.getCurrentName();
-    // Prepare data for background upload
-    Map<String, dynamic> data = {
-      'itemId': _currentItemId,
-      'clientItemId': _clientItemId,
-      'uid': uid,
-      'userName': userName,
-      'barcode': _barcodeController.text.trim(),
-      'name': _nameController.text.trim(),
-      'eng': _engnameController.text.trim(),
-      'description': _descriptionController.text.trim(),
-      '_description_arb_Controller': _description_arb_Controller.text.trim(),
-      'price': _priceController.text.trim(),
-      'quantity': _quantityController.text.trim(),
-      'category': _categoryController.text.trim(),
-      'visibility': _isPublic ? 'public' : 'private',
-      'comments': _commentsEnabled ? 'on' : 'off',
-      'mediaFiles': appProvider.allMedia,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-    };
+    final uid = await FlutterSecureStorage().read(key: 'user_uid');
+    if (uid != null && uid.isNotEmpty && _currentItemId != null) {
+      await DatabaseService.updateItem(
+        itemId: _currentItemId!,
+        clientId: _globalFarmClientId,
+        idx: _globalFarmClientId,
+        uid: uid,
+        barcode: _barcodeController.text.trim(),
+        name: _nameController.text.trim(),
+        eng: _engnameController.text.trim(),
+        description: _descriptionController.text.trim(),
+        description_arb: _description_arb_Controller.text.trim(),
+        category: _categoryController.text.trim(),
+        price: _priceController.text.trim(),
+        quantity: _quantityController.text.trim().isEmpty
+            ? '0'
+            : _quantityController.text.trim(),
+        visibility: _isPublic ? 'Public' : 'Private',
+        comments: _commentsEnabled ? 'on' : 'off',
+        media: _savedMediaString,
+      );
+    }
 
-    // Start background upload
-    _startBackgroundUpload(data);
+    // تحديث نفس صف Gfnursery (client_id) — id يمنع INSERT مكرر
+    if (_globalFarmClientId != null && _globalFarmClientId!.isNotEmpty) {
+      await _ensureGlobalFarmPrimaryImage();
+      await ApiService.syncItemToGlobalFarm(
+        clientId: _globalFarmClientId!,
+        martitItemId: _currentItemId,
+        itemName: _nameController.text.trim(),
+        itemNameEn: _engnameController.text.trim(),
+        category: _categoryController.text.trim(),
+        description: _descriptionController.text.trim(),
+        price: _priceController.text.trim(),
+        barcode: _barcodeController.text.trim(),
+        descriptionArb: _description_arb_Controller.text.trim(),
+        quantity: _quantityController.text.trim().isEmpty
+            ? '0'
+            : _quantityController.text.trim(),
+      );
+    }
 
-    Navigator.pushReplacement(
+    if (!mounted) return;
+    setState(() {
+      _isUploading = false;
+    });
+
+    showAppSnackbar(
       context,
-      MaterialPageRoute(builder: (context) => TikTokFeedScreen()),
+      message: _lang == 'ar'
+          ? 'تم حفظ المنتج بنجاح'
+          : 'Product saved successfully',
+      type: SnackType.success,
     );
-    // Show success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('تم بدء رفع المنتج في الخلفية'),
-        backgroundColor: Colors.green,
-      ),
+    await _clearDraft();
+    final appProvider = Provider.of<AppProvider>(context, listen: false);
+    appProvider.allMedia.clear();
+    Navigator.pop(context, _currentItemId);
+  }
+}
+
+/// Apple Photos–style circular pie progress for media uploads.
+class _ApplePieProgressPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  const _ApplePieProgressPainter({
+    required this.progress,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) / 2;
+
+    // Dim track ring
+    final trackPaint = Paint()
+      ..color = color.withValues(alpha: 0.28)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+    canvas.drawCircle(center, radius - 1.25, trackPaint);
+
+    // Bright ring
+    final ringPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius - 1.25),
+      -math.pi / 2,
+      2 * math.pi * progress.clamp(0.0, 1.0),
+      false,
+      ringPaint,
+    );
+
+    // Solid pie wedge (Apple sync style)
+    final piePaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    final pieRadius = radius - 5.5;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: pieRadius),
+      -math.pi / 2,
+      2 * math.pi * progress.clamp(0.0, 1.0),
+      true,
+      piePaint,
     );
   }
 
-  void _startBackgroundUpload(Map<String, dynamic> data) async {
-    try {
-      final appProvider = Provider.of<AppProvider>(context, listen: false);
-      _runBackgroundUpload(data);
-      appProvider.allMedia.clear();
-    } catch (e) {
-      print('Error starting background upload: $e');
-    }
-  }
-
-  void _runBackgroundUpload(Map<String, dynamic> data) async {
-    try {
-      print("🚀 Starting product upload: ${data['name']}");
-
-      final itemId = data['itemId'];
-      final mediaFiles = List<String>.from(data['mediaFiles']);
-
-      // Step 1: Upload media files to Bunny.net
-      print("📤 Uploading ${mediaFiles.length} media files...");
-
-      final int clientItemId =
-          (data['clientItemId'] is int)
-              ? data['clientItemId'] as int
-              : int.tryParse(data['clientItemId']?.toString() ?? '') ?? 0;
-
-      final uploadResult = await S3UploadService.uploadMediaFiles(
-        filePaths: mediaFiles,
-        clientItemId: clientItemId,
-        useSequentialIdx: true,
-        onProgress: (current, total, progress) {
-          final overallProgress =
-              ((current - 1) / total * 100 + progress * 100 / total).toInt();
-          print(
-            "Upload progress: file $current/$total — $overallProgress%",
-          );
-        },
-      );
-
-      if (uploadResult.urls.isEmpty) {
-        print("❌ No media files uploaded");
-        return;
-      }
-
-      if (uploadResult.nextIdx == null) {
-        print("❌ No idx allocated for S3 folder");
-        return;
-      }
-
-      if (clientItemId <= 0) {
-        print("❌ No client_id from insertNewOne — skipping client thumbnail");
-      }
-
-      print("📁 S3 upload idx folder: ${uploadResult.nextIdx}");
-      print("📁 Client items id for thumbnail: $clientItemId");
-
-      // Step 2: Create media string for database
-      final mediaString = uploadResult.urls
-          .map((url) {
-            final fileName = url.split('/').last;
-            return fileName;
-          })
-          .join(', ');
-
-      print("📝 Media string: $mediaString");
-
-      // Step 3: Update item in database
-      final updateResult = await DatabaseService.updateItem(
-        itemId: itemId,
-        uid: data['uid'],
-        barcode: data['barcode'],
-        name: data['name'],
-        eng: data['eng'],
-        description: data['description'],
-        description_arb: data['_description_arb_Controller'],
-        category: data['category'],
-        price: data['price'],
-        quantity: data['quantity'],
-        visibility: data['visibility'],
-        comments: data['comments'],
-        media: mediaString,
-        idx: uploadResult.nextIdx,
-        clientId: clientItemId > 0 ? clientItemId : uploadResult.clientId,
-      );
-
-      if (updateResult['success'] == true) {
-        print("✅ Product uploaded successfully: ${data['name']}");
-
-        final request = await Dio().post(
-          "https://www.Globee-Trading.com/app2026/sql.php",
-          data: FormData.fromMap({"action": "get_tokens"}),
-        );
-        List playerIds = request.data['player_ids'];
-        List<String> setPlayers = [];
-        for (var player_id in playerIds) {
-          setPlayers.add(player_id['player_id'].toString());
-          await OneSignalService.sendNotificationToMultipleUsers(
-            playerIds: setPlayers,
-            title: "المستخدم: ${data['userName']} رفع منتج جديد",
-            message:
-                "تم رفع منتج جديد بواسطة ${data['userName']} في النظام. اضغط هنا لعرض التفاصيل أو متابعة النشاط.",
-          );
-        }
-      } else {
-        print("❌ Failed to update database: ${updateResult['error']}");
-      }
-
-      data.clear();
-      mediaFiles.clear();
-    } catch (e) {
-      print("❌ Error uploading product: $e");
-    }
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
+  @override
+  bool shouldRepaint(covariant _ApplePieProgressPainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.color != color;
   }
 }

@@ -1,9 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:GlobalFarm/core/constants/app_colors.dart';
+import 'package:GlobalFarm/core/constants/app_config.dart';
 
 class InvoiceWebView extends StatefulWidget {
   final String url;
   const InvoiceWebView({super.key, required this.url});
+
+  /// GlobalFarm invoice URL — always includes [AppConfig.storeId].
+  static String buildUrl({
+    required String orderId,
+    String? view,
+    String? userId,
+  }) {
+    final params = <String, String>{
+      'order_id': orderId,
+      'store_id': AppConfig.storeId,
+      'k': DateTime.now().millisecondsSinceEpoch.toString(),
+    };
+    if (view != null && view.isNotEmpty) params['view'] = view;
+    if (userId != null && userId.isNotEmpty) params['user_id'] = userId;
+    return Uri.parse('${AppConfig.apiBaseUrl}/invoice.php')
+        .replace(queryParameters: params)
+        .toString();
+  }
 
   @override
   State<InvoiceWebView> createState() => _InvoiceWebViewState();
@@ -20,7 +41,6 @@ class _InvoiceWebViewState extends State<InvoiceWebView> {
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (_) {
-          // ✅ هذا هو المفتاح - يضبط الـ viewport عشان الصفحة تجي كاملة
           _controller.runJavaScript('''
             var meta = document.querySelector('meta[name="viewport"]');
             if (!meta) {
@@ -41,14 +61,34 @@ class _InvoiceWebViewState extends State<InvoiceWebView> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('الفاتورة'),
-        backgroundColor: const Color(0xFF5A7A2E),
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        bottom: PreferredSize(preferredSize: Size(double.maxFinite, 2), child: Divider(color: Color(0xFF2C4A1E),)),
+        elevation: 0,
         actions: [
-          // زر ريفريش
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => _controller.reload(),
+          Padding(
+            padding: const EdgeInsetsDirectional.only(end: 12),
+            child: Material(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                onTap: () {
+                  setState(() => _isLoading = true);
+                  _controller.reload();
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: const Icon(Iconsax.refresh, size: 18, color: Colors.white),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -56,7 +96,9 @@ class _InvoiceWebViewState extends State<InvoiceWebView> {
         children: [
           WebViewWidget(controller: _controller),
           if (_isLoading)
-            const Center(child: CircularProgressIndicator()),
+            const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            ),
         ],
       ),
     );

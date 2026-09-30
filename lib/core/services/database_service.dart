@@ -1,25 +1,35 @@
 import 'package:dio/dio.dart';
+import 'package:GlobalFarm/core/constants/app_config.dart';
 
 class DatabaseService {
-  static const String _baseUrl = 'https://www.Globee-Trading.com/app2026';
+  static String get _baseUrl => AppConfig.apiBaseUrl;
   static final Dio _dio = Dio();
 
-  static Future<Map<String, dynamic>> createItem(String userId) async {
+  static Future<int> getLastIdx({String storeId = '2'}) async {
     try {
       final response = await _dio.post(
         '$_baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
-        data: FormData.fromMap({'action': 'create_item', 'user_id': userId}),
+        data: FormData.fromMap({
+          'action': 'get_last_idx',
+          'store_id': storeId,
+        }),
       );
 
-      return response.data;
+      if (response.data is Map && response.data['success'] == true) {
+        final lastIdx = response.data['last_idx'];
+        if (lastIdx is num) return lastIdx.toInt();
+        return int.tryParse(lastIdx?.toString() ?? '') ?? 0;
+      }
     } catch (e) {
-      print('Error creating item: $e');
-      return {'success': false, 'error': e.toString()};
+      print('Error getting last idx: $e');
     }
+    return 0;
   }
 
   static Future<Map<String, dynamic>> updateItem({
     required String itemId,
+    String? clientId,
+    String? idx,
     required String uid,
     required String barcode,
     required String name,
@@ -32,41 +42,55 @@ class DatabaseService {
     required String visibility,
     required String comments,
     required String media,
-    int? idx,
-    int? clientId,
   }) async {
     try {
-      final Map<String, dynamic> payload = {
-        'action': 'insert',
-        'item_id': itemId,
-        'uid': uid,
-        'barcode': barcode,
-        'name': name,
-        'eng': eng,
-        'description': description,
-        'description_arb': description_arb,
-        'category': category,
-        'price': price,
-        'qtt': quantity,
-        'visibility': visibility,
-        'comments': comments,
-        'media': media,
-        'store_id': '2',
-      };
-      if (idx != null && idx > 0) {
-        payload['idx'] = idx.toString();
-      }
-      if (clientId != null && clientId > 0) {
-        payload['client_id'] = clientId.toString();
-      }
       final response = await _dio.post(
         '$_baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
-        data: FormData.fromMap(payload),
+        data: FormData.fromMap({
+          'action': 'insert',
+          'item_id': itemId,
+          'client_id': clientId ?? '0',
+          if (idx != null && idx.isNotEmpty) 'idx': idx,
+          'uid': uid,
+          'barcode': barcode,
+          'name': name,
+          'eng': eng,
+          'description': description,
+          'description_arb': description_arb,
+          'category': category,
+          'price': price,
+          'qtt': quantity,
+          'visibility': visibility,
+          'comments': comments,
+          'media': media,
+        }),
       );
 
       return response.data;
     } catch (e) {
       print('Error updating item: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateItemIdx({
+    required String itemId,
+    required String idx,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '$_baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        data: FormData.fromMap({
+          'action': 'update_item_idx',
+          'item_id': itemId,
+          'idx': idx,
+        }),
+      );
+      return response.data is Map
+          ? Map<String, dynamic>.from(response.data as Map)
+          : {'success': false};
+    } catch (e) {
+      print('Error updating item idx: $e');
       return {'success': false, 'error': e.toString()};
     }
   }
@@ -77,7 +101,8 @@ class DatabaseService {
     String? userToken,
   }) async {
     try {
-      final url = '$_baseUrl/sql.php';
+      final url =
+          '$_baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}';
 
       final response = await Dio().post(
         url,

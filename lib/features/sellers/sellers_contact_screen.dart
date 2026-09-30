@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/services/api_service.dart';
-import '../chat/chat_screen.dart';
+import 'package:GlobalFarm/core/constants/app_colors.dart';
+import 'package:GlobalFarm/core/services/api_service.dart';
+import 'package:GlobalFarm/core/widgets/smart_avatar_widget.dart';
+import 'package:GlobalFarm/features/chat/chat_screen.dart';
+import 'package:GlobalFarm/core/utils/snackbar_helper.dart';
+import 'package:GlobalFarm/core/utils/theme_extensions.dart';
+import 'package:GlobalFarm/features/profile/seller_profile_screen.dart';
 
 class SellersContactScreen extends StatefulWidget {
   final String userId;
@@ -56,26 +60,30 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
     }
   }
 
+  Widget _buildSellerAvatar(SellerContactModel seller, {double size = 60}) {
+    return SmartAvatarWidget(
+      userId: seller.id,
+      name: seller.name,
+      size: size,
+      fallbackUrl: seller.avatar,
+      backgroundColor: AppColors.primary,
+      initialsStyle: TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
+        fontSize: size * 0.35,
+      ),
+    );
+  }
+
   void _showContactOptions(SellerContactModel seller) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: context.appTextDirection,
         child: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                // Color(0xFF1A1A2E),
-                // Color(0xFF16213E),
-                // Color(0xFF0F3460)
-                Color(0xFFD4D4F0),
-                Color(0xFFC8D4F5),
-                Color(0xFFB4D4F0),
-              ],
-            ),
+          decoration: BoxDecoration(
+            gradient: context.bottomBarGradient(),
             borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
           ),
           child: Column(
@@ -88,7 +96,7 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                 height: 4,
                 decoration: BoxDecoration(
                   // color: Colors.white.withOpacity(0.3),
-                  color: const Color(0xFF1A1A2E).withOpacity(0.3),
+                  color: context.appTextPrimary.withOpacity(0.3),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -100,24 +108,7 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
                   children: [
-                    CircleAvatar(
-                      radius: 30,
-                      backgroundColor: AppColors.primary,
-                      backgroundImage: seller.avatar.isNotEmpty
-                          ? NetworkImage(seller.avatar)
-                          : null,
-                      child: seller.avatar.isEmpty
-                          ? Text(
-                              seller.name.isNotEmpty ? seller.name[0] : 'S',
-                              style: const TextStyle(
-                                color: Colors.white,
-
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            )
-                          : null,
-                    ),
+                    _buildSellerAvatar(seller),
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(
@@ -125,9 +116,9 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                         children: [
                           Text(
                             seller.name,
-                            style: const TextStyle(
+                            style: TextStyle(
                               // color: Colors.white,
-                              color: Color(0xFF1A1A2E),
+                              color: context.appTextPrimary,
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
@@ -137,7 +128,7 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                             'البائع',
                             style: TextStyle(
                               // color: Colors.white.withOpacity(0.7),
-                              color: const Color(0xFF1A1A2E).withOpacity(0.6),
+                              color: context.appTextSecondary,
                               fontSize: 14,
                             ),
                           ),
@@ -172,8 +163,7 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                               receiverAvatar: seller.avatar,
                               receiverToken: seller.token,
                               conversationId: seller.convId,
-                              isOnline:
-                                  false, // TODO: Implement real-time online status
+                              isOnline: false,
                             ),
                           ),
                         );
@@ -188,12 +178,10 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                       subtitle: 'اتصل بالبائع مباشرة',
                       onTap: () {
                         Navigator.pop(context);
-                        // TODO: Make phone call
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('ميزة المكالمات ستكون متاحة قريباً'),
-                            backgroundColor: AppColors.primary,
-                          ),
+                        showAppSnackbar(
+                          context,
+                          message: 'ميزة المكالمات ستكون متاحة قريباً',
+                          type: SnackType.info,
                         );
                       },
                     ),
@@ -206,11 +194,11 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                       subtitle: 'اطلع على منتجات البائع الأخرى',
                       onTap: () {
                         Navigator.pop(context);
-                        // TODO: Navigate to seller profile
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('سيتم فتح ملف البائع الشخصي'),
-                            backgroundColor: AppColors.primary,
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                SellerProfileScreen(userId: seller.id),
                           ),
                         );
                       },
@@ -239,7 +227,7 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           // color: Colors.white.withOpacity(0.1),
-          color: Colors.white,
+          color: context.appSurface,
           borderRadius: BorderRadius.circular(15),
           border: Border.all(
             // color: Colors.white.withOpacity(0.2),
@@ -269,9 +257,9 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       // color: Colors.white,
-                      color: Color(0xFF1A1A2E),
+                      color: context.appTextPrimary,
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
@@ -281,7 +269,7 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                     subtitle,
                     style: TextStyle(
                       // color: Colors.white.withOpacity(0.7),
-                      color: const Color(0xFF1A1A2E).withOpacity(0.6),
+                      color: context.appTextSecondary,
                       fontSize: 14,
                     ),
                   ),
@@ -291,7 +279,7 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
             Icon(
               Iconsax.arrow_square_left,
               // color: Colors.white.withOpacity(0.5),
-              color: const Color(0xFF1A1A2E).withOpacity(0.5),
+              color: context.appTextSecondary.withOpacity(0.8),
               size: 20,
             ),
           ],
@@ -303,23 +291,23 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
   @override
   Widget build(BuildContext context) {
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: context.appTextDirection,
       child: Scaffold(
         // backgroundColor: const Color(0xFF0A0E27),
-        backgroundColor: const Color(0xFFF5F7FB),
+        backgroundColor: context.appBackground,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
             onPressed: () => Navigator.pop(context),
             // icon: const Icon(Iconsax.arrow_right_3, color: Colors.white),
-            icon: const Icon(Iconsax.arrow_right, color: Color(0xFF1A1A2E)),
+            icon: Icon(Iconsax.arrow_right, color: context.appTextPrimary),
           ),
-          title: const Text(
+          title: Text(
             'تواصل مع البائعين',
             style: TextStyle(
               // color: Colors.white,
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
@@ -352,11 +340,11 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
         children: [
           const Icon(Iconsax.warning_2, size: 80, color: Colors.red),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'حدث خطأ في تحميل البائعين',
             style: TextStyle(
               // color: Colors.white,
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 18,
               fontWeight: FontWeight.w500,
             ),
@@ -394,11 +382,11 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'لا توجد مشتريات سابقة',
             style: TextStyle(
               // color: Colors.white,
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 24,
               fontWeight: FontWeight.bold,
             ),
@@ -408,7 +396,7 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
             'لم تقم بشراء أي منتجات بعد',
             style: TextStyle(
               // color: Colors.white.withOpacity(0.7),
-              color: const Color(0xFF1A1A2E).withOpacity(0.7),
+              color: context.appTextSecondary,
               fontSize: 16,
             ),
           ),
@@ -437,18 +425,9 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            // const Color(0xFF1A1A2E).withOpacity(0.8),
-            // const Color(0xFF16213E).withOpacity(0.6),
-            Color(0xFFD4D4F0),
-            Color(0xFFC8D4F5),
-          ],
-        ),
+        gradient: context.surfaceGradient(),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+        border: Border.all(color: context.appBorder, width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.3),
@@ -459,28 +438,12 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.all(20),
-        leading: CircleAvatar(
-          radius: 30,
-          backgroundColor: AppColors.primary,
-          backgroundImage: seller.avatar.isNotEmpty
-              ? NetworkImage(seller.avatar)
-              : null,
-          child: seller.avatar.isEmpty
-              ? Text(
-                  seller.name.isNotEmpty ? seller.name[0] : 'S',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                )
-              : null,
-        ),
+        leading: _buildSellerAvatar(seller),
         title: Text(
           seller.name,
-          style: const TextStyle(
+          style: TextStyle(
             // color: Colors.white,
-            color: Color(0xFF1A1A2E),
+            color: context.appTextPrimary,
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
@@ -492,7 +455,7 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
               Icon(
                 Iconsax.shop,
                 // color: Colors.white.withOpacity(0.6),
-                color: const Color(0xFF1A1A2E).withOpacity(0.6),
+                color: context.appTextSecondary,
                 size: 16,
               ),
               const SizedBox(width: 8),
@@ -500,7 +463,7 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                 'البائع',
                 style: TextStyle(
                   // color: Colors.white.withOpacity(0.6),
-                  color: const Color(0xFF1A1A2E).withOpacity(0.6),
+                  color: context.appTextSecondary,
                   fontSize: 14,
                 ),
               ),

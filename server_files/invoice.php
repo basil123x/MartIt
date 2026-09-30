@@ -10,6 +10,11 @@ $conn = mysqli_connect("localhost", "cdagvlmy_Globee", "A122%133z.", "cdagvlmy_G
 
 // Get order ID from URL
 $order_id = isset($_GET['order_id']) ? (int)$_GET['order_id'] : 0;
+// GlobalFarm store_id = 2 (default for this app). Martit = 1.
+$store_id = isset($_GET['store_id']) ? preg_replace('/[^0-9]/', '', $_GET['store_id']) : '2';
+if ($store_id === '') {
+    $store_id = '2';
+}
 
 if ($order_id <= 0) {
     die('رقم الطلب غير صحيح');
@@ -44,6 +49,17 @@ if (!$result || $result->num_rows == 0) {
 
 $order = $result->fetch_assoc();
 $items = json_decode($order['items'], true);
+
+// Brand theme by store
+$is_globalfarm = ($store_id === '2');
+$brand_primary = $is_globalfarm ? '#4A7C3F' : '#CC0000';
+$brand_secondary = $is_globalfarm ? '#3A6230' : '#0055A4';
+$brand_name = $is_globalfarm ? 'Global Farm' : 'Martit';
+$brand_logo = $is_globalfarm
+    ? 'https://www.Globee-Trading.com/app2026/assets/img/globalfarm_logo.png'
+    : 'https://www.Globee-Trading.com/app2026/assets/img/martit_logo.png';
+// Fallback to shared logo if store-specific file missing on older deploys
+$brand_logo_fallback = '../../../assets/img/Logo.png';
 ?>
 
 <!DOCTYPE html>
@@ -79,7 +95,7 @@ $items = json_decode($order['items'], true);
         }
 
         .invoice-header {
-            background: linear-gradient(135deg, #0055A4 0%, #00BCD4 100%);
+            background: linear-gradient(135deg, <?php echo $brand_primary; ?> 0%, <?php echo $brand_secondary; ?> 100%);
             color: white;
             padding: 30px 40px;
             display: flex;
@@ -126,10 +142,10 @@ $items = json_decode($order['items'], true);
         .section-title {
             font-size: 18px;
             font-weight: 700;
-            color: #0055A4;
+            color: <?php echo $brand_primary; ?>;
             margin-bottom: 15px;
             padding-bottom: 8px;
-            border-bottom: 2px solid #00BCD4;
+            border-bottom: 2px solid <?php echo $brand_secondary; ?>;
             display: flex;
             align-items: center;
             gap: 8px;
@@ -145,7 +161,7 @@ $items = json_decode($order['items'], true);
             background: #f8f9fb;
             padding: 15px;
             border-radius: 8px;
-            border-right: 3px solid #00BCD4;
+            border-right: 3px solid <?php echo $brand_primary; ?>;
         }
 
         .info-label {
@@ -172,7 +188,7 @@ $items = json_decode($order['items'], true);
         }
 
         .items-table th {
-            background: linear-gradient(135deg, #0055A4 0%, #00BCD4 100%);
+            background: linear-gradient(135deg, <?php echo $brand_primary; ?> 0%, <?php echo $brand_secondary; ?> 100%);
             color: white;
             padding: 12px 15px;
             text-align: right;
@@ -195,7 +211,7 @@ $items = json_decode($order['items'], true);
         }
 
         .total-section {
-            background: linear-gradient(135deg, #0055A4 0%, #00BCD4 100%);
+            background: linear-gradient(135deg, <?php echo $brand_primary; ?> 0%, <?php echo $brand_secondary; ?> 100%);
             color: white;
             padding: 25px 30px;
             border-radius: 10px;

@@ -13,28 +13,24 @@ import 'package:restart_app/restart_app.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shorebird_code_push/shorebird_code_push.dart';
 import 'package:terminate_restart/terminate_restart.dart';
-import 'core/constants/app_theme.dart';
 import 'core/constants/app_strings.dart';
+import 'core/constants/app_theme.dart';
+import 'core/services/local_notification_service.dart';
+import 'core/services/localization_service.dart';
+import 'core/services/remote_config_service.dart';
 import 'features/splash/splash_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-  String appId = "";
-  if (Platform.isAndroid) {
-    appId = "ddec3249-5f16-4870-9c32-682a704559b6";
-  } else {
-    appId = "5f910d9c-d0cd-4171-b2b2-94f68636d7de";
-  }
-  OneSignal.initialize(appId);
+  String appToken = "d511bd3c-816b-410f-8377-2203131fa013";
+  OneSignal.initialize(appToken);
   await OneSignal.Notifications.requestPermission(true);
 
   OneSignal.Notifications.addClickListener((event) {
@@ -72,17 +68,26 @@ void main() async {
     event.notification.display();
   });
 
-  runApp(const GlobalFarmApp());
+  await LocalizationService.instance.init();
+  await LocalNotificationService.initialize();
+  await RemoteConfigService.instance.load();
+
+  final prefs = await SharedPreferences.getInstance();
+  final isDark = prefs.getBool(AppProvider.darkModeKey) ?? false;
+
+  runApp(MartItApp(initialDarkMode: isDark));
 }
 
-class GlobalFarmApp extends StatefulWidget {
-  const GlobalFarmApp({super.key});
+class MartItApp extends StatefulWidget {
+  final bool? initialDarkMode;
+
+  const MartItApp({super.key, this.initialDarkMode});
 
   @override
-  State<GlobalFarmApp> createState() => _GlobalFarmAppState();
+  State<MartItApp> createState() => _MartItAppState();
 }
 
-class _GlobalFarmAppState extends State<GlobalFarmApp> {
+class _MartItAppState extends State<MartItApp> {
   final updater = ShorebirdUpdater();
   Timer? _timer;
   static const _lastPatchKey = "last_applied_patch";
@@ -148,15 +153,43 @@ class _GlobalFarmAppState extends State<GlobalFarmApp> {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-      providers: [ChangeNotifierProvider(create: (_) => AppProvider())],
-      child: MaterialApp(
-        title: AppStrings.appName,
-        theme: AppTheme.lightTheme,
-        navigatorKey: navigatorKey,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.light,
-        debugShowCheckedModeBanner: false,
-        home: const SplashScreen(),
+      providers: [
+        ChangeNotifierProvider.value(value: LocalizationService.instance),
+        ChangeNotifierProvider(
+          create: (_) {
+            final provider = AppProvider(
+              initialDarkMode: widget.initialDarkMode,
+            );
+            provider.loadPreferences();
+            return provider;
+          },
+        ),
+      ],
+      child: Consumer2<LocalizationService, AppProvider>(
+        builder: (context, localization, appProvider, _) {
+          return MaterialApp(
+            title: AppStrings.appName,
+            theme: AppTheme.lightTheme,
+            navigatorKey: navigatorKey,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: appProvider.themeMode,
+            debugShowCheckedModeBanner: false,
+            locale: Locale(localization.currentLanguage),
+            builder: (context, child) {
+              return Directionality(
+                textDirection: localization.textDirection,
+                child: DefaultTextStyle(
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontFamily: 'Cairo',
+                  ),
+                  child: child!,
+                ),
+              );
+            },
+            home: const SplashScreen(),
+          );
+        },
       ),
     );
   }

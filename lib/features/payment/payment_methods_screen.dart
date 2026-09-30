@@ -1,3 +1,4 @@
+import 'package:GlobalFarm/core/constants/app_config.dart';
 import 'package:GlobalFarm/core/services/auth_service.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:sadad_qa_payments/sadad_qa_payments.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/models/cart_model.dart';
 import '../../core/models/shipping_address_model.dart';
+import '../../core/utils/theme_extensions.dart';
 import 'order_success_screen.dart';
 
 class PaymentMethodsScreen extends StatefulWidget {
@@ -32,15 +34,17 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   String mobile = "";
 
   Future loadProfile() async {
-    String? uid =await AuthService.getCurrentUID();
-    var result = await Dio().post("https://www.globee-trading.com/app2026/profile.php?user_id=$uid&k=${DateTime.now().millisecondsSinceEpoch}");
+    String? uid = await AuthService.getCurrentUID();
+    var result = await Dio().post(
+      "${AppConfig.apiBaseUrl}/profile.php?user_id=$uid&k=${DateTime.now().millisecondsSinceEpoch}",
+    );
     setState(() {
       name = result.data['data']['name'];
       mobile = result.data['data']['phone'];
     });
   }
 
-  @override 
+  @override
   void initState() {
     loadProfile();
     super.initState();
@@ -49,20 +53,20 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   @override
   Widget build(BuildContext context) {
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: context.appTextDirection,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF0F2F5),
+        backgroundColor: context.appBackground,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
             onPressed: () => Navigator.pop(context),
-            icon: const Icon(Iconsax.arrow_right, color: Color(0xFF1A1A2E)),
+            icon: Icon(Iconsax.arrow_right, color: context.appTextPrimary),
           ),
-          title: const Text(
+          title: Text(
             'طريقة الدفع',
             style: TextStyle(
-              color: Color(0xFF1A1A2E),
+              color: context.appTextPrimary,
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
@@ -74,8 +78,6 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
           child: Column(
             children: [
               const SizedBox(height: 20),
-              
-              // Sadad Payment Option
               _buildPaymentOptionCard(
                 index: 0,
                 icon: Iconsax.card,
@@ -88,10 +90,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                   });
                 },
               ),
-              
               const SizedBox(height: 16),
-              
-              // Cash on Delivery Option
               _buildPaymentOptionCard(
                 index: 1,
                 icon: Iconsax.money,
@@ -104,10 +103,8 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                   });
                 },
               ),
-              
               const Spacer(),
-              
-                _buildContinueButton(),
+              _buildContinueButton(),
             ],
           ),
         ),
@@ -124,43 +121,32 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
     required VoidCallback onTap,
   }) {
     final isSelected = _selectedPaymentMethod == index;
-    
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isSelected
-                ? [
-                    AppColors.primary.withOpacity(0.15),
-                    AppColors.primary.withOpacity(0.05),
-                  ]
-                : [
-                    const Color(0xFFD4D4F0),
-                    const Color(0xFFC8D4F5),
-                  ],
-          ),
+          color: isSelected
+              ? AppColors.primary.withValues(alpha: 0.12)
+              : context.appSurface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected
-                ? AppColors.primary
-                : Colors.white.withOpacity(0.3),
+            color: isSelected ? AppColors.primary : context.appBorder,
             width: isSelected ? 2 : 1,
           ),
         ),
         child: Row(
           children: [
-            // Icon on the right (RTL)
             Container(
               width: 56,
               height: 56,
               decoration: BoxDecoration(
                 color: isEnabled
-                    ? (isSelected ? AppColors.primary : AppColors.primary.withOpacity(0.1))
-                    : Colors.grey.withOpacity(0.2),
+                    ? (isSelected
+                        ? AppColors.primary
+                        : AppColors.primary.withValues(alpha: 0.12))
+                    : Colors.grey.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(
@@ -171,10 +157,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                 size: 28,
               ),
             ),
-            
             const SizedBox(width: 16),
-            
-            // Title and Subtitle
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -183,7 +166,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                     title,
                     style: TextStyle(
                       color: isEnabled
-                          ? const Color(0xFF1A1A2E)
+                          ? context.appTextPrimary
                           : Colors.grey,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -194,16 +177,14 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                     subtitle,
                     style: TextStyle(
                       color: isEnabled
-                          ? const Color(0xFF1A1A2E).withOpacity(0.6)
-                          : Colors.grey.withOpacity(0.6),
+                          ? context.appTextSecondary
+                          : Colors.grey.withValues(alpha: 0.6),
                       fontSize: 14,
                     ),
                   ),
                 ],
               ),
             ),
-            
-            // Radio indicator or arrow on the left (RTL)
             if (isEnabled)
               Container(
                 width: 24,
@@ -211,23 +192,21 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: isSelected ? AppColors.primary : Colors.grey.withOpacity(0.4),
+                    color: isSelected
+                        ? AppColors.primary
+                        : context.appTextSecondary,
                     width: 2,
                   ),
                   color: isSelected ? AppColors.primary : Colors.transparent,
                 ),
                 child: isSelected
-                    ? const Icon(
-                        Icons.check,
-                        color: Colors.white,
-                        size: 16,
-                      )
+                    ? const Icon(Icons.check, color: Colors.white, size: 16)
                     : null,
               )
             else
               Icon(
                 Iconsax.arrow_left_2,
-                color: Colors.grey.withOpacity(0.4),
+                color: context.appTextSecondary,
                 size: 20,
               ),
           ],
@@ -244,25 +223,27 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
           width: double.infinity,
           child: ElevatedButton(
             onPressed: () async {
-             
               if (_selectedPaymentMethod == 0) {
-                String? oid =await AuthService.getCurrentOID();
-                String transOid = "";
-                String transId = "";
-                String transStatus = "";
-                String transAmount = "";
-                String transPaymentMode = "";
-                 // TODO: قبل الـ production - انقل الـ secret key للسيرفر
-                var result = await Dio().post("https://api.sadadqatar.com/api-v5/userbusinesses/getsdktoken", data: {
-                  "sadadId": "1672510",
-                  "secretKey": "SoXaZoomMjjo9i1i",
-                  "domain": "globalfarmnursery.com",
-                  "isTest": true
-                });
-                
-                  Navigator.push(context, MaterialPageRoute(
-                    builder: (context) {
-                        return PaymentScreen(
+                final oid = await AuthService.getCurrentOID();
+                // TODO: قبل الـ production - انقل الـ secret key للسيرفر
+                final result = await Dio().post(
+                  "https://api.sadadqatar.com/api-v5/userbusinesses/getsdktoken",
+                  data: {
+                    "sadadId": "1672510",
+                    "secretKey": "SoXaZoomMjjo9i1i",
+                    "domain": "globalfarmnursery.com",
+                    "isTest": true,
+                  },
+                );
+
+                if (!mounted) return;
+
+                final paymentResult =
+                    await Navigator.push<Map<String, dynamic>>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) {
+                          return PaymentScreen(
                             orderId: oid ?? "",
                             productDetail: [],
                             customerName: name,
@@ -272,47 +253,69 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                             token: result.data['accessToken'],
                             packageMode: PackageMode.debug,
                             isWalletEnabled: true,
-                            paymentTypes: [PaymentType.creditCard, PaymentType.debitCard, PaymentType.sadadPay],
+                            paymentTypes: [
+                              PaymentType.creditCard,
+                              PaymentType.debitCard,
+                              PaymentType.sadadPay,
+                            ],
                             image: Image.asset("assets/images/Logo.png"),
                             titleText: "GlobalFarm",
-                            paymentButtonColor: AppColors.accent,
+                            paymentButtonColor: AppColors.primary,
                             paymentButtonTextColor: Colors.white,
                             themeColor: AppColors.primary,
                             googleMerchantID: 'BCR2DN6TR6Y7Z2CJ',
-                            googleMerchantName: 'Sadad Payment Solutions');
-                    },
-                )).then((value) async {
-                  setState(() {
-                    transOid = value['orderid'].toString();
-                    transId = value['transaction_id'].toString();
-                    transStatus = value['status'].toString();
-                    transAmount = value['amount'].toString();
-                    transPaymentMode = value['payment_mode'].toString();
-                  });
-                  await Dio().post("https://www.globee-trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}", data: FormData.fromMap({
-                    "action": "add_new_transactions",
-                    "oid": transOid,
-                    "name": name,
-                    "mobile": mobile,
-                    "trans_id": transId,
-                    "status": transStatus,
-                    "amount": transAmount,
-                    "pay_mode": transPaymentMode,
-                  }));
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => OrderSuccessScreen(
-                        userId: widget.userId,
-                        cartItems: widget.cartItems,
-                        totalAmount: widget.totalAmount,
-                        shippingAddress: widget.shippingAddress,
-                        transStatus: transStatus
+                            googleMerchantName: 'Sadad Payment Solutions',
+                          );
+                        },
                       ),
-                    ),
+                    );
+
+                if (!mounted || paymentResult == null) return;
+
+                final transOid = paymentResult['orderid']?.toString() ?? '';
+                final transId =
+                    paymentResult['transaction_id']?.toString() ?? '';
+                final transStatus = paymentResult['status']?.toString() ?? '';
+                final transAmount =
+                    paymentResult['amount']?.toString() ??
+                    widget.totalAmount.toString();
+                final transPaymentMode =
+                    paymentResult['payment_mode']?.toString() ?? '';
+
+                try {
+                  await Dio().post(
+                    "${AuthService.baseUrl}/sql.php?k=${DateTime.now().millisecondsSinceEpoch}",
+                    data: FormData.fromMap({
+                      "action": "add_new_transactions",
+                      "oid": transOid,
+                      "name": name,
+                      "mobile": mobile,
+                      "trans_id": transId,
+                      "status": transStatus,
+                      "amount": transAmount,
+                      "pay_mode": transPaymentMode,
+                      "store_id": AppConfig.storeId,
+                    }),
                   );
-                });
-                
+                } catch (e) {
+                  debugPrint('Failed to save transaction: $e');
+                }
+
+                if (!mounted) return;
+
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => OrderSuccessScreen(
+                      userId: widget.userId,
+                      cartItems: widget.cartItems,
+                      totalAmount: widget.totalAmount,
+                      shippingAddress: widget.shippingAddress,
+                      transStatus: transStatus,
+                      paymentMode: 'visa',
+                    ),
+                  ),
+                );
               } else {
                 Navigator.push(
                   context,
@@ -322,12 +325,12 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                       cartItems: widget.cartItems,
                       totalAmount: widget.totalAmount,
                       shippingAddress: widget.shippingAddress,
-                      transStatus: "3"
+                      transStatus: "3",
+                      paymentMode: 'credit',
                     ),
                   ),
                 );
               }
-              
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,

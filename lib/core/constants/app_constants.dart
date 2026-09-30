@@ -1,3 +1,5 @@
+import 'app_config.dart';
+
 class AppConstants {
   // App Info
   static const String appName = 'Globee';
@@ -24,4 +26,10 @@ class AppConstants {
   // Animation Durations
   static const Duration splashDuration = Duration(seconds: 3);
   static const Duration animationDuration = Duration(milliseconds: 300);
+
+  /// GlobalFarm store id. Override at build time via `--dart-define=STORE_ID=...`.
+  static const String storeId = String.fromEnvironment(
+    'STORE_ID',
+    defaultValue: AppConfig.storeId,
+  );
 }
