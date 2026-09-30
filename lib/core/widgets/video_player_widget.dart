@@ -8,6 +8,7 @@ class VideoPlayerWidget extends StatefulWidget {
   final String? filePath;
   final bool autoPlay;
   final bool showControls;
+  final BoxFit fit;
 
   const VideoPlayerWidget({
     super.key,
@@ -15,6 +16,7 @@ class VideoPlayerWidget extends StatefulWidget {
     this.filePath,
     this.autoPlay = false,
     this.showControls = true,
+    this.fit = BoxFit.contain,
   }) : assert(networkUrl != null || filePath != null, 'Either networkUrl or filePath must be provided');
 
   @override
@@ -42,6 +44,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
       }
 
       await _controller!.initialize();
+      await _controller!.setLooping(true);
       
       if (mounted) {
         setState(() {
@@ -56,13 +59,22 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
         }
 
         _controller!.addListener(() {
-          if (mounted) {
-            final isPlaying = _controller!.value.isPlaying;
-            if (_isPlaying != isPlaying) {
-              setState(() {
-                _isPlaying = isPlaying;
-              });
-            }
+          if (!mounted || _controller == null) return;
+          final isPlaying = _controller!.value.isPlaying;
+          if (_isPlaying != isPlaying) {
+            setState(() {
+              _isPlaying = isPlaying;
+            });
+          }
+          // Keep playing forever (TikTok-style) if autoPlay and somehow paused at end
+          if (widget.autoPlay &&
+              !_controller!.value.isPlaying &&
+              _controller!.value.isInitialized &&
+              !_controller!.value.isBuffering &&
+              _controller!.value.position >= _controller!.value.duration &&
+              _controller!.value.duration > Duration.zero) {
+            _controller!.seekTo(Duration.zero);
+            _controller!.play();
           }
         });
       }
@@ -126,13 +138,28 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
       child: Container(
         color: Colors.black,
         child: Stack(
+          fit: StackFit.expand,
           alignment: Alignment.center,
           children: [
-            // Video
-            AspectRatio(
-              aspectRatio: _controller!.value.aspectRatio,
-              child: VideoPlayer(_controller!),
-            ),
+            // Video — cover fills the screen
+            if (widget.fit == BoxFit.cover)
+              ClipRect(
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  child: SizedBox(
+                    width: _controller!.value.size.width,
+                    height: _controller!.value.size.height,
+                    child: VideoPlayer(_controller!),
+                  ),
+                ),
+              )
+            else
+              Center(
+                child: AspectRatio(
+                  aspectRatio: _controller!.value.aspectRatio,
+                  child: VideoPlayer(_controller!),
+                ),
+              ),
 
             // Play/Pause overlay
             if (!_isPlaying)

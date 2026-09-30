@@ -11,7 +11,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/utils/snackbar_helper.dart';
-import '../add_product/add_product_screen.dart';
 import '../../core/utils/theme_extensions.dart';
 
 class CameraScreen extends StatefulWidget {
@@ -432,13 +431,10 @@ class _CameraScreenState extends State<CameraScreen> {
                 ),
                 GestureDetector(
                   onTap: () {
-                    Navigator.pushReplacement(
+                    if (capturedFiles.isEmpty) return;
+                    Navigator.pop(
                       context,
-                      MaterialPageRoute(
-                        builder: (context) {
-                          return AddProductScreen(mediaFiles: capturedFiles);
-                        },
-                      ),
+                      List<String>.from(capturedFiles),
                     );
                   },
                   child: Container(

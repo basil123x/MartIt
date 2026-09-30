@@ -1,5 +1,8 @@
+import "dart:io";
+
 import "package:awesome_dialog/awesome_dialog.dart";
 import "package:dio/dio.dart";
+import "package:flutter/foundation.dart";
 import "package:flutter/material.dart";
 import "package:flutter_secure_storage/flutter_secure_storage.dart";
 import "package:iconsax/iconsax.dart";
@@ -8,13 +11,17 @@ import "package:provider/provider.dart";
 import "package:url_launcher/url_launcher.dart";
 
 import "../../core/constants/app_colors.dart";
+import "../../core/constants/app_theme.dart";
 import "../../core/models/item_model.dart";
 import "../../core/services/auth_service.dart";
 import "../../core/utils/snackbar_helper.dart";
-import '../../core/utils/theme_extensions.dart';
+import "../../core/utils/theme_extensions.dart";
 import "../../shared/providers/app_provider.dart";
 import "../auth/login.dart";
+import "../onboarding/language_selection_screen.dart";
 import "../profile/edit_profile_screen.dart";
+import "policy_screen.dart";
+import '../../core/services/api_config_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final UserProfileModel? profile;
@@ -32,9 +39,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _loginType = "";
   UserProfileModel? _profile;
 
-  static const _privacyUrl =
-      "https://www.Globee-Trading.com/app2026/PrivacyPolicy.php";
-  static const _termsUrl = "https://www.Globee-Trading.com/app2026/Terms.php";
+  static String get _privacyUrl =>
+      ApiConfigService.instance.endpoint('PrivacyPolicy.php');
+  static String get _termsUrl =>
+      ApiConfigService.instance.endpoint('Terms.php');
+
+  // TODO: Replace with the real App Store numeric ID once MartIt is live
+  // on the App Store (e.g. "1234567890"). Leave empty until published.
+  static const String appStoreId = "";
+
+  // TODO: Replace with the real Google Play package name once MartIt is live
+  // on Google Play (e.g. "com.mazo.market"). Leave empty until published.
+  // Note: android/app/build.gradle.kts currently has applicationId
+  // "com.mazo.market", but that alone does not mean the store listing exists.
+  static const String androidPackageName = "";
 
   @override
   void initState() {
@@ -80,22 +98,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _openUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
+  Future<void> _openPolicyPage({
+    required String title,
+    required String url,
+  }) async {
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PolicyScreen(title: title, url: url),
+      ),
+    );
   }
 
   Future<void> _rateApp() async {
-    final info = await PackageInfo.fromPlatform();
-    final androidUrl =
-        "https://play.google.com/store/apps/details?id=${info.packageName}";
-    final iosUrl = "https://apps.apple.com/app/id0000000000";
-    final url = Theme.of(context).platform == TargetPlatform.iOS
-        ? iosUrl
-        : androidUrl;
-    await _openUrl(url);
+    final isIos = !kIsWeb && Platform.isIOS;
+    final storeId = isIos ? appStoreId.trim() : androidPackageName.trim();
+
+    // Store listing not configured / app not published yet.
+    if (storeId.isEmpty) {
+      if (!mounted) return;
+      showAppSnackbar(
+        context,
+        message: "المتجر غير متاح حالياً",
+        type: SnackType.info,
+      );
+      return;
+    }
+
+    final url = isIos
+        ? "https://apps.apple.com/app/id$storeId?action=write-review"
+        : "https://play.google.com/store/apps/details?id=$storeId&showAllReviews=true";
+
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else if (mounted) {
+      showAppSnackbar(
+        context,
+        message: "المتجر غير متاح حالياً",
+        type: SnackType.info,
+      );
+    }
+  }
+
+  Future<void> _openLanguageSelection() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const LanguageSelectionScreen(fromSettings: true),
+      ),
+    );
+    // Language subtitle rebuilds via AppProvider / LocalizationService.
+    if (mounted) setState(() {});
   }
 
   void _logout() {
@@ -176,64 +231,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _showLanguageSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Consumer<AppProvider>(
-        builder: (context, appProvider, _) => Container(
-        decoration: BoxDecoration(
-          color: sheetContext.appSurface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 50,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[400],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                "اختر اللغة",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-            ),
-            ListTile(
-              title: const Text("العربية"),
-              trailing: appProvider.language == "ar"
-                  ? const Icon(Iconsax.tick_circle, color: AppColors.primary)
-                  : null,
-              onTap: () {
-                appProvider.setLanguage("ar");
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              title: const Text("English"),
-              trailing: appProvider.language == "en"
-                  ? const Icon(Iconsax.tick_circle, color: AppColors.primary)
-                  : null,
-              onTap: () {
-                appProvider.setLanguage("en");
-                Navigator.pop(context);
-              },
-            ),
-            SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
-          ],
-        ),
-      ),
-      ),
-    );
-  }
-
   Widget _sectionHeader(String title) {
+    final muted = context.appTextSecondary;
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 20, 4, 8),
       child: Align(
@@ -241,7 +240,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Text(
           title,
           style: TextStyle(
-            color: Colors.grey[600],
+            color: muted,
             fontSize: 13,
             fontWeight: FontWeight.w600,
           ),
@@ -250,19 +249,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _settingsCard({required List<Widget> children}) {
-    return Card(
-      elevation: 0,
+  Widget _settingsSection({required List<Widget> children}) {
+    return ColoredBox(
       color: context.appSurface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: context.appCardBorder),
-      ),
       child: Column(children: children),
     );
   }
 
-  Widget _divider() => Divider(height: 1, color: context.appCardBorder);
+  Widget _divider() => Divider(
+    height: 1,
+    thickness: 1,
+    color: context.appDivider,
+    indent: 16,
+    endIndent: 16,
+  );
+
+  Widget _iconBadge({
+    required IconData icon,
+    Color? iconColor,
+    Color? backgroundColor,
+  }) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: backgroundColor ?? context.appIconPillBg,
+        shape: BoxShape.circle,
+      ),
+      alignment: Alignment.center,
+      child: Icon(icon, color: iconColor ?? context.appPrimary, size: 20),
+    );
+  }
 
   Widget _listTile({
     required IconData icon,
@@ -270,60 +287,94 @@ class _SettingsScreenState extends State<SettingsScreen> {
     String? subtitle,
     Widget? trailing,
     Color? iconColor,
+    Color? iconBg,
     Color? titleColor,
     VoidCallback? onTap,
   }) {
+    final muted = context.appTextSecondary;
     return ListTile(
       onTap: onTap,
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: (iconColor ?? AppColors.primary).withOpacity(0.1),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(icon, color: iconColor ?? AppColors.primary, size: 22),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      leading: _iconBadge(
+        icon: icon,
+        iconColor: iconColor,
+        backgroundColor: iconBg,
       ),
       title: Text(
         title,
         style: TextStyle(
           fontWeight: FontWeight.w600,
           color: titleColor ?? context.appTextPrimary,
+          fontSize: 15,
         ),
       ),
-      subtitle: subtitle != null ? Text(subtitle) : null,
+      subtitle: subtitle != null
+          ? Text(subtitle, style: TextStyle(color: muted, fontSize: 13))
+          : null,
       trailing: trailing,
+    );
+  }
+
+  Widget _switchTile({
+    required IconData icon,
+    required String title,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final inactiveTrack = context.isDarkMode
+        ? AppColors.darkElevated
+        : AppColors.fieldBorder;
+
+    return SwitchListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      secondary: _iconBadge(icon: icon),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: context.appTextPrimary,
+          fontSize: 15,
+        ),
+      ),
+      value: value,
+      activeThumbColor: Colors.white,
+      activeTrackColor: cs.primary,
+      inactiveThumbColor: Colors.white,
+      inactiveTrackColor: inactiveTrack,
+      onChanged: onChanged,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final appProvider = context.watch<AppProvider>();
+    final cs = Theme.of(context).colorScheme;
+    final martIt = context.martItColors;
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: context.appBackground,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
-          backgroundColor: context.appSurface,
-          elevation: 0,
           centerTitle: true,
-          title: const Text(
+          title: Text(
             "الإعدادات",
-            style: TextStyle(
-              color: AppColors.primary,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.bold),
           ),
           leading: IconButton(
-            icon: const Icon(Iconsax.arrow_right_3, color: AppColors.primary),
+            icon: Icon(Icons.arrow_back_ios, color: cs.primary, size: 20),
             onPressed: () => Navigator.pop(context),
           ),
         ),
         body: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
           children: [
-            _sectionHeader("الحساب"),
-            _settingsCard(
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _sectionHeader("الحساب"),
+            ),
+            _settingsSection(
               children: [
                 _listTile(
                   icon: Iconsax.edit,
@@ -341,7 +392,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
+                        color: context.isDarkMode
+                            ? AppColors.darkElevated
+                            : Colors.orange.shade50,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -357,77 +410,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ],
             ),
-            _sectionHeader("التفضيلات"),
-            _settingsCard(
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _sectionHeader("التفضيلات"),
+            ),
+            _settingsSection(
               children: [
-                SwitchListTile(
-                  secondary: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Iconsax.moon,
-                      color: AppColors.primary,
-                      size: 22,
-                    ),
-                  ),
-                  title: const Text(
-                    "الوضع الليلي",
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
+                _switchTile(
+                  icon: Iconsax.moon,
+                  title: "الوضع الليلي",
                   value: appProvider.darkMode,
-                  activeColor: AppColors.primary,
                   onChanged: (val) async {
                     await appProvider.setDarkMode(val);
                   },
                 ),
                 _divider(),
-                SwitchListTile(
-                  secondary: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Iconsax.notification,
-                      color: AppColors.primary,
-                      size: 22,
-                    ),
-                  ),
-                  title: const Text(
-                    "الإشعارات",
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
+                _switchTile(
+                  icon: Iconsax.notification,
+                  title: "الإشعارات",
                   value: appProvider.notificationsEnabled,
-                  activeColor: AppColors.primary,
                   onChanged: appProvider.setNotificationsEnabled,
                 ),
                 _divider(),
                 _listTile(
                   icon: Iconsax.language_square,
                   title: "اللغة",
-                  subtitle: appProvider.language == "ar" ? "العربية" : "English",
-                  trailing: const Icon(Iconsax.arrow_left_2, size: 18),
-                  onTap: _showLanguageSheet,
+                  subtitle: appProvider.language == "ar"
+                      ? "العربية"
+                      : "English",
+                  trailing: Icon(
+                    Icons.chevron_left,
+                    size: 22,
+                    color: context.appTextSecondary,
+                  ),
+                  onTap: _openLanguageSelection,
                 ),
               ],
             ),
-            _sectionHeader("عن التطبيق"),
-            _settingsCard(
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _sectionHeader("عن التطبيق"),
+            ),
+            _settingsSection(
               children: [
                 _listTile(
                   icon: Iconsax.shield,
                   title: "سياسة الخصوصية",
-                  onTap: () => _openUrl(_privacyUrl),
+                  onTap: () => _openPolicyPage(
+                    title: "سياسة الخصوصية",
+                    url: _privacyUrl,
+                  ),
                 ),
                 _divider(),
                 _listTile(
                   icon: Iconsax.document,
                   title: "شروط الاستخدام",
-                  onTap: () => _openUrl(_termsUrl),
+                  onTap: () =>
+                      _openPolicyPage(title: "شروط الاستخدام", url: _termsUrl),
                 ),
                 _divider(),
                 _listTile(
@@ -441,27 +480,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: "الإصدار",
                   trailing: Text(
                     _appVersion.isNotEmpty ? _appVersion : "1.2.6",
-                    style: TextStyle(color: Colors.grey[600]),
+                    style: TextStyle(color: context.appTextSecondary),
                   ),
                 ),
               ],
             ),
-            _sectionHeader("الحساب"),
-            _settingsCard(
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _sectionHeader("الحساب"),
+            ),
+            _settingsSection(
               children: [
                 _listTile(
                   icon: Iconsax.logout,
                   title: "تسجيل الخروج",
-                  iconColor: Colors.red,
-                  titleColor: Colors.red,
+                  iconColor: AppColors.error,
+                  iconBg: martIt.dangerBg,
+                  titleColor: AppColors.error,
                   onTap: _logout,
                 ),
                 _divider(),
                 _listTile(
                   icon: Iconsax.trash,
                   title: "حذف الحساب",
-                  iconColor: Colors.red,
-                  titleColor: Colors.red,
+                  iconColor: AppColors.error,
+                  iconBg: martIt.dangerBg,
+                  titleColor: AppColors.error,
                   onTap: _deleteAccount,
                 ),
               ],

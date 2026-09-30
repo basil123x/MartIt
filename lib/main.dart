@@ -9,14 +9,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:provider/provider.dart';
-import 'package:restart_app/restart_app.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:shorebird_code_push/shorebird_code_push.dart';
-import 'package:terminate_restart/terminate_restart.dart';
 import 'core/constants/app_strings.dart';
 import 'core/constants/app_theme.dart';
+import 'core/services/api_config_service.dart';
 import 'core/services/localization_service.dart';
+import 'core/services/shorebird_update_service.dart';
+import 'core/services/store_update_service.dart';
 import 'features/splash/splash_screen.dart';
+import 'features/update/update_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -48,7 +49,6 @@ void main() async {
       final sellerAvatar = additionalData['receiverAvatar'] ?? '';
       final sellerToken = additionalData['receiverToken'] ?? '';
       final convers = additionalData['conversationId'] ?? '';
-
       // استخدام navigatorKey للـ navigation
       navigatorKey.currentState?.push(
         MaterialPageRoute(
@@ -73,82 +73,95 @@ void main() async {
 
   await LocalizationService.instance.init();
 
+  // Load remote API domain and store-update config.
+  await ApiConfigService.instance.init();
+
+  final storeUpdate = await StoreUpdateService.instance.check();
+  if (storeUpdate == null) {
+    final restarting = await ShorebirdUpdateService.instance.sync();
+    if (restarting) return;
+  }
+
   final prefs = await SharedPreferences.getInstance();
   final isDark = prefs.getBool(AppProvider.darkModeKey) ?? false;
 
-  runApp(MartItApp(initialDarkMode: isDark));
+  runApp(
+    MartItApp(
+      initialDarkMode: isDark,
+      forcedUpdate: storeUpdate,
+    ),
+  );
 }
 
 class MartItApp extends StatefulWidget {
   final bool? initialDarkMode;
+  final StoreUpdateRequirement? forcedUpdate;
 
-  const MartItApp({super.key, this.initialDarkMode});
+  const MartItApp({
+    super.key,
+    this.initialDarkMode,
+    this.forcedUpdate,
+  });
 
   @override
   State<MartItApp> createState() => _MartItAppState();
 }
 
-class _MartItAppState extends State<MartItApp> {
-  final updater = ShorebirdUpdater();
+class _MartItAppState extends State<MartItApp> with WidgetsBindingObserver {
   Timer? _timer;
-  static const _lastPatchKey = "last_applied_patch";
-
-  Future<void> ensureDoubleRestart() async {
-    if (!Platform.isAndroid) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    final lastPatchNumber = prefs.getInt(_lastPatchKey) ?? 0;
-    final currentPatch = await updater.readCurrentPatch();
-
-    if (currentPatch != null && currentPatch.number != lastPatchNumber) {
-      await prefs.setInt(_lastPatchKey, currentPatch.number);
-      await Future.delayed(const Duration(seconds: 2));
-      if (Platform.isIOS) {
-        Restart.restartApp();
-      } else {
-        await TerminateRestart.instance.restartApp(
-          options: const TerminateRestartOptions(terminate: true),
-        );
-      }
-    }
-  }
-
-  Future<void> checkForUpdates() async {
-    final status = await updater.checkForUpdate();
-
-    if (status == UpdateStatus.outdated) {
-      try {
-        await updater.update();
-        final prefs = await SharedPreferences.getInstance();
-        final currentPatch = await updater.readCurrentPatch();
-        if (currentPatch != null) {
-          await prefs.setInt(_lastPatchKey, currentPatch.number - 1);
-        }
-
-        if (Platform.isIOS) {
-          Restart.restartApp(
-            notificationTitle: "إشعار هام",
-            notificationBody: "قم بتحديث التطبيق الأن",
-          );
-        } else {
-          await TerminateRestart.instance.restartApp(
-            options: const TerminateRestartOptions(terminate: true),
-          );
-        }
-      } on UpdateException catch (error) {
-        print("Update failed: $error");
-      }
-    }
-  }
+  bool _showingForceUpdate = false;
 
   @override
   void initState() {
-    ensureDoubleRestart();
-    checkForUpdates();
-    _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      checkForUpdates();
-    });
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _showingForceUpdate = widget.forcedUpdate != null;
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+      _watchForUpdates();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _watchForUpdates();
+    }
+  }
+
+  Future<void> _watchForUpdates() async {
+    if (_showingForceUpdate) return;
+    await ApiConfigService.instance.refreshFromRemote();
+    final requirement = await StoreUpdateService.instance.check();
+    if (requirement != null) {
+      _openForceUpdate(requirement);
+      return;
+    }
+    final restarting = await ShorebirdUpdateService.instance.sync();
+    if (restarting) return;
+  }
+
+  void _openForceUpdate(StoreUpdateRequirement requirement) {
+    final nav = navigatorKey.currentState;
+    if (nav == null || _showingForceUpdate) return;
+    _showingForceUpdate = true;
+    nav.pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => ForceUpdateScreen(
+          message: requirement.message,
+          storeUrl: requirement.storeUrl,
+          currentVersion: requirement.currentVersion,
+          latestVersion: requirement.latestVersion,
+        ),
+      ),
+      (_) => false,
+    );
   }
 
   @override
@@ -158,7 +171,9 @@ class _MartItAppState extends State<MartItApp> {
         ChangeNotifierProvider.value(value: LocalizationService.instance),
         ChangeNotifierProvider(
           create: (_) {
-            final provider = AppProvider(initialDarkMode: widget.initialDarkMode);
+            final provider = AppProvider(
+              initialDarkMode: widget.initialDarkMode,
+            );
             provider.loadPreferences();
             return provider;
           },
@@ -186,7 +201,14 @@ class _MartItAppState extends State<MartItApp> {
                 ),
               );
             },
-            home: const SplashScreen(),
+            home: widget.forcedUpdate == null
+                ? const SplashScreen()
+                : ForceUpdateScreen(
+                    message: widget.forcedUpdate!.message,
+                    storeUrl: widget.forcedUpdate!.storeUrl,
+                    currentVersion: widget.forcedUpdate!.currentVersion,
+                    latestVersion: widget.forcedUpdate!.latestVersion,
+                  ),
           );
         },
       ),

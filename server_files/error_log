@@ -25861,7 +25861,7 @@ Stack trace:
 #3 /home1/cdagvlmy/public_html/app2026/send_email.php(13): Resend\Service\Email->send(Array)
 #4 {main}
   thrown in /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Transporters/HttpTransporter.php on line 118
-[25-Apr-2026 14:15:17 America/Boise] PHP Fatal error:  Uncaught Resend\Exceptions\ErrorException: The Globee-Trading.com domain is not verified. Please, add and verify your domain on https://resend.com/domains in /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Transporters/HttpTransporter.php:118
+[25-Apr-2026 14:15:17 America/Boise] PHP Fatal error:  Uncaught Resend\Exceptions\ErrorException: The mart-it.store domain is not verified. Please, add and verify your domain on https://resend.com/domains in /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Transporters/HttpTransporter.php:118
 Stack trace:
 #0 /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Transporters/HttpTransporter.php(47): Resend\Transporters\HttpTransporter->throwIfJsonError(Array, '{"statusCode":4...')
 #1 /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Service/Email.php(50): Resend\Transporters\HttpTransporter->request(Object(Resend\ValueObjects\Transporter\Payload))
@@ -54531,7 +54531,7 @@ Stack trace:
 #3 /home1/cdagvlmy/public_html/app2026/send_email.php(37): Resend\Service\Email->send(Array)
 #4 {main}
   thrown in /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Transporters/HttpTransporter.php on line 118
-[15-May-2026 03:19:52 America/Boise] PHP Fatal error:  Uncaught Resend\Exceptions\ErrorException: The globee-trading.com domain is not verified. Please, add and verify your domain on https://resend.com/domains in /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Transporters/HttpTransporter.php:118
+[15-May-2026 03:19:52 America/Boise] PHP Fatal error:  Uncaught Resend\Exceptions\ErrorException: The mart-it.store domain is not verified. Please, add and verify your domain on https://resend.com/domains in /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Transporters/HttpTransporter.php:118
 Stack trace:
 #0 /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Transporters/HttpTransporter.php(47): Resend\Transporters\HttpTransporter->throwIfJsonError(Array, '{"statusCode":4...')
 #1 /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Service/Email.php(50): Resend\Transporters\HttpTransporter->request(Object(Resend\ValueObjects\Transporter\Payload))
@@ -54539,7 +54539,7 @@ Stack trace:
 #3 /home1/cdagvlmy/public_html/app2026/send_email.php(37): Resend\Service\Email->send(Array)
 #4 {main}
   thrown in /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Transporters/HttpTransporter.php on line 118
-[15-May-2026 03:47:31 America/Boise] PHP Fatal error:  Uncaught Resend\Exceptions\ErrorException: The globee-trading.com domain is not verified. Please, add and verify your domain on https://resend.com/domains in /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Transporters/HttpTransporter.php:118
+[15-May-2026 03:47:31 America/Boise] PHP Fatal error:  Uncaught Resend\Exceptions\ErrorException: The mart-it.store domain is not verified. Please, add and verify your domain on https://resend.com/domains in /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Transporters/HttpTransporter.php:118
 Stack trace:
 #0 /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Transporters/HttpTransporter.php(47): Resend\Transporters\HttpTransporter->throwIfJsonError(Array, '{"statusCode":4...')
 #1 /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Service/Email.php(50): Resend\Transporters\HttpTransporter->request(Object(Resend\ValueObjects\Transporter\Payload))
@@ -54547,7 +54547,7 @@ Stack trace:
 #3 /home1/cdagvlmy/public_html/app2026/send_email.php(37): Resend\Service\Email->send(Array)
 #4 {main}
   thrown in /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Transporters/HttpTransporter.php on line 118
-[15-May-2026 05:52:06 America/Boise] PHP Fatal error:  Uncaught Resend\Exceptions\ErrorException: The globee-trading.com domain is not verified. Please, add and verify your domain on https://resend.com/domains in /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Transporters/HttpTransporter.php:118
+[15-May-2026 05:52:06 America/Boise] PHP Fatal error:  Uncaught Resend\Exceptions\ErrorException: The mart-it.store domain is not verified. Please, add and verify your domain on https://resend.com/domains in /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Transporters/HttpTransporter.php:118
 Stack trace:
 #0 /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Transporters/HttpTransporter.php(47): Resend\Transporters\HttpTransporter->throwIfJsonError(Array, '{"statusCode":4...')
 #1 /home1/cdagvlmy/public_html/app2026/resend_auto/vendor/resend/resend-php/src/Service/Email.php(50): Resend\Transporters\HttpTransporter->request(Object(Resend\ValueObjects\Transporter\Payload))

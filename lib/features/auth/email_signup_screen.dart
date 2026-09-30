@@ -14,6 +14,8 @@ import '../../core/utils/snackbar_helper.dart';
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
 import '../../core/utils/theme_extensions.dart';
+import '../add_product/media_picker_sheet.dart';
+import '../../core/services/api_config_service.dart';
 
 class EmailSignupScreen extends StatefulWidget {
   final String email;
@@ -94,89 +96,52 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
 
   void _showImagePickerOptions() {
     final lang = LocalizationService.instance.currentLanguage;
+    final isAr = lang == 'ar';
+    final options = <MediaPickerOption>[
+      MediaPickerOption(
+        icon: Iconsax.camera5,
+        label: isAr ? 'التقاط صورة' : 'Take photo',
+        subtitle: isAr ? 'استخدم الكاميرا' : 'Use camera',
+        onTap: () {
+          Navigator.pop(context);
+          _takePhoto();
+        },
+      ),
+      MediaPickerOption(
+        icon: Iconsax.gallery5,
+        label: isAr ? 'اختيار من المعرض' : 'Choose from gallery',
+        subtitle: isAr ? 'اختر صورة موجودة' : 'Choose existing photo',
+        onTap: () {
+          Navigator.pop(context);
+          _pickImage();
+        },
+      ),
+    ];
+    if (_selectedImage != null) {
+      options.add(
+        MediaPickerOption(
+          icon: Iconsax.trash,
+          label: isAr ? 'حذف الصورة' : 'Remove photo',
+          subtitle: isAr ? 'إزالة الصورة المحددة' : 'Clear selected photo',
+          accent: AppColors.error,
+          onTap: () {
+            Navigator.pop(context);
+            setState(() {
+              _selectedImage = null;
+            });
+          },
+        ),
+      );
+    }
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-        color: context.appSurface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 50,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.lightGrey,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              lang == 'ar' ? 'اختر صورة الملف الشخصي' : 'Choose profile photo',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF6366F1).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Iconsax.camera, color: Color(0xFF6366F1)),
-              ),
-              title: Text(lang == 'ar' ? 'التقاط صورة' : 'Take photo'),
-              subtitle: Text(lang == 'ar' ? 'استخدم الكاميرا' : 'Use camera'),
-              onTap: () {
-                Navigator.pop(context);
-                _takePhoto();
-              },
-            ),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Iconsax.gallery, color: Color(0xFF8B5CF6)),
-              ),
-              title: Text(lang == 'ar' ? 'اختيار من المعرض' : 'Choose from gallery'),
-              subtitle: Text(
-                lang == 'ar' ? 'اختر صورة موجودة' : 'Choose existing photo',
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                _pickImage();
-              },
-            ),
-            if (_selectedImage != null)
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppColors.error.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Iconsax.trash, color: AppColors.error),
-                ),
-                title: Text(lang == 'ar' ? 'حذف الصورة' : 'Remove photo'),
-                onTap: () {
-                  Navigator.pop(context);
-                  setState(() {
-                    _selectedImage = null;
-                  });
-                },
-              ),
-            const SizedBox(height: 20),
-          ],
-        ),
+      builder: (sheetContext) => MediaPickerSheet(
+        title: isAr ? 'اختر صورة الملف الشخصي' : 'Choose profile photo',
+        subtitle: isAr
+            ? 'التقط صورة جديدة أو اختر من المعرض'
+            : 'Take a new photo or pick from gallery',
+        options: options,
       ),
     );
   }
@@ -192,7 +157,9 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
 
     if (_nameController.text.trim().isEmpty) {
       _showError(
-        lang == 'ar' ? 'يرجى إدخال الاسم الكامل' : 'Please enter your full name',
+        lang == 'ar'
+            ? 'يرجى إدخال الاسم الكامل'
+            : 'Please enter your full name',
       );
       return false;
     }
@@ -249,7 +216,7 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
       String? playerId = OneSignal.User.pushSubscription.id;
 
       final response = await Dio().post(
-        "https://www.Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}",
+        ApiConfigService.instance.sqlUrl(),
         data: FormData.fromMap({
           "action": "create_email_account",
           "name": _nameController.text.trim(),
@@ -433,7 +400,9 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
                     controller: _nameController,
                     label: lang == 'ar' ? 'الاسم الكامل' : 'Full Name',
                     icon: Iconsax.user,
-                    hint: lang == 'ar' ? 'أدخل اسمك الكامل' : 'Enter your full name',
+                    hint: lang == 'ar'
+                        ? 'أدخل اسمك الكامل'
+                        : 'Enter your full name',
                   ),
                   const SizedBox(height: 20),
                   _buildTextField(
@@ -467,7 +436,9 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
                   const SizedBox(height: 20),
                   _buildTextField(
                     controller: _confirmPasswordController,
-                    label: lang == 'ar' ? 'تأكيد كلمة المرور' : 'Confirm Password',
+                    label: lang == 'ar'
+                        ? 'تأكيد كلمة المرور'
+                        : 'Confirm Password',
                     icon: Iconsax.lock_1,
                     hint: '••••••••',
                     obscureText: !_isConfirmPasswordVisible,
@@ -480,7 +451,8 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
                       ),
                       onPressed: () {
                         setState(() {
-                          _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
+                          _isConfirmPasswordVisible =
+                              !_isConfirmPasswordVisible;
                         });
                       },
                     ),
@@ -519,7 +491,9 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
                                 const Icon(Iconsax.tick_circle, size: 20),
                                 const SizedBox(width: 8),
                                 Text(
-                                  lang == 'ar' ? 'إنشاء الحساب' : 'Create Account',
+                                  lang == 'ar'
+                                      ? 'إنشاء الحساب'
+                                      : 'Create Account',
                                   style: Theme.of(context).textTheme.titleMedium
                                       ?.copyWith(
                                         color: Colors.white,

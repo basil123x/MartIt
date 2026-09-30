@@ -1,16 +1,28 @@
+import 'dart:async';
+
+import 'package:awesome_dialog/awesome_dialog.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/app_theme.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/database_service.dart';
 import '../../core/services/localization_service.dart';
+import '../../core/services/background_media_upload_service.dart';
+import '../../core/services/s3_upload_service.dart';
 import '../../core/models/item_model.dart';
 import '../../core/widgets/media_viewer_widget.dart';
+import '../../core/widgets/uploading_media_frame.dart';
 import '../../core/widgets/smart_avatar_widget.dart';
+import '../../core/utils/snackbar_helper.dart';
 import '../../core/utils/theme_extensions.dart';
+import '../add_product/add_product_screen.dart';
+import '../orders/customer_orders_screen.dart';
+import '../orders/my_orders_screen.dart';
 import '../settings/settings_screen.dart';
 import '../product/product_detail_screen.dart';
 import 'profile_avatar_preview_screen.dart';
@@ -18,7 +30,14 @@ import 'profile_avatar_preview_screen.dart';
 class ProfileScreen extends StatefulWidget {
   final String userId;
 
-  const ProfileScreen({super.key, required this.userId});
+  /// When true, hosted inside [MainNavigationScreen] — hide the back control.
+  final bool embeddedInShell;
+
+  const ProfileScreen({
+    super.key,
+    required this.userId,
+    this.embeddedInShell = false,
+  });
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -38,7 +57,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _selectedFilter = '';
   final ScrollController _scrollController = ScrollController();
   bool _isCollapsed = false;
+  bool _isOwnProfile = false;
   int _avatarCacheTimestamp = DateTime.now().millisecondsSinceEpoch;
+
+  final BackgroundMediaUploadService _uploads =
+      BackgroundMediaUploadService.instance;
 
   void _bumpAvatarCache() {
     _avatarCacheTimestamp = DateTime.now().millisecondsSinceEpoch;
@@ -56,9 +79,173 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     _selectedFilter = _filters.first;
     _bumpAvatarCache();
+    _resolveOwnership();
     _loadProfile();
     _loadFreshUserDetails();
     _scrollController.addListener(_onScroll);
+    _uploads.addListener(_mergePendingUploads);
+  }
+
+  @override
+  void dispose() {
+    _uploads.removeListener(_mergePendingUploads);
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _resolveOwnership() async {
+    final uid = await AuthService.getCurrentUID();
+    if (!mounted) return;
+    setState(() {
+      _isOwnProfile = uid != null &&
+          uid.isNotEmpty &&
+          (uid == widget.userId || uid == _itemsOwnerUid);
+    });
+    _mergePendingUploads();
+  }
+
+  void _mergePendingUploads() {
+    if (!mounted || !_isOwnProfile) return;
+    final missing = <Map<String, dynamic>>[];
+    for (final itemId in _uploads.activeItemIds()) {
+      final exists = _items.any((item) => item['id']?.toString() == itemId);
+      if (exists) continue;
+      final snapshot = _uploads.profileSnapshot(itemId);
+      if (snapshot == null) continue;
+      missing.add(snapshot);
+    }
+    if (missing.isEmpty) return;
+    setState(() {
+      _items.insertAll(0, missing);
+      _isLoadingItems = false;
+    });
+  }
+
+  Future<void> _editItem(Map<String, dynamic> item) async {
+    final itemId = item['id']?.toString() ?? '';
+    if (itemId.isEmpty) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    final response = await DatabaseService.getItem(itemId);
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
+
+    Map<String, dynamic> data;
+    if (response['success'] == true && response['data'] != null) {
+      data = Map<String, dynamic>.from(response['data'] as Map);
+    } else {
+      // Fallback to the list payload if get_item isn't deployed yet
+      data = Map<String, dynamic>.from(item);
+    }
+
+    final media = data['media'];
+    final mediaFiles = media is List
+        ? media.map((e) => e.toString()).where((e) => e.isNotEmpty).toList()
+        : <String>[];
+
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddProductScreen(
+          mediaFiles: mediaFiles,
+          itemId: itemId,
+          isEditing: true,
+          existingItem: data,
+        ),
+      ),
+    );
+
+    if (result != null) {
+      _loadItems();
+      _loadProfile();
+    }
+  }
+
+  Future<void> _deleteItem(Map<String, dynamic> item, int index) async {
+    final itemId = item['id']?.toString() ?? '';
+    if (itemId.isEmpty) return;
+
+    final lang = LocalizationService.instance.currentLanguage;
+    final isAr = lang == 'ar';
+
+    AwesomeDialog(
+      context: context,
+      dialogType: DialogType.warning,
+      animType: AnimType.scale,
+      title: isAr ? 'حذف المنتج' : 'Delete Product',
+      desc: isAr
+          ? 'هل أنت متأكد من حذف هذا المنتج نهائيًا؟'
+          : 'Are you sure you want to permanently delete this product?',
+      btnCancelText: isAr ? 'إلغاء' : 'Cancel',
+      btnOkText: isAr ? 'حذف' : 'Delete',
+      btnCancelOnPress: () {},
+      btnOkOnPress: () async {
+        final removed = _items[index];
+        setState(() {
+          _items.removeAt(index);
+          if (_profile != null && _profile!.itemsCount > 0) {
+            _profile = UserProfileModel(
+              id: _profile!.id,
+              uid: _profile!.uid,
+              name: _profile!.name,
+              phone: _profile!.phone,
+              avatar: _profile!.avatar,
+              type: _profile!.type,
+              itemsCount: _profile!.itemsCount - 1,
+            );
+          }
+        });
+
+        final result = await DatabaseService.deleteItem(itemId);
+        if (!mounted) return;
+
+        if (result['success'] == true) {
+          final media = removed['media'];
+          if (media is List) {
+            for (final url in media) {
+              final u = url.toString();
+              if (u.startsWith('http')) {
+                // Best-effort S3 cleanup; ignore failures
+                unawaited(S3UploadService.deleteFile(u));
+              }
+            }
+          }
+          showAppSnackbar(
+            context,
+            message: isAr ? 'تم حذف المنتج' : 'Product deleted',
+            type: SnackType.success,
+          );
+        } else {
+          setState(() {
+            _items.insert(index.clamp(0, _items.length), removed);
+            if (_profile != null) {
+              _profile = UserProfileModel(
+                id: _profile!.id,
+                uid: _profile!.uid,
+                name: _profile!.name,
+                phone: _profile!.phone,
+                avatar: _profile!.avatar,
+                type: _profile!.type,
+                itemsCount: _profile!.itemsCount + 1,
+              );
+            }
+          });
+          showAppSnackbar(
+            context,
+            message: isAr
+                ? 'تعذر حذف المنتج، حاول مرة أخرى'
+                : 'Could not delete the product, please try again',
+            type: SnackType.error,
+          );
+        }
+      },
+    ).show();
   }
 
   String get _itemsOwnerUid =>
@@ -69,13 +256,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.didChangeDependencies();
     setState(_bumpAvatarCache);
     _loadFreshUserDetails();
-  }
-
-  @override
-  void dispose() {
-    _scrollController.removeListener(_onScroll);
-    _scrollController.dispose();
-    super.dispose();
   }
 
   void _onScroll() {
@@ -127,6 +307,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _isLoading = false;
           _bumpAvatarCache();
         });
+        await _resolveOwnership();
         await _loadFreshUserDetails();
         _loadItems();
       } else {
@@ -216,6 +397,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _currentOffset = _pageSize;
           _isLoadingItems = false;
         });
+        _mergePendingUploads();
       } else {
         setState(() {
           _hasErrorItems = true;
@@ -278,8 +460,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       backgroundColor: context.appBackground,
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
+          ? Center(
+              child: CircularProgressIndicator(color: context.appPrimary),
             )
           : _hasError
           ? _buildErrorState()
@@ -288,15 +470,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildErrorState() {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Iconsax.warning_2, size: 64, color: Colors.red),
+          Icon(Iconsax.warning_2, size: 64, color: cs.error),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'حدث خطأ في تحميل الملف الشخصي',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+              color: cs.onSurface,
+            ),
           ),
           const SizedBox(height: 16),
           ElevatedButton(
@@ -305,8 +492,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _loadItems();
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
+              backgroundColor: cs.primary,
+              foregroundColor: cs.onPrimary,
             ),
             child: const Text('إعادة المحاولة'),
           ),
@@ -317,6 +504,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildProfileContent() {
     if (_profile == null) return const SizedBox();
+
+    final cs = Theme.of(context).colorScheme;
+    final headerBg = cs.surfaceContainerHighest;
 
     return Directionality(
       textDirection: LocalizationService.instance.textDirection,
@@ -329,9 +519,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           floating: false,
           pinned: true,
           centerTitle: true,
-          backgroundColor: context.appSurface,
-          elevation: 1,
-          forceElevated: true,
+          backgroundColor: headerBg,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          forceElevated: false,
           title: AnimatedOpacity(
             opacity: _isCollapsed ? 1.0 : 0.0,
             duration: const Duration(milliseconds: 200),
@@ -353,8 +544,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(width: 8),
                       Text(
                         _profile!.name,
-                        style: const TextStyle(
-                          color: AppColors.primary,
+                        style: TextStyle(
+                          color: cs.onSurface,
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
                         ),
@@ -399,27 +590,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _loadFreshUserDetails();
                     }
                   },
-                  icon: const Icon(Iconsax.setting_2, color: AppColors.primary),
+                  icon: Icon(Iconsax.setting_2, color: cs.primary),
                 );
               }
               return const SizedBox();
             },
           ),
           actions: [
-            IconButton(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Iconsax.arrow_right_3, color: AppColors.primary),
-            ),
+            if (!widget.embeddedInShell)
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                // Back lives in `actions` (left in RTL / right in LTR).
+                icon: Icon(
+                  Icons.arrow_forward_ios,
+                  color: cs.primary,
+                  size: 18,
+                ),
+              ),
           ],
           flexibleSpace: FlexibleSpaceBar(
-            background: Container(
-              decoration: BoxDecoration(
-                gradient: context.bottomBarGradient(),
-              ),
+            background: ColoredBox(
+              color: headerBg,
               child: _buildProfileHeader(),
             ),
           ),
         ),
+
+        // Own-account order shortcuts
+        SliverToBoxAdapter(child: _buildOrdersShortcuts()),
 
         // Filter Buttons
         SliverToBoxAdapter(child: _buildFilterButtons()),
@@ -462,6 +660,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (context, snapshot) {
         final isOwnProfile =
             snapshot.hasData && snapshot.data == widget.userId;
+        final cs = Theme.of(context).colorScheme;
 
         return Container(
           padding: const EdgeInsets.all(24),
@@ -475,23 +674,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   isOwnProfile: isOwnProfile,
                 ),
                 child: Container(
-                  width: 120,
-                  height: 120,
+                  width: 110,
+                  height: 110,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.primary, width: 4),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 10,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
+                    border: Border.all(color: cs.primary, width: 2),
                   ),
                   child: SmartAvatarWidget(
                     userId: userId,
                     name: _profile!.name,
-                    size: 112,
+                    size: 106,
                     cacheTimestamp: _avatarCacheTimestamp,
                     loadSocialFromStorage: isOwnProfile,
                     fallbackUrl: _profile!.avatar.isNotEmpty ? _profile!.avatar : null,
@@ -502,8 +694,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 16),
               Text(
                 _profile!.name,
-                style: const TextStyle(
-                  color: AppColors.primary,
+                style: TextStyle(
+                  color: cs.onSurface,
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                 ),
@@ -512,17 +704,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 8),
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.2),
+                  color: context.appIconPillBg,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   '${_profile!.itemsCount} منتج',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
+                  style: TextStyle(
+                    color: cs.primary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -533,8 +725,121 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _buildOrdersShortcuts() {
+    if (!_isOwnProfile) return const SizedBox.shrink();
+
+    final isAr = LocalizationService.instance.currentLanguage == 'ar';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildOrderShortcut(
+              icon: Iconsax.bag,
+              title: isAr ? 'طلباتي' : 'My Orders',
+              subtitle: isAr ? 'الطلبات التي قدّمتها' : 'Orders you placed',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const MyOrdersScreen(),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _buildOrderShortcut(
+              icon: Iconsax.bag_tick,
+              title: isAr ? 'طلبات العملاء' : 'Customer Orders',
+              subtitle: isAr ? 'مشتريات زبائنك' : 'Orders from your buyers',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CustomerOrdersScreen(),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrderShortcut({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = context.isDarkMode;
+    return Material(
+      color: isDark
+          ? AppColors.primary.withValues(alpha: 0.18)
+          : AppColors.primaryContainer,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark
+                  ? AppColors.primary.withValues(alpha: 0.45)
+                  : AppColors.fieldBorder,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: Colors.white, size: 18),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: isDark ? AppColors.primaryLight : AppColors.primaryDark,
+                  fontSize: 11,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFilterButtons() {
+    final cs = Theme.of(context).colorScheme;
     return Container(
+      color: context.appSurface,
       padding: const EdgeInsets.all(16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -543,27 +848,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
           return Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: ElevatedButton(
-                onPressed: () => _onFilterChanged(filter),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isSelected
-                      ? AppColors.primary
-                      : (context.isDarkMode
-                          ? AppColors.darkElevated
-                          : context.appSurfaceVariant),
-                  foregroundColor: isSelected
-                      ? Colors.white
-                      : context.appTextPrimary,
-                  elevation: isSelected ? 2 : 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-                child: Text(
-                  filter,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
+              child: Material(
+                color: isSelected
+                    ? cs.primary
+                    : cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(20),
+                child: InkWell(
+                  onTap: () => _onFilterChanged(filter),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Text(
+                      filter,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected
+                            ? cs.onPrimary
+                            : cs.onSurfaceVariant,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -576,7 +881,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildItemsSection() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+      padding: EdgeInsets.fromLTRB(
+        8,
+        8,
+        8,
+        widget.embeddedInShell ? 100 : 16,
+      ),
       child: Column(
         children: [
           // Skeleton Loading
@@ -601,25 +911,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               itemCount: _items.length,
               itemBuilder: (context, index) {
-                return GestureDetector(
+                final item = _items[index];
+                return ProfileItemCard(
+                  item: item,
+                  showOwnerActions: _isOwnProfile,
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) =>
-                          ProductDetailScreen(item: _items[index]),
+                      builder: (_) => ProductDetailScreen(item: item),
                     ),
                   ),
-                  child: ProfileItemCard(item: _items[index]),
+                  onEdit: () => _editItem(item),
+                  onDelete: () => _deleteItem(item, index),
                 );
               },
             ),
 
           // Loading More Indicator
           if (_isLoadingMore)
-            const Padding(
-              padding: EdgeInsets.all(16),
+            Padding(
+              padding: const EdgeInsets.all(16),
               child: Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
+                child: CircularProgressIndicator(color: context.appPrimary),
               ),
             ),
 
@@ -706,24 +1019,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildEmptyState() {
+    final cs = Theme.of(context).colorScheme;
+    final martIt = context.martItColors;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Iconsax.box_1,
-              size: 80,
-              color: Colors.grey[400],
+            Container(
+              width: 160,
+              height: 160,
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Iconsax.shop_add,
+                size: 90,
+                color: martIt.emptyIcon,
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             Text(
               'لا توجد منتجات بعد',
               style: TextStyle(
                 fontSize: 18,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[600],
+                fontWeight: FontWeight.bold,
+                color: cs.onSurface,
               ),
             ),
             const SizedBox(height: 8),
@@ -731,7 +1054,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               'ابدأ بإضافة منتجاتك الآن',
               style: TextStyle(
                 fontSize: 14,
-                color: Colors.grey[500],
+                color: cs.onSurfaceVariant,
               ),
             ),
           ],
@@ -741,6 +1064,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildItemsErrorState() {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32.0),
@@ -750,12 +1074,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Icon(
               Iconsax.warning_2,
               size: 48,
-              color: Colors.red[300],
+              color: cs.error.withValues(alpha: 0.7),
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'فشل في تحميل المنتجات',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
+              style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 12),
             TextButton(
@@ -771,11 +1095,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
 class ProfileItemCard extends StatelessWidget {
   final Map<String, dynamic> item;
+  final bool showOwnerActions;
+  final VoidCallback? onTap;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
-  const ProfileItemCard({super.key, required this.item});
+  const ProfileItemCard({
+    super.key,
+    required this.item,
+    this.showOwnerActions = false,
+    this.onTap,
+    this.onEdit,
+    this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final price = item['price']?.toString().trim() ?? '';
+    final priceLabel = price.isEmpty ? '—' : price;
+
     return Card(
       color: context.isDarkMode
           ? AppColors.darkSurface
@@ -783,74 +1122,135 @@ class ProfileItemCard extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: AppColors.primary, width: 2),
+        side: BorderSide(color: cs.primary, width: 2),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            flex: 3,
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(12),
-              ),
-              child: MediaViewerWidget(
-                mediaUrls: const [],
-                itmId: "${item["id"] ?? ""}",
-                itmIdx: "${item["idx"] ?? ""}",
-                storeid: "${item["storeid"] ?? item["store_id"] ?? "1"}",
-                autoPlayVideo: false,
-                showControls: false,
-                showIndicators: false,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              flex: 3,
+              child: Stack(
                 children: [
-                  Text(
-                    item['name'] ?? 'غير متوفر',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
-                    textAlign: TextAlign.right,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${item['price']} ريال',
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                    textAlign: TextAlign.right,
-                  ),
-                  const Spacer(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Icon(Iconsax.eye, size: 12, color: Colors.grey),
-                      Text(
-                        item['views']?.toString() ?? "0",
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 10,
-                        ),
+                  Positioned.fill(
+                    child: UploadingMediaFrame(
+                      itemId: "${item["id"] ?? ""}",
+                      ready: MediaViewerWidget(
+                        mediaUrls: const [],
+                        itmId: "${item["id"] ?? ""}",
+                        itmIdx: "${item["idx"] ?? ""}",
+                        storeid:
+                            "${item["storeid"] ?? item["store_id"] ?? "1"}",
+                        autoPlayVideo: false,
+                        showControls: false,
+                        showIndicators: false,
                       ),
-                    ],
+                    ),
                   ),
+                  if (showOwnerActions)
+                    Positioned(
+                      top: 6,
+                      left: 6,
+                      child: Row(
+                        children: [
+                          _OwnerActionButton(
+                            icon: Iconsax.edit_2,
+                            background: const Color(0xFF5C33EA),
+                            onTap: onEdit,
+                          ),
+                          const SizedBox(width: 6),
+                          _OwnerActionButton(
+                            icon: Iconsax.trash,
+                            background: Colors.red,
+                            onTap: onDelete,
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),
-          ),
-        ],
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      item['name']?.toString().isNotEmpty == true
+                          ? item['name'].toString()
+                          : 'غير متوفر',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: cs.onSurface,
+                      ),
+                      textAlign: TextAlign.right,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$priceLabel ريال',
+                      style: TextStyle(
+                        color: cs.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                      textAlign: TextAlign.right,
+                    ),
+                    const Spacer(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Icon(Iconsax.eye, size: 12, color: cs.onSurfaceVariant),
+                        Text(
+                          item['views']?.toString() ?? "0",
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OwnerActionButton extends StatelessWidget {
+  final IconData icon;
+  final Color background;
+  final VoidCallback? onTap;
+
+  const _OwnerActionButton({
+    required this.icon,
+    required this.background,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: background,
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          width: 30,
+          height: 30,
+          child: Icon(icon, color: Colors.white, size: 15),
+        ),
       ),
     );
   }

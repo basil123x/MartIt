@@ -1,17 +1,24 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
-import '../../core/constants/app_colors.dart';
+import '../../core/constants/app_theme.dart';
 import '../../core/services/api_service.dart';
 import '../../core/models/chat_model.dart';
 import '../../core/widgets/smart_avatar_widget.dart';
-import 'chat_screen.dart';
 import '../../core/utils/theme_extensions.dart';
+import 'chat_screen.dart';
 
 class ConversationsScreen extends StatefulWidget {
   final String userId;
 
-  const ConversationsScreen({super.key, required this.userId});
+  /// When true, hosted inside [MainNavigationScreen] — hide the back button.
+  final bool embeddedInShell;
+
+  const ConversationsScreen({
+    super.key,
+    required this.userId,
+    this.embeddedInShell = false,
+  });
 
   @override
   State<ConversationsScreen> createState() => _ConversationsScreenState();
@@ -38,7 +45,6 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   }
 
   void _startStatusChecks() {
-    // Check statuses every 15 seconds for real-time updates
     _statusCheckTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
       _checkAllStatuses();
     });
@@ -78,14 +84,12 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       if (result['success'] == true) {
         final List<dynamic> data = result['data'] ?? [];
         print('✅ Found ${data.length} unique conversations');
-        
+
         setState(() {
-          _conversations = data
-              .map((item) => ChatConversation.fromJson(item))
-              .toList();
+          _conversations =
+              data.map((item) => ChatConversation.fromJson(item)).toList();
           _isLoading = false;
         });
-        // Check statuses after loading conversations
         _checkAllStatuses();
       } else {
         print('❌ API returned success=false: ${result['error']}');
@@ -105,25 +109,25 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    print(widget.userId);
+    final cs = Theme.of(context).colorScheme;
+    final martIt = context.martItColors;
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        // backgroundColor: const Color(0xFF0A0E27),
-        backgroundColor: context.appBackground,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            onPressed: () => Navigator.pop(context),
-            // icon: const Icon(Iconsax.arrow_right_3, color: Colors.white),
-            icon: Icon(Iconsax.arrow_right, color: context.appTextPrimary),
-          ),
+          automaticallyImplyLeading: !widget.embeddedInShell,
+          leading: widget.embeddedInShell
+              ? null
+              : IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: Icon(Icons.arrow_back, color: cs.onSurface),
+                ),
           title: Text(
             'المحادثات',
             style: TextStyle(
-              // color: Colors.white,
-              color: context.appTextPrimary,
+              color: cs.onSurface,
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
@@ -132,46 +136,57 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           actions: [
             IconButton(
               onPressed: _loadConversations,
-              // icon: const Icon(Iconsax.refresh, color: Colors.white),
-              icon: Icon(Iconsax.refresh, color: context.appTextPrimary),
+              icon: Icon(Iconsax.refresh, color: cs.primary),
             ),
           ],
         ),
         body: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
+            ? Center(
+                child: CircularProgressIndicator(color: cs.primary),
               )
             : _hasError
-            ? _buildErrorWidget()
-            : _conversations.isEmpty
-            ? _buildEmptyWidget()
-            : RefreshIndicator(
-                onRefresh: _loadConversations,
-                color: AppColors.primary,
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _conversations.length,
-                  itemBuilder: (context, index) {
-                    return _buildConversationCard(_conversations[index]);
-                  },
-                ),
-              ),
+                ? _buildErrorWidget()
+                : _conversations.isEmpty
+                    ? _buildEmptyWidget()
+                    : RefreshIndicator(
+                        onRefresh: _loadConversations,
+                        color: cs.primary,
+                        child: ListView.separated(
+                          padding: EdgeInsets.fromLTRB(
+                            0,
+                            4,
+                            0,
+                            widget.embeddedInShell ? 100 : 16,
+                          ),
+                          itemCount: _conversations.length,
+                          separatorBuilder: (_, __) => Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: martIt.divider,
+                          ),
+                          itemBuilder: (context, index) {
+                            return _buildConversationTile(
+                              _conversations[index],
+                            );
+                          },
+                        ),
+                      ),
       ),
     );
   }
 
   Widget _buildErrorWidget() {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Iconsax.warning_2, size: 80, color: Colors.red),
+          Icon(Iconsax.warning_2, size: 80, color: cs.error),
           const SizedBox(height: 16),
           Text(
             'حدث خطأ في تحميل المحادثات',
             style: TextStyle(
-              // color: Colors.white,
-              color: context.appTextPrimary,
+              color: cs.onSurface,
               fontSize: 18,
               fontWeight: FontWeight.w500,
             ),
@@ -180,8 +195,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           ElevatedButton(
             onPressed: _loadConversations,
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
+              backgroundColor: cs.primary,
+              foregroundColor: cs.onPrimary,
             ),
             child: const Text('إعادة المحاولة'),
           ),
@@ -191,6 +206,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   }
 
   Widget _buildEmptyWidget() {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -199,22 +215,21 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(60),
+              color: cs.primary.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
             ),
-            child: const Icon(
+            child: Icon(
               Iconsax.message,
-              size: 60,
-              color: AppColors.primary,
+              size: 56,
+              color: cs.primary,
             ),
           ),
           const SizedBox(height: 24),
           Text(
             'لا توجد محادثات',
             style: TextStyle(
-              // color: Colors.white,
-              color: context.appTextPrimary,
-              fontSize: 24,
+              color: cs.onSurface,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -222,17 +237,16 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           Text(
             'ابدأ محادثة جديدة مع البائعين',
             style: TextStyle(
-              // color: Colors.white.withOpacity(0.7),
-              color: context.appTextSecondary,
-              fontSize: 16,
+              color: context.martItColors.mutedText,
+              fontSize: 15,
             ),
           ),
           const SizedBox(height: 32),
           ElevatedButton(
             onPressed: () => Navigator.pop(context),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
+              backgroundColor: cs.primary,
+              foregroundColor: cs.onPrimary,
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(25),
@@ -248,155 +262,19 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     );
   }
 
-  Widget _buildConversationCard(ChatConversation conversation) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        gradient: context.surfaceGradient(),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: context.appBorder, width: 1),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        leading: Stack(
-          children: [
-            SmartAvatarWidget(
-              userId: conversation.participantId,
-              name: conversation.participantName,
-              size: 56,
-              fallbackUrl: conversation.participantAvatar,
-              backgroundColor: AppColors.primary,
-              initialsStyle: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            // Online indicator
-            if (_onlineStatuses[conversation.participantId] == true)
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  width: 16,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    color: Colors.green,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                ),
-              ),
-          ],
-        ),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                conversation.participantName,
-                style: TextStyle(
-                  // color: Colors.white,
-                  color: context.appTextPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            if (conversation.unreadCount > 0)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  conversation.unreadCount.toString(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Online status
-              if (_onlineStatuses[conversation.participantId] == true)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          color: Colors.green,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'متصل الآن',
-                        style: TextStyle(
-                          color: Colors.green.shade700,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              // Last message
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      conversation.lastMessage?.message ?? 'ابدأ محادثة جديدة',
-                      style: TextStyle(
-                        // color: Colors.white.withOpacity(0.7),
-                        color: context.appTextSecondary,
-                        fontSize: 14,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  if (conversation.lastMessage != null)
-                    Text(
-                      _formatTime(conversation.lastMessage!.timestamp),
-                      style: TextStyle(
-                        // color: Colors.white.withOpacity(0.5),
-                        color: context.appTextSecondary.withOpacity(0.8),
-                        fontSize: 12,
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        trailing: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: AppColors.primary.withOpacity(0.3),
-              width: 1,
-            ),
-          ),
-          child: const Icon(
-            Iconsax.message,
-            color: AppColors.primary,
-            size: 20,
-          ),
-        ),
+  Widget _buildConversationTile(ChatConversation conversation) {
+    final cs = Theme.of(context).colorScheme;
+    final martIt = context.martItColors;
+    final isOnline = _onlineStatuses[conversation.participantId] == true;
+    final preview =
+        conversation.lastMessage?.message ?? 'ابدأ محادثة جديدة';
+    final dateLabel = conversation.lastMessage != null
+        ? _formatTime(conversation.lastMessage!.timestamp)
+        : '';
+
+    return ColoredBox(
+      color: context.appSurface,
+      child: InkWell(
         onTap: () {
           Navigator.push(
             context,
@@ -407,14 +285,106 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                 receiverAvatar: conversation.participantAvatar,
                 receiverToken: conversation.participantToken,
                 conversationId: conversation.conversationId,
-                isOnline: _onlineStatuses[conversation.participantId] ?? false,
+                isOnline: isOnline,
               ),
             ),
-          ).then((_) {
-            // Refresh conversations when returning from chat
-            _loadConversations();
-          });
+          ).then((_) => _loadConversations());
         },
+        splashColor: cs.primary.withValues(alpha: 0.06),
+        highlightColor: cs.primary.withValues(alpha: 0.03),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Stack(
+                children: [
+                  SmartAvatarWidget(
+                    userId: conversation.participantId,
+                    name: conversation.participantName,
+                    size: 52,
+                    fallbackUrl: conversation.participantAvatar,
+                    backgroundColor: cs.primary,
+                    initialsStyle: TextStyle(
+                      color: cs.onPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (isOnline)
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      child: Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: context.appSurface,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      conversation.participantName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      preview,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: cs.primary.withValues(alpha: 0.75),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    dateLabel,
+                    style: TextStyle(
+                      color: martIt.mutedText,
+                      fontSize: 12,
+                    ),
+                  ),
+                  if (conversation.unreadCount > 0) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: cs.primary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

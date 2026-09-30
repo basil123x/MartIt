@@ -3,7 +3,9 @@ import 'package:MartIt/core/services/onesignal_service.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:geolocator/geolocator.dart';
-import '../../core/constants/app_colors.dart';
+import 'package:shimmer/shimmer.dart';
+import '../../core/constants/app_constants.dart';
+import '../../core/constants/app_theme.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/models/chat_model.dart';
@@ -186,10 +188,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _launchUrl(latitude, longitude) async {
+    final lat = (latitude as num).toDouble();
+    final lng = (longitude as num).toDouble();
     final Uri url = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
+      AppConstants.googleMapsSearchUrl(lat: lat, lng: lng),
     );
-    if (!await launchUrl(url)) {
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       throw Exception('Could not launch $url');
     }
   }
@@ -301,18 +305,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        // backgroundColor: const Color(0xFF0A0E27),
-        backgroundColor: context.appBackground,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
           leading: IconButton(
             onPressed: () => Navigator.pop(context),
-            // icon: const Icon(Iconsax.arrow_right_3, color: Colors.white),
-            icon: Icon(Iconsax.arrow_right, color: context.appTextPrimary),
+            icon: Icon(Icons.arrow_back, color: cs.onSurface),
           ),
           title: GestureDetector(
             onTap: () => Navigator.push(
@@ -329,7 +331,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   child: Text(
                     widget.receiverName ?? 'مستخدم',
                     style: TextStyle(
-                      color: context.appTextPrimary,
+                      color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -347,34 +349,28 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   type: SnackType.info,
                 );
               },
-              icon: Icon(Iconsax.call, color: context.appTextPrimary),
+              icon: Icon(Iconsax.call, color: cs.primary),
             ),
           ],
         ),
         body: Column(
           children: [
-            // Messages List
             Expanded(
-              // ✅ نظهر loading فقط في التحميل الأول
               child: _isLoading && _isFirstLoad
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.primary,
-                      ),
+                  ? Center(
+                      child: CircularProgressIndicator(color: cs.primary),
                     )
                   : _messages.isEmpty
-                  ? _buildEmptyState()
-                  : ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _messages.length,
-                      itemBuilder: (context, index) {
-                        return _buildMessageBubble(_messages[index]);
-                      },
-                    ),
+                      ? _buildEmptyState()
+                      : ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _messages.length,
+                          itemBuilder: (context, index) {
+                            return _buildMessageBubble(_messages[index]);
+                          },
+                        ),
             ),
-
-            // Message Input
             _buildMessageInput(),
           ],
         ),
@@ -383,6 +379,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildEmptyState() {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -391,21 +388,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(40),
+              color: cs.primary.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
             ),
-            child: const Icon(
+            child: Icon(
               Iconsax.message,
               size: 40,
-              color: AppColors.primary,
+              color: cs.primary,
             ),
           ),
           const SizedBox(height: 16),
           Text(
             'ابدأ محادثة جديدة',
             style: TextStyle(
-              // color: Colors.white,
-              color: context.appTextPrimary,
+              color: cs.onSurface,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
@@ -414,8 +410,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           Text(
             'أرسل رسالة لبدء المحادثة مع ${widget.receiverName ?? "المستخدم"}',
             style: TextStyle(
-              // color: Colors.white.withOpacity(0.7),
-              color: context.appTextSecondary,
+              color: context.martItColors.mutedText,
               fontSize: 14,
             ),
             textAlign: TextAlign.center,
@@ -426,14 +421,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildReceiverAvatar({required double size}) {
+    final cs = Theme.of(context).colorScheme;
     return SmartAvatarWidget(
       userId: widget.receiverId,
       name: widget.receiverName ?? "",
       size: size,
       fallbackUrl: widget.receiverAvatar,
-      backgroundColor: AppColors.primary,
+      backgroundColor: cs.primary,
       initialsStyle: TextStyle(
-        color: Colors.white,
+        color: cs.onPrimary,
         fontWeight: FontWeight.bold,
         fontSize: size * 0.4,
       ),
@@ -442,13 +438,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Widget _buildMessageBubble(ChatMessage message) {
     final isMyMessage = message.senderId == _currentUserId;
+    final cs = Theme.of(context).colorScheme;
+    final martIt = context.martItColors;
+    // Force LTR row geometry so "end" = physical right, "start" = left,
+    // independent of the screen's RTL Directionality.
+    final align =
+        isMyMessage ? MainAxisAlignment.end : MainAxisAlignment.start;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       child: Row(
-        mainAxisAlignment: isMyMessage
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        textDirection: TextDirection.ltr,
+        mainAxisAlignment: align,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isMyMessage) ...[
             GestureDetector(
@@ -462,144 +464,75 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ),
             const SizedBox(width: 8),
           ],
-
           Flexible(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: message.messageType == 'location'
+                  ? const EdgeInsets.all(4)
+                  : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                // gradient: isMyMessage
-                //     ? LinearGradient(
-                //         colors: [
-                //           AppColors.primary,
-                //           AppColors.primary.withOpacity(0.8),
-                //         ],
-                //       )
-                //     : LinearGradient(
-                //         colors: [
-                //           Colors.white.withOpacity(0.1),
-                //           Colors.white.withOpacity(0.05),
-                //         ],
-                //       ),
-                // borderRadius: BorderRadius.only(
-                //   topLeft: const Radius.circular(16),
-                //   topRight: const Radius.circular(16),
-                //   bottomLeft: isMyMessage
-                //       ? const Radius.circular(16)
-                //       : const Radius.circular(4),
-                //   bottomRight: isMyMessage
-                //       ? const Radius.circular(4)
-                //       : const Radius.circular(16),
-                color:
-                    isMyMessage
-                    ? AppColors.primary
-                    : (context.isDarkMode
-                        ? AppColors.darkSurface
-                        : const Color(0xFFE8EAF6)),
+                color: isMyMessage ? cs.primary : martIt.receivedBubble,
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(16),
                   topRight: const Radius.circular(16),
-                  bottomLeft: isMyMessage
-                      ? const Radius.circular(16)
-                      : const Radius.circular(4),
-                  bottomRight: isMyMessage
-                      ? const Radius.circular(4)
-                      : const Radius.circular(16),
+                  bottomLeft: Radius.circular(isMyMessage ? 16 : 4),
+                  bottomRight: Radius.circular(isMyMessage ? 4 : 16),
                 ),
-                border: !isMyMessage
-                    ? Border.all(color: context.appBorder)
-                    : null,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Check if it's a location message
-                  if (message.messageType == 'location')
-                    GestureDetector(
-                      onTap: () async {
-                        if (message.locationLat != null &&
-                            message.locationLng != null) {
-                          _launchUrl(message.locationLat, message.locationLng);
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          // color: Colors.white.withOpacity(0.1),
-                          color: isMyMessage
-                              ? Colors.white.withOpacity(0.2)
-                              : AppColors.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Iconsax.location,
-                              // color: Colors.white,
-                              color: isMyMessage
-                                  ? Colors.white
-                                  : AppColors.primary,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'عرض الموقع',
-                              style: TextStyle(
-                                // color: Colors.white,
-                                color: isMyMessage
-                                    ? Colors.white
-                                    : AppColors.primary,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                  if (message.messageType == 'location' &&
+                      message.locationLat != null &&
+                      message.locationLng != null)
+                    _buildLocationMapBubble(
+                      lat: message.locationLat!,
+                      lng: message.locationLng!,
                     )
                   else
                     Text(
                       message.message,
                       style: TextStyle(
-                        // color: Colors.white,
-                        color: isMyMessage
-                            ? Colors.white
-                            : context.appTextPrimary,
-                        fontSize: 16,
+                        color: isMyMessage ? cs.onPrimary : cs.onSurface,
+                        fontSize: 15,
+                        height: 1.35,
                       ),
                     ),
                   const SizedBox(height: 4),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _formatTime(message.timestamp),
-                        style: TextStyle(
-                          // color: Colors.white.withOpacity(0.7),
-                          color: isMyMessage
-                              ? Colors.white.withOpacity(0.7)
-                              : context.appTextSecondary,
-                          fontSize: 12,
+                  Padding(
+                    padding: message.messageType == 'location'
+                        ? const EdgeInsets.symmetric(horizontal: 4)
+                        : EdgeInsets.zero,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _formatTime(message.timestamp),
+                          style: TextStyle(
+                            color: isMyMessage
+                                ? cs.onPrimary.withValues(alpha: 0.75)
+                                : martIt.mutedText,
+                            fontSize: 11,
+                          ),
                         ),
-                      ),
-                      if (isMyMessage) ...[
-                        const SizedBox(width: 4),
-                        Icon(
-                          message.isRead
-                              ? Iconsax.tick_circle
-                              : Iconsax.tick_square,
-                          size: 14,
-                          color: message.isRead
-                              ? Colors.blue.shade300
-                              : Colors.white.withOpacity(0.7),
-                        ),
+                        if (isMyMessage) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            message.isRead
+                                ? Iconsax.tick_circle
+                                : Iconsax.tick_square,
+                            size: 14,
+                            color: message.isRead
+                                ? const Color(0xFFB8F0FF)
+                                : cs.onPrimary.withValues(alpha: 0.75),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ],
               ),
             ),
           ),
-
           if (isMyMessage) ...[
             const SizedBox(width: 8),
             GestureDetector(
@@ -621,17 +554,112 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildLocationMapBubble({
+    required double lat,
+    required double lng,
+  }) {
+    final mapUrl = AppConstants.osmStaticMapUrl(
+      lat: lat,
+      lng: lng,
+      width: 300,
+      height: 180,
+      zoom: 16,
+    );
+
+    return GestureDetector(
+      onTap: () => _launchUrl(lat, lng),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          width: 260,
+          height: 160,
+          child: Image.network(
+            mapUrl,
+            width: 260,
+            height: 160,
+            fit: BoxFit.cover,
+            headers: const {
+              'User-Agent': 'MartIt/1.0 (Flutter; chat location preview)',
+            },
+            loadingBuilder: (context, child, progress) {
+              if (progress == null) return child;
+              final shimmerBase = context.appSurfaceVariant;
+              return Shimmer.fromColors(
+                baseColor: shimmerBase,
+                highlightColor: context.appSurface,
+                child: Container(
+                  width: 260,
+                  height: 160,
+                  color: shimmerBase,
+                ),
+              );
+            },
+            errorBuilder: (_, __, ___) {
+              // Fallback: OSM tile + local pin if staticmap host fails.
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.network(
+                    AppConstants.osmTileUrl(lat: lat, lng: lng, zoom: 16),
+                    fit: BoxFit.cover,
+                    headers: const {
+                      'User-Agent':
+                          'MartIt/1.0 (Flutter; chat location preview)',
+                    },
+                    errorBuilder: (_, __, ___) => _buildLocationMapFallback(),
+                  ),
+                  const Center(
+                    child: Icon(
+                      Iconsax.location5,
+                      color: Color(0xFFE53935),
+                      size: 36,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLocationMapFallback() {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: 260,
+      height: 160,
+      color: context.appIconPillBg,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Iconsax.map_1, color: cs.primary, size: 40),
+          const SizedBox(height: 8),
+          Text(
+            'معاينة الخريطة غير متاحة',
+            style: TextStyle(
+              color: cs.primary,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSenderAvatar() {
+    final cs = Theme.of(context).colorScheme;
     if (_currentUserId == null) {
       return CircleAvatar(
         radius: 16,
-        backgroundColor: AppColors.primary,
+        backgroundColor: cs.primary,
         child: Text(
           _currentUserName != null && _currentUserName!.isNotEmpty
               ? _currentUserName![0]
               : 'أ',
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: cs.onPrimary,
             fontSize: 12,
             fontWeight: FontWeight.bold,
           ),
@@ -644,9 +672,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       name: _currentUserName ?? "",
       size: 32,
       loadSocialFromStorage: true,
-      backgroundColor: AppColors.primary,
-      initialsStyle: const TextStyle(
-        color: Colors.white,
+      backgroundColor: cs.primary,
+      initialsStyle: TextStyle(
+        color: cs.onPrimary,
         fontSize: 12,
         fontWeight: FontWeight.bold,
       ),
@@ -689,106 +717,103 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildMessageInput() {
+    final cs = Theme.of(context).colorScheme;
+    final martIt = context.martItColors;
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
-        gradient: context.bottomBarGradient(),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
-        border: Border.all(color: context.appBorder),
+        color: context.appSurface,
+        border: Border(
+          top: BorderSide(color: martIt.divider, width: 1),
+        ),
       ),
       child: SafeArea(
+        top: false,
         child: Row(
           children: [
-            // Location button
             GestureDetector(
               onTap: _sendLocation,
               child: Container(
-                width: 45,
-                height: 45,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  color: context.appSurface,
-                  borderRadius: BorderRadius.circular(22.5),
-                  border: Border.all(color: context.appBorder),
+                  color: context.appIconPillBg,
+                  shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Iconsax.location,
-                  // color: Colors.white,
-                  color: AppColors.primary,
+                  color: cs.primary,
                   size: 22,
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: context.isDarkMode
-                      ? AppColors.darkElevated.withOpacity(0.6)
-                      : Colors.white.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(25),
-                  border: Border.all(color: context.appBorder),
-                ),
-                child: TextField(
-                  controller: _messageController,
-                  // style: const TextStyle(color: Colors.white),
-                  style: TextStyle(color: context.appTextPrimary),
-                  maxLines: null,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => _sendMessage(),
-                  decoration: InputDecoration(
-                    hintText: 'اكتب رسالة...',
-                    hintStyle: TextStyle(
-                      // color: Colors.white.withOpacity(0.5)
-                      color: context.appTextSecondary.withOpacity(0.8),
-                    ),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
+              child: TextField(
+                controller: _messageController,
+                style: TextStyle(color: cs.onSurface, fontSize: 15),
+                maxLines: null,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _sendMessage(),
+                decoration: InputDecoration(
+                  hintText: 'اكتب رسالة...',
+                  hintStyle: TextStyle(
+                    color: martIt.mutedText,
+                    fontSize: 14,
+                  ),
+                  filled: true,
+                  fillColor: martIt.fieldBg,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide(color: martIt.fieldBorder),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide(color: martIt.fieldBorder),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide(
+                      color: cs.primary,
+                      width: 1.5,
                     ),
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             GestureDetector(
               onTap: _isSending ? null : _sendMessage,
               child: Container(
-                width: 50,
-                height: 50,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppColors.primary,
-                      AppColors.primary.withOpacity(0.8),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(25),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  color: cs.primary,
+                  shape: BoxShape.circle,
                 ),
                 child: _isSending
-                    ? const Center(
+                    ? Center(
                         child: SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
-                            color: Colors.white,
+                            color: cs.onPrimary,
                             strokeWidth: 2,
                           ),
                         ),
                       )
                     : Transform.flip(
+                        // RTL: send arrow should point left (message flow).
                         flipX: true,
-                        child: const Icon(
+                        child: Icon(
                           Iconsax.send_1,
-                          color: Colors.white,
-                          size: 24,
+                          color: cs.onPrimary,
+                          size: 22,
                         ),
                       ),
               ),

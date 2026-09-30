@@ -1,4 +1,4 @@
-# نظام الطلبات - Globee Trading
+# نظام الطلبات - MartIt Trading
 
 ## نظرة عامة
 تم إضافة نظام طلبات كامل يتضمن:
@@ -114,7 +114,7 @@ GET: invoice.php?order_id={order_id}
 1. `server_files/sql.php` - إضافة API endpoints
 2. `lib/core/services/api_service.dart` - إضافة دوال API
 3. `lib/features/payment/payment_success_screen.dart` - إضافة إنشاء الطلبات
-4. `lib/features/home/tiktok_feed_screen.dart` - إضافة أزرار الطلبات
+4. `lib/features/home/home_feed_screen.dart` - إضافة أزرار الطلبات
 
 ## الوصول إلى الصفحات
 

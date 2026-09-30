@@ -3,330 +3,425 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
+/// Extra MartIt tokens not covered cleanly by ColorScheme alone.
+@immutable
+class MartItColors extends ThemeExtension<MartItColors> {
+  final Color iconPillBg;
+  final Color fieldBg;
+  final Color fieldBorder;
+  final Color divider;
+  final Color mutedText;
+  final Color receivedBubble;
+  final Color emptyIcon;
+  final Color dangerBg;
+
+  const MartItColors({
+    required this.iconPillBg,
+    required this.fieldBg,
+    required this.fieldBorder,
+    required this.divider,
+    required this.mutedText,
+    required this.receivedBubble,
+    required this.emptyIcon,
+    required this.dangerBg,
+  });
+
+  static const light = MartItColors(
+    iconPillBg: AppColors.primaryContainer,
+    fieldBg: AppColors.fieldBg,
+    fieldBorder: AppColors.fieldBorder,
+    divider: AppColors.dividerLight,
+    mutedText: AppColors.textSecondary,
+    receivedBubble: Color(0xFFF0EEFA),
+    emptyIcon: Color(0xFFC9BFF5),
+    dangerBg: AppColors.dangerBg,
+  );
+
+  static const dark = MartItColors(
+    iconPillBg: AppColors.darkElevated,
+    fieldBg: AppColors.darkSurface,
+    fieldBorder: AppColors.darkBorder,
+    divider: AppColors.darkDivider,
+    mutedText: AppColors.darkTextSecondary,
+    receivedBubble: AppColors.darkElevated,
+    emptyIcon: Color(0xFF5A5A62),
+    dangerBg: Color(0xFF3A1F1F),
+  );
+
+  @override
+  MartItColors copyWith({
+    Color? iconPillBg,
+    Color? fieldBg,
+    Color? fieldBorder,
+    Color? divider,
+    Color? mutedText,
+    Color? receivedBubble,
+    Color? emptyIcon,
+    Color? dangerBg,
+  }) {
+    return MartItColors(
+      iconPillBg: iconPillBg ?? this.iconPillBg,
+      fieldBg: fieldBg ?? this.fieldBg,
+      fieldBorder: fieldBorder ?? this.fieldBorder,
+      divider: divider ?? this.divider,
+      mutedText: mutedText ?? this.mutedText,
+      receivedBubble: receivedBubble ?? this.receivedBubble,
+      emptyIcon: emptyIcon ?? this.emptyIcon,
+      dangerBg: dangerBg ?? this.dangerBg,
+    );
+  }
+
+  @override
+  MartItColors lerp(ThemeExtension<MartItColors>? other, double t) {
+    if (other is! MartItColors) return this;
+    return MartItColors(
+      iconPillBg: Color.lerp(iconPillBg, other.iconPillBg, t)!,
+      fieldBg: Color.lerp(fieldBg, other.fieldBg, t)!,
+      fieldBorder: Color.lerp(fieldBorder, other.fieldBorder, t)!,
+      divider: Color.lerp(divider, other.divider, t)!,
+      mutedText: Color.lerp(mutedText, other.mutedText, t)!,
+      receivedBubble: Color.lerp(receivedBubble, other.receivedBubble, t)!,
+      emptyIcon: Color.lerp(emptyIcon, other.emptyIcon, t)!,
+      dangerBg: Color.lerp(dangerBg, other.dangerBg, t)!,
+    );
+  }
+}
+
+extension MartItThemeX on BuildContext {
+  MartItColors get martItColors =>
+      Theme.of(this).extension<MartItColors>() ?? MartItColors.light;
+}
+
 class AppTheme {
+  static ColorScheme get _lightScheme => const ColorScheme(
+        brightness: Brightness.light,
+        primary: AppColors.primary,
+        onPrimary: Colors.white,
+        primaryContainer: AppColors.primaryContainer,
+        onPrimaryContainer: AppColors.primary,
+        secondary: AppColors.primaryLight,
+        onSecondary: Colors.white,
+        secondaryContainer: AppColors.fieldBg,
+        onSecondaryContainer: AppColors.textPrimary,
+        surface: AppColors.surface,
+        onSurface: AppColors.textPrimary,
+        onSurfaceVariant: AppColors.textSecondary,
+        surfaceContainerHighest: AppColors.fieldBg,
+        error: AppColors.error,
+        onError: Colors.white,
+        outline: AppColors.fieldBorder,
+        outlineVariant: AppColors.dividerLight,
+      );
+
+  static ColorScheme get _darkScheme => const ColorScheme(
+        brightness: Brightness.dark,
+        primary: AppColors.darkPrimary,
+        onPrimary: AppColors.darkOnPrimary,
+        primaryContainer: AppColors.darkElevated,
+        onPrimaryContainer: AppColors.darkPrimary,
+        secondary: AppColors.darkPrimary,
+        onSecondary: AppColors.darkOnPrimary,
+        secondaryContainer: AppColors.darkElevated,
+        onSecondaryContainer: AppColors.darkText,
+        surface: AppColors.darkSurface,
+        onSurface: AppColors.darkText,
+        onSurfaceVariant: AppColors.darkTextSecondary,
+        surfaceContainerHighest: AppColors.darkElevated,
+        error: AppColors.error,
+        onError: Colors.white,
+        outline: AppColors.darkBorder,
+        outlineVariant: AppColors.darkDivider,
+      );
+
   static ThemeData get lightTheme {
+    final scheme = _lightScheme;
+    final textTheme = _textTheme(scheme);
     return ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.primary,
-        brightness: Brightness.light,
-      ),
-
-      // App Bar Theme
-      appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.white,
-        foregroundColor: AppColors.textPrimary,
+      brightness: Brightness.light,
+      colorScheme: scheme,
+      scaffoldBackgroundColor: AppColors.background,
+      extensions: const [MartItColors.light],
+      appBarTheme: AppBarTheme(
+        backgroundColor: AppColors.background,
+        foregroundColor: scheme.onSurface,
         elevation: 0,
+        scrolledUnderElevation: 0,
         centerTitle: true,
-        systemOverlayStyle: SystemUiOverlayStyle(
+        iconTheme: IconThemeData(color: scheme.primary),
+        titleTextStyle: textTheme.titleLarge?.copyWith(
+          color: scheme.onSurface,
+          fontWeight: FontWeight.bold,
+        ),
+        systemOverlayStyle: const SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
         ),
       ),
-
-      // Bottom Navigation Bar Theme
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: AppColors.white,
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: AppColors.grey,
-        type: BottomNavigationBarType.fixed,
-        elevation: 8,
-      ),
-
-      // Card Theme
       cardTheme: CardThemeData(
-        color: AppColors.cardBackground,
-        elevation: 2,
+        color: scheme.surface,
+        elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
-
-      // Elevated Button Theme
+      dividerTheme: DividerThemeData(
+        color: scheme.outlineVariant,
+        thickness: 1,
+        space: 1,
+      ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: AppColors.white,
-          elevation: 2,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          backgroundColor: scheme.primary,
+          foregroundColor: scheme.onPrimary,
+          disabledBackgroundColor: AppColors.fieldBorder,
+          disabledForegroundColor: AppColors.textHint,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
         ),
       ),
-
-      // Text Button Theme
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: scheme.primary,
+          side: BorderSide(color: scheme.primary),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: AppColors.primary,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        ),
+        style: TextButton.styleFrom(foregroundColor: scheme.primary),
       ),
-
-      // Input Decoration Theme
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.lightGrey,
+        fillColor: MartItColors.light.fieldBg,
+        hintStyle: TextStyle(color: scheme.onSurfaceVariant),
+        labelStyle: TextStyle(color: scheme.onSurfaceVariant),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: scheme.outline),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: scheme.outline),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: scheme.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.error, width: 1),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: scheme.error),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
-          vertical: 12,
+          vertical: 14,
         ),
       ),
-
-      // Text Theme with Google Fonts
-      textTheme: _getTextTheme(),
-
-      // Icon Theme
-      iconTheme: const IconThemeData(color: AppColors.textPrimary, size: 24),
-
-      // Floating Action Button Theme
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: AppColors.primary,
-        foregroundColor: AppColors.white,
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          return Colors.white;
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return scheme.primary;
+          return AppColors.fieldBorder;
+        }),
+        trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
+      ),
+      listTileTheme: ListTileThemeData(
+        textColor: scheme.onSurface,
+        iconColor: scheme.primary,
+      ),
+      iconTheme: IconThemeData(color: scheme.onSurface, size: 24),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: scheme.primary,
+        foregroundColor: scheme.onPrimary,
         elevation: 4,
       ),
-
-      // Scaffold Background
-      scaffoldBackgroundColor: AppColors.background,
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
+        backgroundColor: scheme.surface,
+        selectedItemColor: scheme.primary,
+        unselectedItemColor: scheme.onSurfaceVariant,
+        type: BottomNavigationBarType.fixed,
+        elevation: 8,
+      ),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: scheme.primary,
+      ),
+      textTheme: textTheme,
+      dividerColor: scheme.outlineVariant,
     );
   }
 
   static ThemeData get darkTheme {
+    final scheme = _darkScheme;
+    final textTheme = _textTheme(scheme);
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
+      colorScheme: scheme,
       scaffoldBackgroundColor: AppColors.darkBackground,
-      colorScheme: const ColorScheme.dark(
-        primary: AppColors.primary,
-        surface: AppColors.darkSurface,
-        onSurface: AppColors.darkText,
-        onBackground: AppColors.darkText,
-      ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.darkSurface,
-        foregroundColor: AppColors.darkText,
+      extensions: const [MartItColors.dark],
+      appBarTheme: AppBarTheme(
+        backgroundColor: AppColors.darkBackground,
+        foregroundColor: scheme.onSurface,
         elevation: 0,
+        scrolledUnderElevation: 0,
         centerTitle: true,
-        systemOverlayStyle: SystemUiOverlayStyle(
+        iconTheme: IconThemeData(color: scheme.primary),
+        titleTextStyle: textTheme.titleLarge?.copyWith(
+          color: scheme.onSurface,
+          fontWeight: FontWeight.bold,
+        ),
+        systemOverlayStyle: const SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: Brightness.light,
+          statusBarBrightness: Brightness.dark,
         ),
       ),
       cardTheme: CardThemeData(
-        color: AppColors.darkSurface,
+        color: scheme.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: AppColors.darkBorder),
+          side: BorderSide(color: scheme.outline),
         ),
+      ),
+      dividerTheme: DividerThemeData(
+        color: scheme.outlineVariant,
+        thickness: 1,
+        space: 1,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: AppColors.white,
-          elevation: 2,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          backgroundColor: scheme.primary,
+          foregroundColor: scheme.onPrimary,
+          disabledBackgroundColor: AppColors.darkElevated,
+          disabledForegroundColor: AppColors.darkTextSecondary,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: scheme.primary,
+          side: BorderSide(color: scheme.primary),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: AppColors.primaryLight,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        ),
+        style: TextButton.styleFrom(foregroundColor: scheme.primary),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.darkElevated,
+        fillColor: MartItColors.dark.fieldBg,
+        hintStyle: TextStyle(color: scheme.onSurfaceVariant),
+        labelStyle: TextStyle(color: scheme.onSurfaceVariant),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.darkBorder),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: scheme.outline),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.darkBorder),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: scheme.outline),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: scheme.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.error, width: 1),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: scheme.error),
         ),
-        hintStyle: const TextStyle(color: AppColors.darkTextSecondary),
-        labelStyle: const TextStyle(color: AppColors.darkTextSecondary),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      ),
-      textTheme: _getDarkTextTheme(),
-      iconTheme: const IconThemeData(color: AppColors.darkText, size: 24),
-      listTileTheme: const ListTileThemeData(
-        textColor: AppColors.darkText,
-        iconColor: AppColors.darkText,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
       ),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return AppColors.primary;
-          return AppColors.darkTextSecondary;
+          return Colors.white;
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return AppColors.primary.withOpacity(0.4);
-          }
-          return AppColors.darkBorder;
+          if (states.contains(WidgetState.selected)) return scheme.primary;
+          return AppColors.darkElevated;
         }),
+        trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
       ),
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: AppColors.darkSurface,
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: AppColors.darkTextSecondary,
+      listTileTheme: ListTileThemeData(
+        textColor: scheme.onSurface,
+        iconColor: scheme.primary,
+      ),
+      iconTheme: IconThemeData(color: scheme.onSurface, size: 24),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: scheme.primary,
+        foregroundColor: scheme.onPrimary,
+      ),
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
+        backgroundColor: AppColors.darkBackground,
+        selectedItemColor: scheme.primary,
+        unselectedItemColor: scheme.onSurfaceVariant,
         type: BottomNavigationBarType.fixed,
         elevation: 8,
       ),
-      dividerColor: AppColors.darkBorder,
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: AppColors.primary,
-        foregroundColor: AppColors.white,
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: scheme.primary,
       ),
+      textTheme: textTheme,
+      dividerColor: scheme.outlineVariant,
     );
   }
 
-  static TextTheme _getDarkTextTheme() {
+  static TextTheme _textTheme(ColorScheme scheme) {
     return GoogleFonts.cairoTextTheme().copyWith(
       headlineLarge: GoogleFonts.cairo(
         fontSize: 32,
         fontWeight: FontWeight.bold,
-        color: AppColors.darkText,
+        color: scheme.onSurface,
       ),
       headlineMedium: GoogleFonts.cairo(
         fontSize: 28,
         fontWeight: FontWeight.bold,
-        color: AppColors.darkText,
+        color: scheme.onSurface,
       ),
       headlineSmall: GoogleFonts.cairo(
         fontSize: 24,
         fontWeight: FontWeight.w600,
-        color: AppColors.darkText,
+        color: scheme.onSurface,
       ),
       titleLarge: GoogleFonts.cairo(
         fontSize: 20,
         fontWeight: FontWeight.w600,
-        color: AppColors.darkText,
+        color: scheme.onSurface,
       ),
       titleMedium: GoogleFonts.cairo(
         fontSize: 16,
         fontWeight: FontWeight.w500,
-        color: AppColors.darkText,
+        color: scheme.onSurface,
       ),
       titleSmall: GoogleFonts.cairo(
         fontSize: 14,
         fontWeight: FontWeight.w500,
-        color: AppColors.darkText,
+        color: scheme.onSurface,
       ),
-      bodyLarge: GoogleFonts.cairo(fontSize: 16, color: AppColors.darkText),
+      bodyLarge: GoogleFonts.cairo(fontSize: 16, color: scheme.onSurface),
       bodyMedium: GoogleFonts.cairo(
         fontSize: 14,
-        color: AppColors.darkTextSecondary,
+        color: scheme.onSurfaceVariant,
       ),
       bodySmall: GoogleFonts.cairo(
         fontSize: 12,
-        color: AppColors.darkTextSecondary,
+        color: scheme.onSurfaceVariant,
       ),
-    );
-  }
-
-  static TextTheme _getTextTheme() {
-    // Detect if the current locale is Arabic
-    return GoogleFonts.cairoTextTheme().copyWith(
-      headlineLarge: GoogleFonts.cairo(
-        fontSize: 32,
-        fontWeight: FontWeight.bold,
-        color: AppColors.textPrimary,
-      ),
-      headlineMedium: GoogleFonts.cairo(
-        fontSize: 28,
-        fontWeight: FontWeight.bold,
-        color: AppColors.textPrimary,
-      ),
-      headlineSmall: GoogleFonts.cairo(
-        fontSize: 24,
-        fontWeight: FontWeight.w600,
-        color: AppColors.textPrimary,
-      ),
-      titleLarge: GoogleFonts.cairo(
-        fontSize: 20,
-        fontWeight: FontWeight.w600,
-        color: AppColors.textPrimary,
-      ),
-      titleMedium: GoogleFonts.cairo(
-        fontSize: 16,
-        fontWeight: FontWeight.w500,
-        color: AppColors.textPrimary,
-      ),
-      titleSmall: GoogleFonts.cairo(
-        fontSize: 14,
-        fontWeight: FontWeight.w500,
-        color: AppColors.textPrimary,
-      ),
-      bodyLarge: GoogleFonts.cairo(fontSize: 16, color: AppColors.textPrimary),
-      bodyMedium: GoogleFonts.cairo(
-        fontSize: 14,
-        color: AppColors.textSecondary,
-      ),
-      bodySmall: GoogleFonts.cairo(fontSize: 12, color: AppColors.textHint),
-    );
-  }
-
-  static TextTheme getEnglishTextTheme() {
-    return GoogleFonts.ubuntuTextTheme().copyWith(
-      headlineLarge: GoogleFonts.ubuntu(
-        fontSize: 32,
-        fontWeight: FontWeight.bold,
-        color: AppColors.textPrimary,
-      ),
-      headlineMedium: GoogleFonts.ubuntu(
-        fontSize: 28,
-        fontWeight: FontWeight.bold,
-        color: AppColors.textPrimary,
-      ),
-      headlineSmall: GoogleFonts.ubuntu(
-        fontSize: 24,
-        fontWeight: FontWeight.w600,
-        color: AppColors.textPrimary,
-      ),
-      titleLarge: GoogleFonts.ubuntu(
-        fontSize: 20,
-        fontWeight: FontWeight.w600,
-        color: AppColors.textPrimary,
-      ),
-      titleMedium: GoogleFonts.ubuntu(
-        fontSize: 16,
-        fontWeight: FontWeight.w500,
-        color: AppColors.textPrimary,
-      ),
-      titleSmall: GoogleFonts.ubuntu(
-        fontSize: 14,
-        fontWeight: FontWeight.w500,
-        color: AppColors.textPrimary,
-      ),
-      bodyLarge: GoogleFonts.ubuntu(fontSize: 16, color: AppColors.textPrimary),
-      bodyMedium: GoogleFonts.ubuntu(
-        fontSize: 14,
-        color: AppColors.textSecondary,
-      ),
-      bodySmall: GoogleFonts.ubuntu(fontSize: 12, color: AppColors.textHint),
     );
   }
 }

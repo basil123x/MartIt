@@ -7,7 +7,6 @@ import "package:iconsax/iconsax.dart";
 import "../utils/item_media_url_util.dart";
 import "../constants/app_colors.dart";
 import "video_player_widget.dart";
-import '../../core/utils/theme_extensions.dart';
 
 class MediaViewerWidget extends StatefulWidget {
   static const String s3BaseUrl = "https://martit.s3.ap-south-1.amazonaws.com";
@@ -19,6 +18,7 @@ class MediaViewerWidget extends StatefulWidget {
   final bool autoPlayVideo;
   final bool showControls;
   final bool showIndicators;
+  final BoxFit fit;
   final VoidCallback? onMediaUnavailable;
 
   const MediaViewerWidget({
@@ -30,6 +30,7 @@ class MediaViewerWidget extends StatefulWidget {
     this.autoPlayVideo = true,
     this.showControls = false,
     this.showIndicators = true,
+    this.fit = BoxFit.contain,
     this.onMediaUnavailable,
   });
 
@@ -105,8 +106,24 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
   }
 
   Future<List<String>> _resolveMediaUrls() async {
+    // Prefer absolute non-S3 URLs (e.g. Unsplash demo assets) — skip S3 probing.
+    final external = <String>[];
+    for (final mediaUrl in widget.mediaUrls) {
+      final normalized = mediaUrl.split("]")[0].trim();
+      if (normalized.startsWith("http://") ||
+          normalized.startsWith("https://")) {
+        final isMartitS3 = normalized.contains("martit.s3");
+        if (!isMartitS3 && !external.contains(normalized)) {
+          external.add(normalized);
+        }
+      }
+    }
+    if (external.isNotEmpty) {
+      return external;
+    }
+
     final urls = <String>[];
-    const extensions = ["png", "mp4", "mov"];
+    const extensions = ["webp", "mp4", "mov"];
 
     for (int index = 1; index <= _maxImages; index++) {
       bool foundAny = false;
@@ -125,8 +142,10 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
     }
 
     for (final mediaUrl in widget.mediaUrls) {
-      final normalized = mediaUrl.split("]")[0];
-      if (_isVideoUrl(normalized) && !urls.contains(normalized)) {
+      final normalized = mediaUrl.split("]")[0].trim();
+      if ((normalized.startsWith("http://") ||
+              normalized.startsWith("https://")) &&
+          !urls.contains(normalized)) {
         urls.add(normalized);
       }
     }
@@ -220,37 +239,43 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
         networkUrl: finalFullUrl,
         autoPlay: widget.autoPlayVideo,
         showControls: widget.showControls,
+        fit: widget.fit,
       );
     } else {
-      return CachedNetworkImage(
-        imageUrl: finalFullUrl,
-        fit: BoxFit.contain,
-        placeholder: (context, url) => Container(
-          color: Colors.black,
-          child: const Center(child: SpinKitPulse(color: AppColors.white)),
-        ),
-        errorWidget: (context, url, error) {
-          _reportMediaUnavailable();
-          if (_hideUnavailablePlaceholder) {
-            return const SizedBox.shrink();
-          }
-          return Container(
-            color: Colors.grey[300],
-            child: const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Iconsax.image, size: 64, color: Colors.grey),
-                  SizedBox(height: 8),
-                  Text(
-                    "فشل في تحميل الصورة",
-                    style: TextStyle(color: Colors.grey, fontSize: 14),
-                  ),
-                ],
+      return SizedBox.expand(
+        child: CachedNetworkImage(
+          imageUrl: finalFullUrl,
+          fit: widget.fit,
+          width: double.infinity,
+          height: double.infinity,
+          alignment: Alignment.center,
+          placeholder: (context, url) => Container(
+            color: Colors.black,
+            child: const Center(child: SpinKitPulse(color: AppColors.white)),
+          ),
+          errorWidget: (context, url, error) {
+            _reportMediaUnavailable();
+            if (_hideUnavailablePlaceholder) {
+              return const SizedBox.shrink();
+            }
+            return Container(
+              color: Colors.grey[300],
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Iconsax.image, size: 64, color: Colors.grey),
+                    SizedBox(height: 8),
+                    Text(
+                      "فشل في تحميل الصورة",
+                      style: TextStyle(color: Colors.grey, fontSize: 14),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       );
     }
   }

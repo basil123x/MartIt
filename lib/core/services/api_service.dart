@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:MartIt/core/constants/app_constants.dart';
 import 'package:MartIt/core/models/item_model.dart';
+import 'package:MartIt/core/services/api_config_service.dart';
 import 'package:MartIt/core/services/onesignal_service.dart';
 import 'package:MartIt/core/services/s3_upload_service.dart';
 import 'package:dio/dio.dart';
@@ -10,7 +11,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = 'https://www.Globee-Trading.com/app2026';
+  static String get baseUrl => ApiConfigService.instance.apiBaseUrl;
 
   // Test server connection
   static Future<Map<String, dynamic>> testConnection() async {
@@ -752,6 +753,74 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> updateShippingAddress({
+    required int addressId,
+    required String fullname,
+    required String mobile,
+    required String email,
+    required String country,
+    required String city,
+    required String zoneNumber,
+    required String streetNumber,
+    required String buildingNumber,
+    required String uid,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        data: FormData.fromMap({
+          "action": "update_shipping_address",
+          "address_id": addressId.toString(),
+          "fullname": fullname,
+          "mobile": mobile,
+          "email": email,
+          "country": country,
+          "city": city,
+          "zone_number": zoneNumber,
+          "street_number": streetNumber,
+          "building_number": buildingNumber,
+          "uid": uid,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception(
+          'Failed to update shipping address: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      throw Exception('Shipping address error: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> deleteShippingAddress({
+    required int addressId,
+    required String uid,
+  }) async {
+    try {
+      final response = await Dio().post(
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        data: FormData.fromMap({
+          "action": "delete_shipping_address",
+          "address_id": addressId.toString(),
+          "uid": uid,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception(
+          'Failed to delete shipping address: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      throw Exception('Shipping address error: $e');
+    }
+  }
+
   // Get user sellers
   static Future<Map<String, dynamic>> getUserSellers({
     required String userId,
@@ -817,12 +886,12 @@ class ApiService {
   static Future<void> _uploadAvatar(String uid, File avatar) async {
     try {
       final bytes = await avatar.readAsBytes();
-      final pngBytes = await compute(convertImageToPng, bytes);
-      final objectKey = 'Users/store_1/$uid/1.png';
+      final webpBytes = await compute(convertImageToWebP, bytes);
+      final objectKey = 'Users/store_1/$uid/1.webp';
       final url = await S3UploadService.uploadBytes(
-        bytes: pngBytes,
+        bytes: webpBytes,
         objectKey: objectKey,
-        contentType: 'image/png',
+        contentType: 'image/webp',
       );
       if (url == null) {
         throw Exception('Avatar upload failed');
@@ -1130,6 +1199,7 @@ class ApiService {
   static Future<Map<String, dynamic>> updateOrderStatus({
     required String orderId,
     required String status,
+    required String uid,
   }) async {
     try {
       final response = await Dio().post(
@@ -1138,6 +1208,7 @@ class ApiService {
           "action": "update_order_status",
           "order_id": orderId,
           "status": status,
+          "uid": uid,
         }),
         
       );

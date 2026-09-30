@@ -2,11 +2,11 @@
     <div class="footer-content">
         <div class="footer-item">
             <i class="fas fa-envelope"></i>
-            <span>info@globee-trading.com</span>
+            <span>info@mart-it.store</span>
         </div>
         <div class="footer-item">
             <i class="fas fa-globe"></i>
-            <span>www.Globee-Trading.com</span>
+            <span>www.mart-it.store</span>
         </div>
         <div class="footer-item">
             <i class="fas fa-phone"></i>

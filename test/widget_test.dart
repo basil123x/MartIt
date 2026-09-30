@@ -14,7 +14,7 @@ void main() {
     await tester.pumpWidget(const MartItApp());
 
     // Verify that splash screen is displayed
-    expect(find.text('Globee'), findsOneWidget);
+    expect(find.text('MartIt'), findsOneWidget);
     expect(find.text('اكتشف • تسوق • تفاعل'), findsOneWidget);
   });
 }

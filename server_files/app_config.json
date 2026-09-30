@@ -1,0 +1,10 @@
+{
+  "api_base_url": "https://www.mart-it.store/app2026",
+  "latest_version": "1.0.1",
+  "force_update": true,
+  "update_message_ar": "يتوفر إصدار جديد. حدّث التطبيق من المتجر للمتابعة.",
+  "update_message_en": "A new version is available. Update from the store to continue.",
+  "play_store_url": "https://play.google.com/store/apps/details?id=com.mazo.market",
+  "app_store_url": "",
+  "huawei_store_url": ""
+}

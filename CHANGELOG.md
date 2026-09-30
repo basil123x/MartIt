@@ -1,4 +1,4 @@
-# سجل التغييرات - Globee Trading App
+# سجل التغييرات - MartIt Trading App
 
 ## التحديثات الجديدة
 

@@ -12,6 +12,7 @@ import '../../core/services/localization_service.dart';
 import '../../core/utils/snackbar_helper.dart';
 import 'email_signup_screen.dart';
 import '../../core/utils/theme_extensions.dart';
+import '../../core/services/api_config_service.dart';
 
 class EmailOTPScreen extends StatefulWidget {
   final String email;
@@ -86,7 +87,7 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
     if (_enteredOTP == _generatedOTP) {
       try {
         final cacheBust =
-            "https://www.Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}";
+            ApiConfigService.instance.sqlUrl();
         final checkResponse = await Dio().post(
           cacheBust,
           data: FormData.fromMap({
@@ -167,7 +168,7 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
   Future<void> _updateFcmToken() async {
     String? userId = OneSignal.User.pushSubscription.id;
     await Dio().post(
-      "https://www.Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}",
+      ApiConfigService.instance.sqlUrl(),
       data: FormData.fromMap({
         "action": "update_fcm_token",
         "email": widget.email,
@@ -203,7 +204,7 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
 
   sendOTPEmail() async {
     var result = await Dio().post(
-      "https://globee-trading.com/app2026/send_email.php?k=${DateTime.now().millisecondsSinceEpoch}",
+      ApiConfigService.instance.endpoint('send_email.php?k=${DateTime.now().millisecondsSinceEpoch}'),
       data: FormData.fromMap({"email": widget.email, "otp": _generatedOTP}),
     );
     print(result);
@@ -301,7 +302,9 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
                                           .textTheme
                                           .bodyLarge
                                           ?.copyWith(
-                                            color: AppColors.textSecondaryColor(context),
+                                            color: AppColors.textSecondaryColor(
+                                              context,
+                                            ),
                                           ),
                                       children: [
                                         TextSpan(
@@ -398,7 +401,11 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
                                             ? 'ألم يصلك الكود ؟'
                                             : "Didn't receive the code?",
                                         textAlign: TextAlign.center,
-                                        style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+                                        style: TextStyle(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurface,
+                                        ),
                                       ),
                                     ],
                                   ),

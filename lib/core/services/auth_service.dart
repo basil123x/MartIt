@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'api_config_service.dart';
 import 's3_upload_service.dart';
 
 class AuthService {
@@ -10,7 +12,7 @@ class AuthService {
   static const String _phoneKey = 'user_phone';
   static const String _nameKey = 'user_name';
   static const String _profileImageKey = 'user_profile_image';
-  static const String baseUrl = 'https://www.Globee-Trading.com/app2026';
+  static String get baseUrl => ApiConfigService.instance.apiBaseUrl;
 
   // Check if user is logged in
   static Future<bool> isLoggedIn() async {
@@ -125,13 +127,41 @@ class AuthService {
     );
   }
 
-  static Future getUserStatus(uid) async {
-    var request = await Dio().post(
-      '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
-      data: FormData.fromMap({"action": "user_status", "uid": uid}),
-    );
-    if (request.statusCode == 200) {
-      return request.data;
+  /// Returns `{success, status}` or `{success: false, error}` — never throws.
+  static Future<Map<String, dynamic>> getUserStatus(dynamic uid) async {
+    if (uid == null || uid.toString().isEmpty) {
+      return {'success': false, 'error': 'uid missing', 'status': null};
+    }
+    try {
+      final request = await Dio().post(
+        '$baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        data: FormData.fromMap({"action": "user_status", "uid": uid.toString()}),
+        options: Options(
+          responseType: ResponseType.plain,
+          validateStatus: (code) => code != null && code < 500,
+        ),
+      );
+      final raw = request.data?.toString().trim() ?? '';
+      if (raw.isEmpty) {
+        return {'success': false, 'error': 'empty response', 'status': null};
+      }
+      // Strip accidental PHP warnings before the JSON object.
+      final jsonStart = raw.indexOf('{');
+      if (jsonStart < 0) {
+        return {
+          'success': false,
+          'error': 'non-json response',
+          'status': null,
+          'raw': raw.length > 200 ? raw.substring(0, 200) : raw,
+        };
+      }
+      final decoded = jsonDecode(raw.substring(jsonStart));
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+      return {'success': false, 'error': 'invalid payload', 'status': null};
+    } catch (e) {
+      return {'success': false, 'error': e.toString(), 'status': null};
     }
   }
 

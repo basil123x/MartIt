@@ -10,14 +10,16 @@ import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
 // TODO: Phone update feature - requires OTP service subscription
 // import 'package:pinput/pinput.dart';
-import '../../core/constants/app_colors.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/s3_upload_service.dart';
+import '../../core/constants/app_theme.dart';
 import '../../core/utils/avatar_url_util.dart';
 import '../../core/utils/snackbar_helper.dart';
 import '../../core/widgets/smart_avatar_widget.dart';
 import '../../core/utils/theme_extensions.dart';
+import '../add_product/media_picker_sheet.dart';
+import '../../core/services/localization_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final String currentName;
@@ -237,88 +239,35 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _pickImage() async {
+    final isAr = LocalizationService.instance.currentLanguage == 'ar';
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: context.appSurface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 50,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[400],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              "اختر مصدر الصورة",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: context.appTextPrimary,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            _buildImageSourceTile(
-              icon: Iconsax.camera,
-              title: "الكاميرا",
-              subtitle: "استخدم الكاميرا",
-              onTap: () async {
-                Navigator.pop(context);
-                await _selectImage(ImageSource.camera);
-              },
-            ),
-            _buildImageSourceTile(
-              icon: Iconsax.gallery,
-              title: "المعرض",
-              subtitle: "اختر صورة موجودة",
-              onTap: () async {
-                Navigator.pop(context);
-                await _selectImage(ImageSource.gallery);
-              },
-            ),
-            SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildImageSourceTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return ListTile(
-      onTap: onTap,
-      leading: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: AppColors.primary.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(icon, color: AppColors.primary, size: 24),
-      ),
-      title: Text(
-        title,
-        style: TextStyle(
-          fontWeight: FontWeight.w600,
-          color: context.appTextPrimary,
-        ),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: TextStyle(color: Colors.grey[600], fontSize: 13),
+      builder: (sheetContext) => MediaPickerSheet(
+        title: isAr ? 'اختر مصدر الصورة' : 'Choose image source',
+        subtitle: isAr
+            ? 'التقط صورة جديدة أو اختر من المعرض'
+            : 'Take a new photo or pick from gallery',
+        options: [
+          MediaPickerOption(
+            icon: Iconsax.camera5,
+            label: isAr ? 'الكاميرا' : 'Camera',
+            subtitle: isAr ? 'استخدم الكاميرا' : 'Use camera',
+            onTap: () async {
+              Navigator.pop(sheetContext);
+              await _selectImage(ImageSource.camera);
+            },
+          ),
+          MediaPickerOption(
+            icon: Iconsax.gallery5,
+            label: isAr ? 'المعرض' : 'Gallery',
+            subtitle: isAr ? 'اختر صورة موجودة' : 'Choose existing photo',
+            onTap: () async {
+              Navigator.pop(sheetContext);
+              await _selectImage(ImageSource.gallery);
+            },
+          ),
+        ],
       ),
     );
   }
@@ -412,7 +361,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Widget _buildAvatarImage() {
-    const size = 114.0;
+    const size = 106.0;
 
     if (_selectedImage != null) {
       return ClipOval(
@@ -727,174 +676,145 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          onPressed: () => Navigator.pop(context),
-          icon: const Icon(Iconsax.arrow_square_left, color: AppColors.primary),
-        ),
-        title: const Text(
-          'تعديل الملف الشخصي',
-          style: TextStyle(
-            color: AppColors.primary,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
+    final canSave = _hasAnyChanges && !_isLoading && !_isUploadingImage;
+    final cs = Theme.of(context).colorScheme;
+    final martIt = context.martItColors;
+
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        appBar: AppBar(
+          // leading is on the right in RTL — arrow_back_ios mirrors to point right.
+          leading: IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: Icon(
+              Icons.arrow_back_ios,
+              color: cs.primary,
+              size: 20,
+            ),
           ),
+          title: Text(
+            'تعديل الملف الشخصي',
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          centerTitle: true,
         ),
-        centerTitle: true,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              // Profile Picture Section
-              GestureDetector(
-                onTap: _isUploadingImage ? null : _pickImage,
-                child: Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.primary, width: 3),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withOpacity(0.3),
-                        blurRadius: 10,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: Stack(
-                    children: [
-                      _buildAvatarImage(),
-                      // Loading overlay while uploading
-                      if (_isUploadingImage)
-                        Positioned.fill(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.black.withOpacity(0.5),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                GestureDetector(
+                  onTap: _isUploadingImage ? null : _pickImage,
+                  child: SizedBox(
+                    width: 110,
+                    height: 110,
+                    child: Stack(
+                      children: [
+                        Container(
+                          width: 110,
+                          height: 110,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: cs.primary,
+                              width: 2,
                             ),
-                            child: const Center(
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 3,
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: _buildAvatarImage(),
+                        ),
+                        if (_isUploadingImage)
+                          Positioned.fill(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.black.withValues(alpha: 0.5),
+                              ),
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  color: cs.onPrimary,
+                                  strokeWidth: 3,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: _isUploadingImage
-                                ? Colors.grey
-                                : AppColors.primary,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
-                          ),
-                          child: Icon(
-                            _isUploadingImage
-                                ? Iconsax.refresh
-                                : Iconsax.camera,
-                            color: AppColors.white,
-                            size: 16,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Name Field
-              _buildTextField(
-                controller: _nameController,
-                label: 'الاسم',
-                icon: Iconsax.user,
-              ),
-
-              // TODO: Phone update feature - requires OTP service subscription
-              /*
-              const SizedBox(height: 20),
-
-              // Phone Field
-              _buildTextField(
-                controller: _phoneController,
-                label: 'رقم الهاتف',
-                icon: Iconsax.call,
-                keyboardType: TextInputType.phone,
-              ),
-
-              AnimatedSize(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-                child: _showOtpField
-                    ? Column(
-                        children: [
-                          const SizedBox(height: 24),
-                          const Text(
-                            "رمز التحقق",
-                            style: TextStyle(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 16,
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: _isUploadingImage
+                                  ? Colors.grey
+                                  : cs.primary,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Theme.of(context).scaffoldBackgroundColor,
+                                width: 2,
+                              ),
+                            ),
+                            child: Icon(
+                              _isUploadingImage
+                                  ? Iconsax.refresh
+                                  : Iconsax.camera,
+                              color: cs.onPrimary,
+                              size: 16,
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          _buildOtpPinPut(),
-                        ],
-                      )
-                    : const SizedBox.shrink(),
-              ),
-              */
-              const SizedBox(height: 40),
-
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _hasAnyChanges && !_isLoading && !_isUploadingImage
-                      ? _saveProfile
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey,
-                    disabledForegroundColor: context.appSurface,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Text(
-                          'حفظ التغييرات',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
                         ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 32),
+                _buildTextField(
+                  controller: _nameController,
+                  label: 'الاسم',
+                  icon: Iconsax.user,
+                ),
+                const SizedBox(height: 40),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: canSave ? _saveProfile : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: cs.primary,
+                      foregroundColor: cs.onPrimary,
+                      disabledBackgroundColor: martIt.fieldBorder,
+                      disabledForegroundColor: martIt.mutedText,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: _isLoading
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: cs.onPrimary,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'حفظ التغييرات',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -909,33 +829,37 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     String? Function(String?)? validator,
     Widget? suffixIcon,
   }) {
+    final cs = Theme.of(context).colorScheme;
+    final martIt = context.martItColors;
+
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       validator: validator,
-      style: const TextStyle(color: AppColors.primary),
+      style: TextStyle(color: cs.onSurface, fontSize: 16),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: AppColors.primary.withOpacity(0.7)),
-        prefixIcon: Icon(icon, color: AppColors.primary),
+        labelStyle: TextStyle(color: context.appTextSecondary),
+        floatingLabelStyle: TextStyle(color: cs.primary),
+        prefixIcon: Icon(icon, color: cs.primary),
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: AppColors.primary.withOpacity(0.1),
+        fillColor: martIt.fieldBg,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
-          borderSide: BorderSide(color: AppColors.primary.withOpacity(0.2)),
+          borderSide: BorderSide(color: martIt.fieldBorder),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
-          borderSide: BorderSide(color: AppColors.primary.withOpacity(0.2)),
+          borderSide: BorderSide(color: martIt.fieldBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
-          borderSide: const BorderSide(color: AppColors.primary),
+          borderSide: BorderSide(color: cs.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
-          borderSide: const BorderSide(color: Colors.red),
+          borderSide: BorderSide(color: cs.error),
         ),
       ),
     );

@@ -3,15 +3,24 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:shimmer/shimmer.dart';
+import '../../core/constants/app_theme.dart';
 import '../../core/services/localization_service.dart';
-import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
-import '../../core/utils/item_media_url_util.dart';
-import '../home/tiktok_feed_screen.dart';
+import '../../core/widgets/item_thumbnail_widget.dart';
 import '../../core/utils/theme_extensions.dart';
+import '../home/home_feed_screen.dart';
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  /// When true, hosted inside [MainNavigationScreen] — no back button,
+  /// and item taps report via [onItemSelected] instead of replacing the route.
+  final bool embeddedInShell;
+  final ValueChanged<String>? onItemSelected;
+
+  const SearchScreen({
+    super.key,
+    this.embeddedInShell = false,
+    this.onItemSelected,
+  });
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -29,6 +38,9 @@ class _SearchScreenState extends State<SearchScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    _searchFocusNode.addListener(() {
+      if (mounted) setState(() {});
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _searchFocusNode.requestFocus();
     });
@@ -88,132 +100,199 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _navigateToItem(String itemId) {
+    if (widget.embeddedInShell && widget.onItemSelected != null) {
+      widget.onItemSelected!(itemId);
+      return;
+    }
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (context) => TikTokFeedScreen(initialItemId: itemId),
+        builder: (context) => HomeFeedScreen(initialItemId: itemId),
       ),
-    );
-  }
-
-  String _thumbnailUrl(dynamic item) {
-    final storeId =
-        item['storeid']?.toString() ?? item['store_id']?.toString() ?? '1';
-    final itemId = item['id']?.toString() ?? '';
-    final itemIdx = item['idx']?.toString();
-    return ItemMediaUrlUtil.thumbnail(
-      storeId: storeId,
-      itemId: itemId,
-      itemIdx: itemIdx,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final lang = LocalizationService.instance.currentLanguage;
+    final isAr = lang == 'ar';
+    final focused = _searchFocusNode.hasFocus;
+    final cs = Theme.of(context).colorScheme;
+
     return Directionality(
       textDirection: LocalizationService.instance.textDirection,
       child: Scaffold(
-        backgroundColor: context.appBackground,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
-          backgroundColor: context.appSurface,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          leading: IconButton(
-            icon: Icon(Iconsax.arrow_right_3, color: context.appTextPrimary),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: Container(
-            height: 46,
-            decoration: BoxDecoration(
-              color: context.appSurfaceVariant,
-              borderRadius: BorderRadius.circular(30),
-            ),
-            child: TextField(
-              controller: _searchController,
-              focusNode: _searchFocusNode,
-              autofocus: true,
-              textAlign: TextAlign.right,
-              textInputAction: TextInputAction.search,
-              onSubmitted: (value) {
-                _debounce?.cancel();
-                if (value.trim().isNotEmpty) {
-                  _performSearch(value.trim());
-                }
-              },
-              style: TextStyle(fontSize: 15, color: context.appTextPrimary),
-              decoration: InputDecoration(
-                hintText: lang == 'ar'
-                    ? 'ابحث عن المنتجات...'
-                    : 'Search for products...',
-                hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                prefixIcon: Icon(
-                  Iconsax.search_normal_1,
-                  color: Colors.grey[500],
-                  size: 22,
+          automaticallyImplyLeading: !widget.embeddedInShell,
+          leading: widget.embeddedInShell
+              ? null
+              : IconButton(
+                  icon: Icon(Icons.arrow_back, color: cs.onSurface),
+                  onPressed: () => Navigator.pop(context),
                 ),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                        onPressed: () {
-                          _searchController.clear();
-                          _searchFocusNode.requestFocus();
-                        },
-                        icon: Icon(
-                          Iconsax.close_circle,
-                          color: Colors.grey[500],
-                          size: 22,
-                        ),
-                      )
-                    : null,
+          titleSpacing: 0,
+          title: Padding(
+            // When embedded (no back button), pad both sides so the field
+            // isn't flush with the screen edges.
+            padding: widget.embeddedInShell
+                ? const EdgeInsets.symmetric(horizontal: 16)
+                : const EdgeInsetsDirectional.only(end: 16),
+            child: SizedBox(
+              height: 44,
+              child: TextField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                autofocus: true,
+                textInputAction: TextInputAction.search,
+                onSubmitted: (value) {
+                  _debounce?.cancel();
+                  if (value.trim().isNotEmpty) {
+                    _performSearch(value.trim());
+                  }
+                },
+                style: TextStyle(
+                  fontSize: 14,
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w500,
+                  height: 1.2,
+                ),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: focused
+                      ? Colors.white
+                      : const Color(0xFFF5F3FF),
+                  hintText: isAr
+                      ? 'ابحث عن المنتجات...'
+                      : 'Search for products...',
+                  hintStyle: const TextStyle(
+                    color: Color(0xFFA9A9B2),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  prefixIcon: Icon(
+                    Iconsax.search_normal_1,
+                    color: focused
+                        ? const Color(0xFF5C33EA)
+                        : const Color(0xFF8B7AF0),
+                    size: 18,
+                  ),
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 36,
+                    minHeight: 36,
+                  ),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          onPressed: () {
+                            _searchController.clear();
+                            _searchFocusNode.requestFocus();
+                          },
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 36,
+                            minHeight: 36,
+                          ),
+                          icon: const Icon(
+                            Iconsax.close_circle,
+                            color: Color(0xFFA9A9B2),
+                            size: 18,
+                          ),
+                        )
+                      : null,
+                  suffixIconConstraints: const BoxConstraints(
+                    minWidth: 36,
+                    minHeight: 36,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  disabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF5C33EA),
+                      width: 1.5,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
+          toolbarHeight: widget.embeddedInShell ? 52 : kToolbarHeight,
         ),
-        body: _buildBody(),
+        body: _buildBody(isAr),
       ),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(bool isAr) {
     if (!_hasSearched) {
-      return _buildInitialEmptyState();
+      return _buildInitialEmptyState(isAr);
     }
     if (_isLoading) {
       return _buildLoadingState();
     }
     if (_searchResults.isEmpty) {
-      return _buildNoResultsState();
+      return _buildNoResultsState(isAr);
     }
-    return _buildResultsList();
+    return _buildResultsList(isAr);
   }
 
-  Widget _buildInitialEmptyState() {
-    final lang = LocalizationService.instance.currentLanguage;
+  Widget _buildInitialEmptyState(bool isAr) {
+    final cs = Theme.of(context).colorScheme;
+    final martIt = context.martItColors;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 40),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Iconsax.search_normal, size: 80, color: context.appTextSecondary),
+            Container(
+              width: 140,
+              height: 140,
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Iconsax.search_normal,
+                size: 80,
+                color: martIt.emptyIcon,
+              ),
+            ),
             const SizedBox(height: 24),
             Text(
-              lang == 'ar' ? 'ابحث عن ما تريد' : 'Search for what you want',
+              isAr ? 'ابحث عن ما تريد' : 'Search for what you want',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: context.appTextSecondary,
+                color: cs.onSurface,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              lang == 'ar'
+              isAr
                   ? 'اكتب اسم المنتج في مربع البحث'
                   : 'Type product name in search box',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: context.appTextSecondary),
+              style: TextStyle(
+                fontSize: 14,
+                color: cs.onSurfaceVariant,
+                height: 1.4,
+              ),
             ),
           ],
         ),
@@ -221,31 +300,45 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  Widget _buildNoResultsState() {
-    final lang = LocalizationService.instance.currentLanguage;
+  Widget _buildNoResultsState(bool isAr) {
+    final cs = Theme.of(context).colorScheme;
+    final martIt = context.martItColors;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 40),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Iconsax.emoji_sad, size: 80, color: context.appTextSecondary),
+            Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Iconsax.emoji_sad,
+                size: 56,
+                color: martIt.emptyIcon,
+              ),
+            ),
             const SizedBox(height: 24),
             Text(
-              lang == 'ar' ? 'لا توجد نتائج' : 'No results found',
+              isAr ? 'لا توجد نتائج' : 'No results found',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: context.appTextSecondary,
+                color: cs.onSurface,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              lang == 'ar'
-                  ? 'جرب كلمة بحث مختلفة'
-                  : 'Try a different search term',
+              isAr ? 'جرب كلمة بحث مختلفة' : 'Try a different search term',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: context.appTextSecondary),
+              style: TextStyle(
+                fontSize: 14,
+                color: cs.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -254,62 +347,73 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildLoadingState() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: 4,
-      itemBuilder: (context, index) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: _buildShimmerCard(),
+    return ListView.separated(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        12,
+        16,
+        widget.embeddedInShell ? 100 : 24,
       ),
+      itemCount: 6,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, index) => _buildShimmerCard(),
     );
   }
 
   Widget _buildShimmerCard() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final shimmerBase = context.appSurfaceVariant;
+    final shimmerHighlight = context.appSurface;
     return Shimmer.fromColors(
-      baseColor: isDark ? const Color(0xFF1E1E2E) : Colors.grey[300]!,
-      highlightColor: isDark ? const Color(0xFF2A2A3E) : Colors.grey[100]!,
+      baseColor: shimmerBase,
+      highlightColor: shimmerHighlight,
       child: Container(
-        height: 94,
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.darkSurface : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
         padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: context.appSurface,
+          borderRadius: BorderRadius.circular(14),
+        ),
         child: Row(
           children: [
-            Container(
-              width: 70,
-              height: 70,
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkElevated : Colors.grey[200],
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
                     height: 14,
                     width: double.infinity,
-                    color: isDark ? AppColors.darkElevated : Colors.grey[300],
+                    decoration: BoxDecoration(
+                      color: shimmerBase,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Container(
                     height: 12,
-                    width: 120,
-                    color: isDark ? AppColors.darkElevated : Colors.grey[300],
+                    width: 110,
+                    decoration: BoxDecoration(
+                      color: shimmerBase,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   Container(
                     height: 14,
-                    width: 80,
-                    color: isDark ? AppColors.darkElevated : Colors.grey[300],
+                    width: 72,
+                    decoration: BoxDecoration(
+                      color: shimmerBase,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: shimmerBase,
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
           ],
@@ -318,121 +422,146 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  Widget _buildResultsList() {
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+  Widget _buildResultsList(bool isAr) {
+    return ListView.separated(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        12,
+        16,
+        widget.embeddedInShell ? 100 : 24,
+      ),
       itemCount: _searchResults.length,
+      separatorBuilder: (_, __) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Divider(
+          height: 1,
+          thickness: 1,
+          color: context.appDivider,
+        ),
+      ),
       itemBuilder: (context, index) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: _buildSearchResultItem(_searchResults[index]),
-        );
+        return _buildSearchResultItem(_searchResults[index], isAr);
       },
     );
   }
 
-  Widget _buildSearchResultItem(dynamic item) {
-    final lang = LocalizationService.instance.currentLanguage;
+  Widget _buildSearchResultItem(dynamic item, bool isAr) {
+    final cs = Theme.of(context).colorScheme;
+    final martIt = context.martItColors;
     final itemId = item['id']?.toString() ?? '';
-    final thumbnailUrl = _thumbnailUrl(item);
-    final sellerName = item['seller']?['name']?.toString() ?? 'بائع';
+    final storeId =
+        item['storeid']?.toString() ?? item['store_id']?.toString() ?? '1';
+    final itemIdx = item['idx']?.toString();
+    final preferredThumb = item['thumbnail']?.toString();
+    final sellerName = item['seller']?['name']?.toString() ??
+        (isAr ? 'بائع' : 'Seller');
+    final title = isAr
+        ? (item['name']?.toString() ?? '')
+        : ((item['eng']?.toString().isNotEmpty == true)
+            ? item['eng'].toString()
+            : item['name']?.toString() ?? '');
+    final thumbPlaceholder = martIt.receivedBubble;
 
-    return InkWell(
-      onTap: () => _navigateToItem(itemId),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        decoration: BoxDecoration(
-        color: context.appSurface,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    lang == 'ar'
-                        ? (item['name']?.toString() ?? '')
-                        : ((item['eng']?.toString().isNotEmpty == true)
-                            ? item['eng'].toString()
-                            : item['name']?.toString() ?? ''),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: context.appTextPrimary,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _navigateToItem(itemId),
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: context.appSurface,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: cs.primary.withValues(alpha: 0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: cs.onSurface,
+                        height: 1.3,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Icon(Iconsax.shop, size: 14, color: Colors.grey[500]),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          sellerName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: context.appTextSecondary,
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(
+                          Iconsax.shop,
+                          size: 14,
+                          color: cs.primary.withValues(alpha: 0.75),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            sellerName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: cs.primary.withValues(alpha: 0.75),
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '${item['price']} ${lang == 'ar' ? 'ريال' : 'QAR'}',
-                    style: const TextStyle(
-                      color: AppColors.secondary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    Text(
+                      '${item['price']} ${isAr ? 'ريال' : 'QAR'}',
+                      style: TextStyle(
+                        color: cs.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: 70,
-                height: 70,
-                color: context.appSurfaceVariant,
-                child: itemId.isNotEmpty
-                    ? Image.network(
-                        thumbnailUrl,
-                        width: 70,
-                        height: 70,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            color: context.appSurfaceVariant,
-                            child: Icon(
-                              Iconsax.image,
-                              color: Colors.grey[400],
-                              size: 28,
-                            ),
-                          );
-                        },
-                      )
-                    : Icon(Iconsax.image, color: Colors.grey[400], size: 28),
+              const SizedBox(width: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  width: 72,
+                  height: 72,
+                  color: thumbPlaceholder,
+                  child: itemId.isNotEmpty
+                      ? ItemThumbnailWidget(
+                          storeId: storeId,
+                          itemId: itemId,
+                          itemIdx: itemIdx,
+                          preferredUrl: preferredThumb,
+                          width: 72,
+                          height: 72,
+                          fit: BoxFit.cover,
+                          iconSize: 28,
+                          placeholderColor: thumbPlaceholder,
+                        )
+                      : Icon(
+                          Iconsax.image,
+                          color: martIt.emptyIcon,
+                          size: 28,
+                        ),
+                ),
               ),
+            ],
             ),
-            const SizedBox(width: 8),
-            Icon(Iconsax.arrow_left_2, color: Colors.grey[400], size: 22),
-          ],
+          ),
         ),
       ),
     );

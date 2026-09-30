@@ -1,33 +1,44 @@
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
+import '../constants/app_theme.dart';
 
 extension AppThemeContext on BuildContext {
   bool get isDarkMode => Theme.of(this).brightness == Brightness.dark;
+
+  ColorScheme get appColors => Theme.of(this).colorScheme;
+
+  MartItColors get martIt => martItColors;
 
   Color get appBackground => Theme.of(this).scaffoldBackgroundColor;
 
   Color get appSurface => Theme.of(this).colorScheme.surface;
 
-  Color get appSurfaceVariant => Theme.of(this).colorScheme.surfaceContainerHighest;
+  Color get appSurfaceVariant =>
+      Theme.of(this).colorScheme.surfaceContainerHighest;
 
   Color get appTextPrimary => Theme.of(this).colorScheme.onSurface;
 
-  Color get appTextSecondary => isDarkMode
-      ? AppColors.darkTextSecondary
-      : AppColors.textSecondary;
+  Color get appTextSecondary =>
+      Theme.of(this).colorScheme.onSurfaceVariant;
 
-  Color get appBorder =>
-      isDarkMode ? AppColors.darkBorder : Colors.black.withOpacity(0.08);
+  Color get appPrimary => Theme.of(this).colorScheme.primary;
 
-  Color get appCardBorder =>
-      isDarkMode ? AppColors.darkBorder : Colors.grey.shade200;
+  Color get appOnPrimary => Theme.of(this).colorScheme.onPrimary;
+
+  Color get appBorder => Theme.of(this).colorScheme.outline;
+
+  Color get appCardBorder => Theme.of(this).colorScheme.outlineVariant;
+
+  Color get appIconPillBg => martItColors.iconPillBg;
+
+  Color get appDivider => martItColors.divider;
 
   List<Color> get surfaceGradientColors => isDarkMode
-      ? [AppColors.darkSurface, AppColors.darkElevated]
+      ? [AppColors.darkBackground, AppColors.darkSurface]
       : [
-          const Color(0xFFD4D4F0),
-          const Color(0xFFC8D4F5),
-          const Color(0xFFB4D4F0),
+          const Color(0xFFF5F3FF),
+          const Color(0xFFEAE5FC),
+          Colors.white,
         ];
 
   LinearGradient surfaceGradient({
@@ -49,16 +60,16 @@ extension AppThemeContext on BuildContext {
       return LinearGradient(
         begin: begin,
         end: end,
-        colors: [AppColors.darkSurface, AppColors.darkElevated],
+        colors: const [AppColors.darkBackground, AppColors.darkSurface],
       );
     }
-    return LinearGradient(
-      begin: begin,
-      end: end,
+    return const LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
       colors: [
-        const Color(0xFFD4D4F0),
-        const Color(0xFFC8D4F5),
-        const Color(0xFFB4D4F0),
+        Color(0xFFF5F3FF),
+        Color(0xFFEAE5FC),
+        Colors.white,
       ],
     );
   }

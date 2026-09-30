@@ -9,8 +9,10 @@ import '../../core/constants/app_strings.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/localization_service.dart';
 import '../../core/utils/snackbar_helper.dart';
-import '../home/tiktok_feed_screen.dart';
+import '../home/main_navigation_screen.dart';
 import '../../core/utils/theme_extensions.dart';
+import '../add_product/media_picker_sheet.dart';
+import '../../core/services/api_config_service.dart';
 
 class CreateAccountScreen extends StatefulWidget {
   final String phoneNumber;
@@ -84,66 +86,52 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
   void _showImagePickerOptions() {
     final lang = LocalizationService.instance.currentLanguage;
+    final isAr = lang == 'ar';
+    final options = <MediaPickerOption>[
+      MediaPickerOption(
+        icon: Iconsax.camera5,
+        label: isAr ? 'التقاط صورة' : 'Take photo',
+        subtitle: isAr ? 'استخدم الكاميرا' : 'Use camera',
+        onTap: () {
+          Navigator.pop(context);
+          _takePhoto();
+        },
+      ),
+      MediaPickerOption(
+        icon: Iconsax.gallery5,
+        label: isAr ? 'اختيار من المعرض' : 'Choose from gallery',
+        subtitle: isAr ? 'اختر صورة موجودة' : 'Choose existing photo',
+        onTap: () {
+          Navigator.pop(context);
+          _pickImage();
+        },
+      ),
+    ];
+    if (_selectedImage != null) {
+      options.add(
+        MediaPickerOption(
+          icon: Iconsax.trash,
+          label: isAr ? 'حذف الصورة' : 'Remove photo',
+          subtitle: isAr ? 'إزالة الصورة المحددة' : 'Clear selected photo',
+          accent: AppColors.error,
+          onTap: () {
+            Navigator.pop(context);
+            setState(() {
+              _selectedImage = null;
+            });
+          },
+        ),
+      );
+    }
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-        color: context.appSurface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 50,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              lang == 'ar' ? 'اختر صورة الملف الشخصي' : 'Choose profile photo',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 20),
-            ListTile(
-              leading: const Icon(Iconsax.camera, color: AppColors.primary),
-              title: Text(lang == 'ar' ? 'التقاط صورة' : 'Take photo'),
-              subtitle: Text(lang == 'ar' ? 'استخدم الكاميرا' : 'Use camera'),
-              onTap: () {
-                Navigator.pop(context);
-                _takePhoto();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Iconsax.gallery, color: AppColors.secondary),
-              title: Text(lang == 'ar' ? 'اختيار من المعرض' : 'Choose from gallery'),
-              subtitle: Text(
-                lang == 'ar' ? 'اختر صورة موجودة' : 'Choose existing photo',
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                _pickImage();
-              },
-            ),
-            if (_selectedImage != null)
-              ListTile(
-                leading: const Icon(Iconsax.trash, color: AppColors.error),
-                title: Text(lang == 'ar' ? 'حذف الصورة' : 'Remove photo'),
-                onTap: () {
-                  Navigator.pop(context);
-                  setState(() {
-                    _selectedImage = null;
-                  });
-                },
-              ),
-            const SizedBox(height: 20),
-          ],
-        ),
+      builder: (sheetContext) => MediaPickerSheet(
+        title: isAr ? 'اختر صورة الملف الشخصي' : 'Choose profile photo',
+        subtitle: isAr
+            ? 'التقط صورة جديدة أو اختر من المعرض'
+            : 'Take a new photo or pick from gallery',
+        options: options,
       ),
     );
   }
@@ -170,7 +158,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         profileImage: _selectedImage?.path,
       );
       final request = await Dio().post(
-        "https://www.Globee-Trading.com/app2026/sql.php",
+        ApiConfigService.instance.sqlEndpoint,
         data: FormData.fromMap({"action": "get_tokens"}),
       );
       List playerIds = request.data['player_ids'];
@@ -187,7 +175,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         );
       }
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const TikTokFeedScreen()),
+        MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
         (route) => false,
       );
     } catch (e) {

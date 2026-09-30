@@ -6,6 +6,8 @@ import "package:flutter_secure_storage/flutter_secure_storage.dart";
 import "package:onesignal_flutter/onesignal_flutter.dart";
 import "package:sign_in_with_apple/sign_in_with_apple.dart";
 
+import "api_config_service.dart";
+
 class AppleAuthResult {
   final String uid;
   final String oid;
@@ -21,8 +23,7 @@ class AppleAuthResult {
 }
 
 class AppleAuthService {
-  static const String _apiUrl =
-      "https://www.Globee-Trading.com/app2026/sql.php";
+  static String get _apiUrl => ApiConfigService.instance.sqlEndpoint;
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
 
   static String _cacheKey(String userIdentifier, String field) {
@@ -81,16 +82,12 @@ class AppleAuthService {
         print("Apple Sign In — userId: $userIdentifier, email: $email");
       }
 
-      final cacheBust =
-          "$_apiUrl?k=${DateTime.now().millisecondsSinceEpoch}";
+      final cacheBust = "$_apiUrl?k=${DateTime.now().millisecondsSinceEpoch}";
 
       // Look up existing account by email (no token verification — credential only)
       final checkResponse = await Dio().post(
         cacheBust,
-        data: FormData.fromMap({
-          "action": "get_user_by_email",
-          "email": email,
-        }),
+        data: FormData.fromMap({"action": "get_user_by_email", "email": email}),
       );
 
       if (kDebugMode) {
@@ -107,9 +104,7 @@ class AppleAuthService {
 
       // Existing user — success true with data
       if (checkMap["success"] == true && checkMap["data"] != null) {
-        final userData = Map<String, dynamic>.from(
-          checkMap["data"] as Map,
-        );
+        final userData = Map<String, dynamic>.from(checkMap["data"] as Map);
         await _updateFcmToken(email);
         return AppleAuthResult(
           uid: userData["id"]?.toString() ?? "",
@@ -178,8 +173,8 @@ class AppleAuthService {
       throw Exception(
         createData is Map
             ? createData["message"]?.toString() ??
-                createData["error"]?.toString() ??
-                "Failed to create Apple account"
+                  createData["error"]?.toString() ??
+                  "Failed to create Apple account"
             : "Failed to create Apple account",
       );
     }

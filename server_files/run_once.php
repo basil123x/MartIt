@@ -11,17 +11,17 @@ while ($row = $result->fetch_assoc()) {
     $idx = $row['idx'];
     $id = $row['id'];
 
-    $url = "https://martit.s3.ap-south-1.amazonaws.com/store_{$store_id}/{$idx}/1.png";
+    $url = "https://martit.s3.ap-south-1.amazonaws.com/store_{$store_id}/{$idx}/1.webp";
 
     $headers = @get_headers($url);
 
     if ($headers && strpos($headers[0], '200') !== false) {
         $conx->query("UPDATE Items SET has_image = 1 WHERE id = '$id'");
         $updated++;
-        echo "✅ Found: store_{$store_id}/{$idx}/1.png (id: $id)<br>";
+        echo "✅ Found: store_{$store_id}/{$idx}/1.webp (id: $id)<br>";
     } else {
         $notFound++;
-        echo "❌ Not found: store_{$store_id}/{$idx}/1.png (id: $id)<br>";
+        echo "❌ Not found: store_{$store_id}/{$idx}/1.webp (id: $id)<br>";
     }
 
     // Small delay to avoid hammering S3

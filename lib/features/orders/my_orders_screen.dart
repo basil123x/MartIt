@@ -5,6 +5,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/utils/theme_extensions.dart';
+import '../../core/services/api_config_service.dart';
 
 class MyOrdersScreen extends StatefulWidget {
   const MyOrdersScreen({super.key});
@@ -33,7 +34,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     try {
       final uid = await AuthService.getCurrentUID();
       print('🔍 DEBUG MyOrders - UID from AuthService: $uid');
-      
+
       if (uid == null) {
         print('❌ DEBUG MyOrders - UID is null, user not logged in');
         throw Exception('User not logged in');
@@ -51,7 +52,9 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
           _isLoading = false;
         });
       } else {
-        print('❌ DEBUG MyOrders - API returned success=false: ${result['error']}');
+        print(
+          '❌ DEBUG MyOrders - API returned success=false: ${result['error']}',
+        );
         setState(() {
           _hasError = true;
           _isLoading = false;
@@ -66,18 +69,20 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     }
   }
 
-  Future<void> _openInvoice(String orderId, {bool isCustomerView = false}) async {
+  Future<void> _openInvoice(
+    String orderId, {
+    bool isCustomerView = false,
+  }) async {
     final viewParam = isCustomerView ? '&view=customer' : '';
-    final url =
-        'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId$viewParam&k=${DateTime.now().millisecondsSinceEpoch}';
+    final url = ApiConfigService.instance.endpoint(
+      'invoice.php?order_id=$orderId$viewParam&k=${DateTime.now().millisecondsSinceEpoch}',
+    );
 
     if (!context.mounted) return;
 
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => InvoiceWebView(url: url),
-      ),
+      MaterialPageRoute(builder: (_) => InvoiceWebView(url: url)),
     );
   }
 
@@ -186,14 +191,27 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
           const SizedBox(height: 12),
           Text(
             'لم تقم بأي طلبات حتى الآن',
-            style: TextStyle(
-              color: context.appTextSecondary,
-              fontSize: 16,
-            ),
+            style: TextStyle(color: context.appTextSecondary, fontSize: 16),
           ),
         ],
       ),
     );
+  }
+
+  int _sellerCount(dynamic order) {
+    if (order is! Map) return 1;
+
+    final value = order["seller_count"];
+    if (value == null) return 1;
+
+    final count = switch (value) {
+      int v => v,
+      num v => v.toInt(),
+      _ => int.tryParse(value.toString().trim()),
+    };
+
+    if (count == null || count < 1) return 1;
+    return count;
   }
 
   Widget _buildOrderCard(dynamic order) {
@@ -298,7 +316,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
             _buildDetailRow(
               Iconsax.shop,
               'عدد البائعين',
-              '${order['seller_count'] ?? 1} بائع',
+              '${_sellerCount(order)} بائع',
             ),
             const SizedBox(height: 12),
             _buildDetailRow(
@@ -328,7 +346,8 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () => _openInvoice(order['oid'].toString(), isCustomerView: true),
+                onPressed: () =>
+                    _openInvoice(order['oid'].toString(), isCustomerView: true),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -358,10 +377,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         const SizedBox(width: 8),
         Text(
           '$label: ',
-          style: TextStyle(
-            color: context.appTextSecondary,
-            fontSize: 14,
-          ),
+          style: TextStyle(color: context.appTextSecondary, fontSize: 14),
         ),
         Expanded(
           child: Text(

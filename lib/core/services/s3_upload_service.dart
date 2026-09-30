@@ -7,12 +7,12 @@ import "package:flutter/foundation.dart";
 import "package:image/image.dart" as img;
 import "package:path/path.dart" as path;
 
-Uint8List convertImageToPng(Uint8List bytes) {
+Uint8List convertImageToWebP(Uint8List bytes) {
   final decoded = img.decodeImage(bytes);
   if (decoded == null) {
     throw Exception("Failed to decode image");
   }
-  return Uint8List.fromList(img.encodePng(decoded));
+  return Uint8List.fromList(img.encodeWebP(decoded));
 }
 
 class S3UploadService {
@@ -43,15 +43,17 @@ class S3UploadService {
     required String itemId,
     int startIndex = 0,
     Function(int current, int total, double progress)? onProgress,
+    Function(int fileIndex, String filePath, double progress)? onFileProgress,
   }) async {
     final uploadedUrls = <String>[];
 
     try {
       for (int i = 0; i < filePaths.length; i++) {
-        final file = File(filePaths[i]);
+        final filePath = filePaths[i];
+        final file = File(filePath);
         if (!file.existsSync()) continue;
 
-        final extension = path.extension(filePaths[i]).toLowerCase();
+        final extension = path.extension(filePath).toLowerCase();
         if (!_isImageExtension(extension) && !_isVideoExtension(extension)) {
           continue;
         }
@@ -63,15 +65,17 @@ class S3UploadService {
           fileName = "${startIndex + i + 1}$extension";
           payload = await file.readAsBytes();
         } else {
-          fileName = "${startIndex + i + 1}.png";
+          fileName = "${startIndex + i + 1}.webp";
           try {
             final bytes = await file.readAsBytes();
-            payload = await compute(convertImageToPng, bytes);
+            payload = await compute(convertImageToWebP, bytes);
           } catch (e) {
-            print("Failed to convert image: ${filePaths[i]} — $e");
+            print("Failed to convert image: $filePath — $e");
             continue;
           }
         }
+
+        onFileProgress?.call(i, filePath, 0.0);
 
         final objectKey = "$_storeFolder/$itemId/$fileName";
         final uploadUrl = await _uploadBytes(
@@ -79,10 +83,12 @@ class S3UploadService {
           objectKey,
           onProgress: (progress) {
             onProgress?.call(i + 1, filePaths.length, progress);
+            onFileProgress?.call(i, filePath, progress);
           },
         );
         if (uploadUrl != null) {
           uploadedUrls.add(uploadUrl);
+          onFileProgress?.call(i, filePath, 1.0);
         }
       }
 
@@ -111,12 +117,13 @@ class S3UploadService {
       }
 
       final bytes = await file.readAsBytes();
-      final pngBytes = await compute(convertImageToPng, bytes);
-      final objectKey = "Users/store_1/$userId/1.png";
+      final webpBytes = await compute(convertImageToWebP, bytes);
+      final objectKey = "Users/store_1/$userId/1.webp";
 
       return _uploadBytes(
-        pngBytes,
+        webpBytes,
         objectKey,
+        contentType: "image/webp",
         onProgress: onProgress,
       );
     } catch (e) {
@@ -181,11 +188,19 @@ class S3UploadService {
     }
   }
 
-  static Future<bool> deleteFile(String remotePath) async {
+  /// Deletes an S3 object. Accepts a full URL, object key, or store-relative path.
+  /// Examples:
+  /// - `https://martit.s3.ap-south-1.amazonaws.com/store_1/31284/5.mp4`
+  /// - `store_1/31284/5.mp4`
+  /// - `31284/5.mp4` (prefixed with store folder)
+  static Future<bool> deleteFile(String remotePathOrUrl) async {
     try {
-      final objectKey = remotePath.startsWith("$_storeFolder/")
-          ? remotePath
-          : "$_storeFolder/$remotePath";
+      final objectKey = resolveObjectKey(remotePathOrUrl);
+      if (objectKey == null || objectKey.isEmpty) {
+        print("Delete skipped: could not resolve object key from $remotePathOrUrl");
+        return false;
+      }
+
       final headers = _signedHeaders(
         method: "DELETE",
         objectKey: objectKey,
@@ -198,13 +213,55 @@ class S3UploadService {
         options: Options(headers: headers),
       );
 
-      return response.statusCode == 200 ||
+      final ok = response.statusCode == 200 ||
           response.statusCode == 204 ||
           response.statusCode == 404;
+      if (ok) {
+        print("Deleted: $_baseUrl/$objectKey");
+      } else {
+        print("Delete failed for $objectKey: ${response.statusCode}");
+      }
+      return ok;
     } catch (e) {
       print("Error deleting file: $e");
       return false;
     }
+  }
+
+  static String? resolveObjectKey(String remotePathOrUrl) {
+    final trimmed = remotePathOrUrl.trim();
+    if (trimmed.isEmpty) return null;
+
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+      final uri = Uri.tryParse(trimmed);
+      if (uri == null) return null;
+      final path = uri.path.startsWith("/") ? uri.path.substring(1) : uri.path;
+      return path.isEmpty ? null : path;
+    }
+
+    if (trimmed.startsWith("$_baseUrl/")) {
+      return trimmed.substring(_baseUrl.length + 1);
+    }
+
+    if (trimmed.startsWith("$_storeFolder/")) {
+      return trimmed;
+    }
+
+    return "$_storeFolder/$trimmed";
+  }
+
+  static String mediaObjectKey({
+    required String itemId,
+    required String fileName,
+  }) {
+    return "$_storeFolder/$itemId/$fileName";
+  }
+
+  static String mediaUrl({
+    required String itemId,
+    required String fileName,
+  }) {
+    return "$_baseUrl/${mediaObjectKey(itemId: itemId, fileName: fileName)}";
   }
 
   static Map<String, String> _signedHeaders({

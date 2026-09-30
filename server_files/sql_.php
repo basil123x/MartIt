@@ -467,14 +467,30 @@ if ($store_id == '4') {
     break;
             
         case 'user_status':
-            $uid = isset($_POST['uid']) ? $conx->real_escape_string($_POST['uid']) : '';
-            $sql = "SELECT status FROM Users WHERE uid = '$uid' ";
-            $status = $conx->query($sql)->fetch_array()[0];
+            $uid = isset($_POST['uid']) ? $conx->real_escape_string(trim($_POST['uid'])) : '';
+            if ($uid === '') {
+                $response = array(
+                    'success' => false,
+                    'error' => 'uid required',
+                    'status' => null
+                );
+                break;
+            }
 
-            $response = array(
-                'success' => true,
-                'status' => $status
-            );
+            $sql = "SELECT status FROM Users WHERE uid = '$uid' OR id = '$uid' LIMIT 1";
+            $result = $conx->query($sql);
+            if ($result && ($row = $result->fetch_assoc())) {
+                $response = array(
+                    'success' => true,
+                    'status' => $row['status']
+                );
+            } else {
+                $response = array(
+                    'success' => false,
+                    'error' => 'user not found',
+                    'status' => null
+                );
+            }
             break;
 
         // =====================================

@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:MartIt/core/services/otp_local_notification_service.dart';
 import 'package:MartIt/features/auth/login.dart';
 import 'package:MartIt/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
@@ -6,12 +9,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
-import '../../core/constants/app_colors.dart';
+import '../../core/constants/app_theme.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/localization_service.dart';
 import '../../core/utils/snackbar_helper.dart';
-import 'create_account_screen.dart';
 import '../../core/utils/theme_extensions.dart';
+import 'create_account_screen.dart';
+import '../../core/services/api_config_service.dart';
 
 class OTPScreen extends StatefulWidget {
   final String phoneNumber;
@@ -30,6 +34,8 @@ class OTPScreen extends StatefulWidget {
 }
 
 class _OTPScreenState extends State<OTPScreen> {
+  static const int _resendSeconds = 60;
+
   final List<TextEditingController> _controllers = List.generate(
     6,
     (index) => TextEditingController(),
@@ -38,73 +44,81 @@ class _OTPScreenState extends State<OTPScreen> {
   bool _isLoading = false;
   String _enteredOTP = '';
   late String _activeOtp;
-  String? _debugOtp;
-
-  Future sendOTP() async {
-    await Dio().post(
-      "https://graph.facebook.com/v22.0/1020621547810315/messages",
-      options: Options(
-        headers: {
-          "Authorization":
-              "Bearer EAAdhZCjMZCRZBABQZBhtWgeoQcYCOzXj32zhFSLi7aELSVCWDp32TaP8pd0NNbiZChZB95UwEvQw89izAsQuQEXugIMyiqZAQT8ZAxuq0CZAk8T323L6xJdxcLyG5MybKsaO4wtR9iCZBYMAHQdUg3ZAo9ApDHCld4Y6wri7JG39JBsagQa0aqqQAHWM8BfnEJsMgZDZD",
-          "Content-Type": "application/json",
-        },
-      ),
-      data: {
-        "messaging_product": "whatsapp",
-        "to": "${widget.countryCode}${widget.phoneNumber}",
-        "type": "template",
-        "template": {
-          "name": "send_otp",
-          "language": {"code": "ar"},
-          "components": [
-            {
-              "type": "body",
-              "parameters": [
-                {"type": "text", "text": _activeOtp},
-              ],
-            },
-            {
-              "type": "button",
-              "sub_type": "url",
-              "index": 0,
-              "parameters": [
-                {"type": "text", "text": _activeOtp},
-              ],
-            },
-          ],
-        },
-      },
-    );
-  }
+  int _resendRemaining = _resendSeconds;
+  Timer? _resendTimer;
 
   @override
   void initState() {
     super.initState();
-    _activeOtp = widget.generatedOTP;
-    _debugOtp = widget.generatedOTP;
-    // Auto focus first field
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Prefer the OTP generated at navigation time; regenerate if empty.
+    _activeOtp = widget.generatedOTP.trim().isNotEmpty
+        ? widget.generatedOTP
+        : AuthService.generateOTP();
+
+    for (final node in _focusNodes) {
+      node.addListener(() {
+        if (mounted) setState(() {});
+      });
+    }
+
+    _startResendTimer();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
       _focusNodes[0].requestFocus();
-      sendOTP();
+      await _deliverOtpNotification(_activeOtp);
     });
   }
 
+  Future<void> _deliverOtpNotification(String otp) async {
+    await OtpLocalNotificationService.showOtpNotification(otp: otp);
+  }
+
+  void _startResendTimer() {
+    _resendTimer?.cancel();
+    _resendRemaining = _resendSeconds;
+    if (mounted) setState(() {});
+
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_resendRemaining <= 1) {
+        timer.cancel();
+        setState(() => _resendRemaining = 0);
+      } else {
+        setState(() => _resendRemaining -= 1);
+      }
+    });
+  }
+
+  String _formatCountdown(int seconds) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
+  }
+
   void _onOTPChanged(int index, String value) {
-    if (value.isNotEmpty) {
+    if (value.length > 1) {
+      final digits = value.replaceAll(RegExp(r'\D'), '');
+      for (var i = 0; i < 6; i++) {
+        _controllers[i].text = i < digits.length ? digits[i] : '';
+      }
+      final focusIndex = digits.length.clamp(0, 5);
+      _focusNodes[focusIndex].requestFocus();
+    } else if (value.isNotEmpty) {
       if (index < 5) {
         _focusNodes[index + 1].requestFocus();
+      } else {
+        _focusNodes[index].unfocus();
       }
-    } else {
-      if (index > 0) {
-        _focusNodes[index - 1].requestFocus();
-      }
+    } else if (index > 0) {
+      _focusNodes[index - 1].requestFocus();
     }
 
-    // Build entered OTP
-    _enteredOTP = _controllers.map((controller) => controller.text).join();
+    _enteredOTP = _controllers.map((c) => c.text).join();
+    setState(() {});
 
-    // Auto verify when 6 digits are entered
     if (_enteredOTP.length == 6) {
       _verifyOTP();
     }
@@ -121,11 +135,7 @@ class _OTPScreenState extends State<OTPScreen> {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
-
-    // Simulate network delay
+    setState(() => _isLoading = true);
     await Future.delayed(const Duration(seconds: 1));
 
     if (_enteredOTP != '000000') {
@@ -133,6 +143,7 @@ class _OTPScreenState extends State<OTPScreen> {
         final response = await AuthService.loginWithPhone(widget.phoneNumber);
 
         if (response == false) {
+          if (!mounted) return;
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
               builder: (context) => CreateAccountScreen(
@@ -142,14 +153,14 @@ class _OTPScreenState extends State<OTPScreen> {
             ),
           );
         } else {
+          if (!mounted) return;
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => SplashScreen()),
           );
         }
       } else {
-        setState(() {
-          _isLoading = false;
-        });
+        if (!mounted) return;
+        setState(() => _isLoading = false);
         _showError(
           lang == 'ar'
               ? 'كود التحقق غير صحيح، يرجى المحاولة مرة أخرى'
@@ -160,14 +171,14 @@ class _OTPScreenState extends State<OTPScreen> {
     } else {
       String? userId = OneSignal.User.pushSubscription.id;
       final responseuid = await Dio().post(
-        'https://www.Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        ApiConfigService.instance.sqlUrl(),
         data: FormData.fromMap({
           "action": "get_user_details",
           "phone": widget.phoneNumber,
         }),
       );
       final response = await Dio().post(
-        'https://www.Globee-Trading.com/app2026/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        ApiConfigService.instance.sqlUrl(),
         data: FormData.fromMap({
           "action": "get_user_details",
           "phone": widget.phoneNumber,
@@ -192,6 +203,7 @@ class _OTPScreenState extends State<OTPScreen> {
         value: response.data['data']['name'],
       );
       await FlutterSecureStorage().write(key: "login_type", value: "Phone");
+      if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => SplashScreen()),
       );
@@ -204,20 +216,21 @@ class _OTPScreenState extends State<OTPScreen> {
     }
     _enteredOTP = '';
     _focusNodes[0].requestFocus();
+    setState(() {});
   }
 
   void _showError(String message) {
     showAppSnackbar(context, message: message, type: SnackType.error);
   }
 
-  void _resendOTP() async {
+  Future<void> _resendOTP() async {
+    if (_resendRemaining > 0 || _isLoading) return;
+
     final newOtp = AuthService.generateOTP();
-    setState(() {
-      _activeOtp = newOtp;
-      _debugOtp = newOtp;
-    });
+    setState(() => _activeOtp = newOtp);
     _clearOTP();
-    await sendOTP();
+    _startResendTimer();
+    await _deliverOtpNotification(newOtp);
 
     if (!mounted) return;
     showAppSnackbar(
@@ -232,23 +245,23 @@ class _OTPScreenState extends State<OTPScreen> {
   @override
   Widget build(BuildContext context) {
     final lang = LocalizationService.instance.currentLanguage;
+    final isAr = lang == 'ar';
+    final canConfirm = _enteredOTP.length == 6 && !_isLoading;
+    final canResend = _resendRemaining == 0 && !_isLoading;
+    final cs = Theme.of(context).colorScheme;
+    final martIt = context.martItColors;
+
     return Directionality(
       textDirection: LocalizationService.instance.textDirection,
       child: GestureDetector(
-        onTap: () {
-          FocusScope.of(context).unfocus();
-        },
+        onTap: () => FocusScope.of(context).unfocus(),
         child: Scaffold(
-          backgroundColor: context.appSurface,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           appBar: AppBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
-            title: null,
             leading: IconButton(
-              icon: Icon(
-                Iconsax.arrow_left,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
+              icon: Icon(Icons.arrow_back, color: cs.onSurface),
               onPressed: () => Navigator.of(context).pop(),
             ),
           ),
@@ -256,211 +269,201 @@ class _OTPScreenState extends State<OTPScreen> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 return SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
+                      minHeight: constraints.maxHeight - 16,
                     ),
-                    child: IntrinsicHeight(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24.0),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 420),
                         child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Expanded(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  // Icon
-                                  Container(
-                                    width: 100,
-                                    height: 100,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.secondary.withValues(
-                                        alpha: 0.1,
+                            const SizedBox(height: 12),
+                            Container(
+                              width: 90,
+                              height: 90,
+                              decoration: BoxDecoration(
+                                color: context.appIconPillBg,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Iconsax.shield_tick,
+                                size: 42,
+                                color: cs.primary,
+                              ),
+                            ),
+                            const SizedBox(height: 28),
+                            Text(
+                              isAr
+                                  ? 'تحقق من رقم هاتفك'
+                                  : 'Verify your phone',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: cs.onSurface,
+                                fontSize: 25,
+                                fontWeight: FontWeight.bold,
+                                height: 1.25,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              isAr
+                                  ? 'أدخل الكود المرسل إلى'
+                                  : 'Enter the code sent to',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: cs.onSurfaceVariant,
+                                fontSize: 15,
+                                height: 1.4,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '${widget.countryCode} ${widget.phoneNumber}',
+                              textAlign: TextAlign.center,
+                              textDirection: TextDirection.ltr,
+                              style: TextStyle(
+                                color: cs.primary,
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                            const SizedBox(height: 36),
+                            Directionality(
+                              textDirection: TextDirection.ltr,
+                              child: Row(
+                                children: List.generate(6, (index) {
+                                  return Expanded(
+                                    child: Padding(
+                                      padding: EdgeInsets.only(
+                                        left: index == 0 ? 0 : 5,
+                                        right: index == 5 ? 0 : 5,
                                       ),
-                                      borderRadius: BorderRadius.circular(25),
+                                      child: _buildOTPField(index),
                                     ),
-                                    child: const Icon(
-                                      Iconsax.sms,
-                                      size: 50,
-                                      color: AppColors.secondary,
+                                  );
+                                }),
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                            if (_resendRemaining > 0)
+                              Text(
+                                isAr
+                                    ? 'إعادة الإرسال خلال ${_formatCountdown(_resendRemaining)}'
+                                    : 'Resend in ${_formatCountdown(_resendRemaining)}',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: cs.onSurfaceVariant,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              )
+                            else
+                              TextButton(
+                                onPressed: canResend ? _resendOTP : null,
+                                style: TextButton.styleFrom(
+                                  foregroundColor: cs.primary,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Iconsax.refresh, size: 18),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      isAr
+                                          ? 'إعادة إرسال الكود'
+                                          : 'Resend Code',
+                                      style: TextStyle(
+                                        color: cs.primary,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            const SizedBox(height: 18),
+                            Wrap(
+                              alignment: WrapAlignment.center,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 6,
+                              children: [
+                                Text(
+                                  isAr
+                                      ? 'ألم يصلك الكود؟'
+                                      : "Didn't receive the code?",
+                                  style: TextStyle(
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const LoginScreen(),
+                                      ),
+                                    );
+                                  },
+                                  child: Text(
+                                    isAr
+                                        ? 'جرب طريقة أخرى'
+                                        : 'Try another way',
+                                    style: TextStyle(
+                                      color: cs.primary,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
-
-                                  const SizedBox(height: 40),
-
-                                  // Title
-                                  Text(
-                                    lang == 'ar'
-                                        ? 'تحقق من رقم هاتفك'
-                                        : 'Verify your phone',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .headlineMedium
-                                        ?.copyWith(
-                                          color: Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 36),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: canConfirm ? _verifyOTP : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: cs.primary,
+                                  disabledBackgroundColor: martIt.divider,
+                                  foregroundColor: cs.onPrimary,
+                                  disabledForegroundColor: martIt.mutedText,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 17,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                                child: _isLoading
+                                    ? SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.4,
+                                          color: cs.onPrimary,
+                                        ),
+                                      )
+                                    : Text(
+                                        isAr ? 'تأكيد' : 'Confirm',
+                                        style: TextStyle(
                                           fontWeight: FontWeight.bold,
-                                        ),
-                                  ),
-
-                                  const SizedBox(height: 16),
-
-                                  // Subtitle
-                                  RichText(
-                                    textAlign: TextAlign.center,
-                                    text: TextSpan(
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyLarge
-                                          ?.copyWith(
-                                            color: AppColors.textSecondaryColor(context),
-                                          ),
-                                      children: [
-                                        TextSpan(
-                                          text: lang == 'ar'
-                                              ? 'أدخل الكود المرسل إلى\n'
-                                              : 'Enter the code sent to\n',
-                                        ),
-                                        TextSpan(
-                                          text:
-                                              '${widget.countryCode} ${widget.phoneNumber}',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            color: AppColors.primary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-
-                                  if (_debugOtp != null)
-                                    Container(
-                                      margin: const EdgeInsets.symmetric(
-                                        horizontal: 24,
-                                        vertical: 8,
-                                      ),
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: Colors.orange.withOpacity(0.15),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: Colors.orange,
-                                          width: 1.5,
+                                          fontSize: 16,
+                                          color: canConfirm
+                                              ? cs.onPrimary
+                                              : martIt.mutedText,
                                         ),
                                       ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          const Icon(
-                                            Icons.info_outline,
-                                            color: Colors.orange,
-                                            size: 18,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            lang == 'ar'
-                                                ? 'رمز التحقق: $_debugOtp'
-                                                : 'OTP Code: $_debugOtp',
-                                            style: const TextStyle(
-                                              color: Colors.orange,
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold,
-                                              letterSpacing: 4,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-
-                                  const SizedBox(height: 50),
-
-                                  // OTP Input Fields
-                                  Directionality(
-                                    textDirection: TextDirection.ltr,
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: List.generate(
-                                        6,
-                                        (index) => _buildOTPField(index),
-                                      ),
-                                    ),
-                                  ),
-
-                                  const SizedBox(height: 40),
-
-                                  // Loading indicator
-                                  if (_isLoading)
-                                    const CircularProgressIndicator(
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        AppColors.primary,
-                                      ),
-                                    ),
-
-                                  const SizedBox(height: 40),
-
-                                  // Resend OTP
-                                  TextButton(
-                                    onPressed: _resendOTP,
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        const Icon(
-                                          Iconsax.refresh,
-                                          size: 18,
-                                          color: AppColors.primary,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          lang == 'ar'
-                                              ? 'إعادة إرسال الكود'
-                                              : 'Resend Code',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleMedium
-                                              ?.copyWith(
-                                                color: AppColors.primary,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      GestureDetector(
-                                        onTap: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) =>
-                                                  const LoginScreen(),
-                                            ),
-                                          );
-                                        },
-                                        child: Text(
-                                          lang == 'ar'
-                                              ? 'جرب طريقة أخرى'
-                                              : 'Try another way',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            color: AppColors.primaryLight,
-                                          ),
-                                        ),
-                                      ),
-                                      SizedBox(width: 10),
-                                      Text(
-                                        lang == 'ar'
-                                            ? 'ألم يصلك الكود ؟'
-                                            : "Didn't receive the code?",
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-                                      ),
-                                    ],
-                                  ),
-                                ],
                               ),
                             ),
                           ],
@@ -478,56 +481,81 @@ class _OTPScreenState extends State<OTPScreen> {
   }
 
   Widget _buildOTPField(int index) {
-    return Container(
-      width: 50,
-      height: 60,
+    final focused = _focusNodes[index].hasFocus;
+    final filled = _controllers[index].text.isNotEmpty;
+    final cs = Theme.of(context).colorScheme;
+    final martIt = context.martItColors;
+
+    Color borderColor;
+    Color fillColor;
+    double borderWidth;
+    List<BoxShadow>? shadows;
+
+    if (focused) {
+      borderColor = cs.primary;
+      fillColor = context.appSurface;
+      borderWidth = 2;
+      shadows = [
+        BoxShadow(
+          color: cs.primary.withValues(alpha: 0.14),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        ),
+      ];
+    } else if (filled) {
+      borderColor = cs.primary;
+      fillColor = cs.primaryContainer;
+      borderWidth = 1.5;
+      shadows = null;
+    } else {
+      borderColor = martIt.fieldBorder;
+      fillColor = martIt.fieldBg;
+      borderWidth = 1.2;
+      shadows = null;
+    }
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      height: 56,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: fillColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor, width: borderWidth),
+        boxShadow: shadows,
       ),
-      child: TextField(
-        controller: _controllers[index],
-        focusNode: _focusNodes[index],
-        textDirection: TextDirection.ltr,
-        textAlign: TextAlign.center,
-        keyboardType: TextInputType.number,
-        maxLength: 1,
-        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-          fontWeight: FontWeight.bold,
-          color: AppColors.primary,
+      child: Center(
+        child: TextField(
+          controller: _controllers[index],
+          focusNode: _focusNodes[index],
+          textDirection: TextDirection.ltr,
+          textAlign: TextAlign.center,
+          keyboardType: TextInputType.number,
+          maxLength: 1,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+            color: cs.onSurface,
+            height: 1.2,
+          ),
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: const InputDecoration(
+            counterText: '',
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            filled: false,
+            contentPadding: EdgeInsets.zero,
+            isDense: true,
+          ),
+          onChanged: (value) => _onOTPChanged(index, value),
         ),
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        decoration: InputDecoration(
-          counterText: '',
-          filled: true,
-          fillColor: context.appSurface,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: AppColors.lightGrey, width: 1),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: AppColors.lightGrey, width: 1),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: AppColors.primary, width: 2),
-          ),
-          contentPadding: EdgeInsets.zero,
-        ),
-        onChanged: (value) => _onOTPChanged(index, value),
       ),
     );
   }
 
   @override
   void dispose() {
+    _resendTimer?.cancel();
     for (var controller in _controllers) {
       controller.dispose();
     }

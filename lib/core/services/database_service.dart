@@ -1,7 +1,8 @@
 import 'package:dio/dio.dart';
+import 'api_config_service.dart';
 
 class DatabaseService {
-  static const String _baseUrl = 'https://www.Globee-Trading.com/app2026';
+  static String get _baseUrl => ApiConfigService.instance.apiBaseUrl;
   static final Dio _dio = Dio();
 
   static Future<Map<String, dynamic>> createItem(String userId) async {
@@ -110,6 +111,42 @@ class DatabaseService {
       return response.data;
     } catch (e) {
       print('Error getting items: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>> getItem(String itemId) async {
+    try {
+      final response = await _dio.post(
+        '$_baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        data: FormData.fromMap({
+          'action': 'get_item',
+          'item_id': itemId,
+        }),
+      );
+      return response.data is Map
+          ? Map<String, dynamic>.from(response.data as Map)
+          : {'success': false, 'error': 'Invalid response'};
+    } catch (e) {
+      print('Error getting item: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>> deleteItem(String itemId) async {
+    try {
+      final response = await _dio.post(
+        '$_baseUrl/sql.php?k=${DateTime.now().millisecondsSinceEpoch}',
+        data: FormData.fromMap({
+          'action': 'delete',
+          'item_id': itemId,
+        }),
+      );
+      return response.data is Map
+          ? Map<String, dynamic>.from(response.data as Map)
+          : {'success': false, 'error': 'Invalid response'};
+    } catch (e) {
+      print('Error deleting item: $e');
       return {'success': false, 'error': e.toString()};
     }
   }

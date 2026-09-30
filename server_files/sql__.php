@@ -134,13 +134,13 @@ try {
                                 if (preg_match('/(\d+)/', $media, $m)) {
                                     $index = (int)$m[1];
                                 }
-                                $mediaFiles[] = "https://martit.s3.ap-south-1.amazonaws.com/store_{$storeid}/{$itemId}/{$index}.png";
+                                $mediaFiles[] = "https://martit.s3.ap-south-1.amazonaws.com/store_{$storeid}/{$itemId}/{$index}.webp";
                                 $index++;
                             }
                         }
                     }
                     if (empty($mediaFiles)) {
-                        $mediaFiles[] = "https://martit.s3.ap-south-1.amazonaws.com/store_{$storeid}/{$itemId}/1.png";
+                        $mediaFiles[] = "https://martit.s3.ap-south-1.amazonaws.com/store_{$storeid}/{$itemId}/1.webp";
                     }
                     
                     $item = array(
@@ -475,14 +475,30 @@ if ($store_id == '4') {
     break;
             
         case 'user_status':
-            $uid = isset($_POST['uid']) ? $conn->real_escape_string($_POST['uid']) : '';
-            $sql = "SELECT status FROM Users WHERE uid = '$uid' ";
-            $status = $conn->query($sql)->fetch_array()[0];
+            $uid = isset($_POST['uid']) ? $conn->real_escape_string(trim($_POST['uid'])) : '';
+            if ($uid === '') {
+                $response = array(
+                    'success' => false,
+                    'error' => 'uid required',
+                    'status' => null
+                );
+                break;
+            }
 
-            $response = array(
-                'success' => true,
-                'status' => $status
-            );
+            $sql = "SELECT status FROM Users WHERE uid = '$uid' OR id = '$uid' LIMIT 1";
+            $result = $conn->query($sql);
+            if ($result && ($row = $result->fetch_assoc())) {
+                $response = array(
+                    'success' => true,
+                    'status' => $row['status']
+                );
+            } else {
+                $response = array(
+                    'success' => false,
+                    'error' => 'user not found',
+                    'status' => null
+                );
+            }
             break;
 
         // =====================================
@@ -752,7 +768,7 @@ if ($store_id == '4') {
                     while($row = $result->fetch_assoc()) {
                         $storeid = !empty($row['storeid']) ? (string)$row['storeid'] : '4';
                         $itemId = (string)$row['id'];
-                        $thumbnail = "https://martit.s3.ap-south-1.amazonaws.com/store_{$storeid}/{$itemId}/1.png";
+                        $thumbnail = "https://martit.s3.ap-south-1.amazonaws.com/store_{$storeid}/{$itemId}/1.webp";
                         
                         // Build search result object
                         $item = array(

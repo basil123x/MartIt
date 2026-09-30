@@ -1,4 +1,5 @@
 import "package:flutter/material.dart";
+import "package:flutter/services.dart";
 import "package:onesignal_flutter/onesignal_flutter.dart";
 import "package:shared_preferences/shared_preferences.dart";
 
@@ -44,6 +45,14 @@ class AppProvider extends ChangeNotifier {
     _darkMode = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(darkModeKey, value);
+    SystemChrome.setSystemUIOverlayStyle(
+      SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness:
+            value ? Brightness.light : Brightness.dark,
+        statusBarBrightness: value ? Brightness.dark : Brightness.light,
+      ),
+    );
     notifyListeners();
   }
 

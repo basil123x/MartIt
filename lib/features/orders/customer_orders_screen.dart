@@ -1,12 +1,14 @@
 import 'package:MartIt/core/services/onesignal_service.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:url_launcher/url_launcher.dart';
+
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/utils/snackbar_helper.dart';
 import '../../core/utils/theme_extensions.dart';
+import 'invoice_webview.dart';
+import '../../core/services/api_config_service.dart';
 
 class CustomerOrdersScreen extends StatefulWidget {
   const CustomerOrdersScreen({super.key});
@@ -63,13 +65,15 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
   Future<void> _openInvoice(String orderId, String visitorUid) async {
     // Seller view: pass user_id to filter by seller's uid
     final uid = await AuthService.getCurrentUID();
-    final url =
-        'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&user_id=$uid&view=seller&k=${DateTime.now().millisecondsSinceEpoch}';
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } else {
-      showAppSnackbar(context, message: 'فشل في فتح الفاتورة', type: SnackType.error);
-    }
+    final url = ApiConfigService.instance.endpoint(
+      'invoice.php?order_id=$orderId&user_id=$uid&view=seller&k=${DateTime.now().millisecondsSinceEpoch}',
+    );
+
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => InvoiceWebView(url: url)),
+    );
   }
 
   Future<void> _showStatusBottomSheet(dynamic order) async {
@@ -245,9 +249,15 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
     );
 
     try {
+      final uid = await AuthService.getCurrentUID();
+      if (uid == null) {
+        throw Exception('User not logged in');
+      }
+
       final result = await ApiService.updateOrderStatus(
         orderId: order['oid'].toString(),
         status: newStatus,
+        uid: uid,
       );
 
       if (!mounted) return;

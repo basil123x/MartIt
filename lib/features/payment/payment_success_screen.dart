@@ -1,17 +1,19 @@
 import 'dart:math';
-import 'package:MartIt/features/home/tiktok_feed_screen.dart';
+
+import 'package:MartIt/features/home/main_navigation_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:iconsax/iconsax.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:iconsax/iconsax.dart';
+
 import '../../core/constants/app_colors.dart';
 import '../../core/models/cart_model.dart';
 import '../../core/models/shipping_address_model.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/localization_service.dart';
+import '../orders/invoice_screen.dart';
 import '../sellers/sellers_contact_screen.dart';
-import '../../core/utils/snackbar_helper.dart';
-import '../../core/utils/theme_extensions.dart';
+import '../../core/services/api_config_service.dart';
 
 class PaymentSuccessScreen extends StatefulWidget {
   final String userId;
@@ -31,32 +33,25 @@ class PaymentSuccessScreen extends StatefulWidget {
   State<PaymentSuccessScreen> createState() => _PaymentSuccessScreenState();
 }
 
-class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
-    with TickerProviderStateMixin {
-  late AnimationController _animationController;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _fadeAnimation;
+class _PaymentSuccessScreenState extends State<PaymentSuccessScreen> {
+  static const Color _title = Color(0xFF1A1333);
+  static const Color _muted = Color(0xFF6B6B80);
+  static const Color _brand = Color(0xFF5C33EA);
+  static const Color _border = Color(0xFFEDEAF7);
+  static const Color _outline = Color(0xFFE0DBF5);
+  static const Color _iconBadge = Color(0xFFEAE5FC);
+  static const Color _success = Color(0xFF2E9E5B);
+  static const Color _successSoft = Color(0xFF34C471);
+  static const Color _noticeBg = Color(0xFFEAF7EF);
+  static const Color _noticeBorder = Color(0xFFB8E6C8);
+
   String? _createdOrderOid;
+
+  bool get _isAr => LocalizationService.instance.currentLanguage == 'ar';
 
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
-      vsync: this,
-    );
-
-    _scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.elasticOut),
-    );
-
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
-    );
-
-    _animationController.forward();
-
-    // Create orders for each seller
     _createOrders();
   }
 
@@ -108,398 +103,396 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
 
   Future<void> _clearCartAndUpdateOID() async {
     try {
-      // Generate new 4-digit OID
       final newOid = (1000 + Random().nextInt(9000)).toString();
 
-      // Clear cart and update OID in database
       await ApiService.clearCartAndUpdateOID(
         userId: widget.userId,
         newOid: newOid,
       );
 
-      // Update OID in local storage
       const storage = FlutterSecureStorage();
       await storage.write(key: 'user_oid', value: newOid);
 
       print('✅ Cart cleared and OID updated to: $newOid');
     } catch (e) {
       print('❌ Error clearing cart and updating OID: $e');
-      // Don't show error to user as payment was successful
     }
   }
 
-  Future<void> _openInvoice(String orderId) async {
-    print("My Bill Order Id ---> $orderId");
-    final Uri url = Uri.parse(
-      'https://www.Globee-Trading.com/app2026/invoice.php?order_id=$orderId&view=customer&k=${DateTime.now().millisecondsSinceEpoch}',
+  void _openInvoice(String orderId) {
+    final invoiceNumber = orderId.isNotEmpty ? orderId : '—';
+    final shareUrl = orderId.isEmpty
+        ? null
+        : ApiConfigService.instance.endpoint(
+            'invoice.php?order_id=$orderId&view=customer'
+            '&k=${DateTime.now().millisecondsSinceEpoch}',
+          );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InvoiceScreen.fromCheckout(
+          invoiceNumber: invoiceNumber,
+          cartItems: widget.cartItems,
+          shippingAddress: widget.shippingAddress,
+          totalAmount: widget.totalAmount,
+          shareUrl: shareUrl,
+        ),
+      ),
     );
-
-    if (!await launchUrl(
-      url,
-      mode: LaunchMode.inAppWebView, // يفتح داخل الأب
-      webViewConfiguration: const WebViewConfiguration(enableJavaScript: true),
-    )) {
-      if (context.mounted) {
-        showAppSnackbar(
-          context,
-          message: 'فشل فتح الفاتورة',
-          type: SnackType.error,
-        );
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      // backgroundColor: const Color(0xFF0A0E27),
-      backgroundColor: context.appBackground,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Success Animation
-                    AnimatedBuilder(
-                      animation: _animationController,
-                      builder: (context, child) {
-                        return Transform.scale(
-                          scale: _scaleAnimation.value,
+    final isAr = _isAr;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppColors.darkBackground : Colors.white;
+    final titleColor = isDark ? Colors.white : _title;
+    final mutedColor = isDark ? AppColors.darkTextSecondary : _muted;
+    final currency = isAr ? 'ريال' : 'QAR';
+
+    return Directionality(
+      textDirection: isAr ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+        backgroundColor: bg,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 24),
+                        TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0.7, end: 1.0),
+                          duration: const Duration(milliseconds: 500),
+                          curve: Curves.elasticOut,
+                          builder: (context, scale, child) {
+                            return Transform.scale(scale: scale, child: child);
+                          },
                           child: Container(
-                            width: 120,
-                            height: 120,
+                            width: 96,
+                            height: 96,
                             decoration: BoxDecoration(
-                              gradient: RadialGradient(
-                                colors: [
-                                  Colors.green.withOpacity(0.3),
-                                  Colors.green.withOpacity(0.1),
-                                  Colors.transparent,
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(60),
-                            ),
-                            child: Container(
-                              margin: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                color: Colors.green,
-                                borderRadius: BorderRadius.circular(40),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.green.withOpacity(0.3),
-                                    blurRadius: 20,
-                                    spreadRadius: 5,
-                                  ),
-                                ],
-                              ),
-                              child: const Icon(
-                                Iconsax.tick_circle,
-                                color: Colors.white,
-                                size: 50,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-
-                    const SizedBox(height: 32),
-
-                    // Success Message
-                    FadeTransition(
-                      opacity: _fadeAnimation,
-                      child: Column(
-                        children: [
-                          Text(
-                            'تم الدفع بنجاح!',
-                            style: TextStyle(
-                              // color: Colors.white,
-                              color: context.appTextPrimary,
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'شكراً لك، تم تأكيد طلبك بنجاح',
-                            style: TextStyle(
-                              // color: Colors.white.withOpacity(0.8),
-                              color: context.appTextSecondary,
-                              fontSize: 16,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 40),
-
-                    // Order Summary Card
-                    FadeTransition(
-                      opacity: _fadeAnimation,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          gradient: context.surfaceGradient(),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: context.appBorder,
-                            width: 1,
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Iconsax.receipt_2,
-                                  color: AppColors.primary,
-                                  size: 24,
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'ملخص الطلب',
-                                  style: TextStyle(
-                                    // color: Colors.white,
-                                    color: context.appTextPrimary,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                              color: _successSoft,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: _success.withValues(alpha: 0.28),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
                                 ),
                               ],
                             ),
-
-                            const SizedBox(height: 20),
-
-                            _buildSummaryRow(
-                              'عدد العناصر:',
-                              '${widget.cartItems.length} عنصر',
+                            alignment: Alignment.center,
+                            child: const Icon(
+                              Icons.check_rounded,
+                              color: Colors.white,
+                              size: 48,
                             ),
-                            const SizedBox(height: 12),
-                            _buildSummaryRow(
-                              'المبلغ الإجمالي:',
-                              '${widget.totalAmount.toStringAsFixed(2)} ريال',
-                            ),
-                            const SizedBox(height: 12),
-                            _buildSummaryRow(
-                              'العنوان:',
-                              widget.shippingAddress.formattedAddress,
-                            ),
-
-                            const SizedBox(height: 20),
-
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Colors.green.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: Colors.green.withOpacity(0.3),
-                                  width: 1,
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Iconsax.info_circle,
-                                    color: Colors.green,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      'سيتم التواصل معك قريباً لتأكيد التسليم',
-                                      style: TextStyle(
-                                        // color: Colors.green.shade300,
-                                        color: Colors.green.shade700,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Action Buttons
-              FadeTransition(
-                opacity: _fadeAnimation,
-                child: Column(
-                  children: [
-                    // Contact Sellers Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  SellersContactScreen(userId: widget.userId),
-                            ),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(25),
                           ),
-                          elevation: 8,
                         ),
-                        icon: const Icon(Iconsax.message),
-                        label: const Text(
-                          'تواصل مع البائعين',
+                        const SizedBox(height: 28),
+                        Text(
+                          isAr ? 'تم الدفع بنجاح!' : 'Payment successful!',
                           style: TextStyle(
-                            fontSize: 16,
+                            color: titleColor,
+                            fontSize: 26,
                             fontWeight: FontWeight.bold,
                           ),
+                          textAlign: TextAlign.center,
                         ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Back to Home Button
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: () {
-                                _clearCartAndUpdateOID();
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => TikTokFeedScreen(),
-                                  ),
-                                );
-                              },
-                              // 31665646
-                              style: OutlinedButton.styleFrom(
-                                // foregroundColor: Colors.white,
-                                foregroundColor: context.appTextPrimary,
-                                side: BorderSide(
-                                  color: const Color(
-                                    0xFF1A1A2E,
-                                  ).withOpacity(0.3),
-                                  // color: Colors.white.withOpacity(0.3),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(25),
-                                ),
-                              ),
-                              icon: const Icon(Iconsax.home),
-                              label: const Text(
-                                'الرئيسية',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
+                        const SizedBox(height: 10),
+                        Text(
+                          isAr
+                              ? 'شكراً لك، تم تأكيد طلبك بنجاح'
+                              : 'Thank you, your order has been confirmed',
+                          style: TextStyle(
+                            color: mutedColor,
+                            fontSize: 15,
+                            height: 1.4,
                           ),
+                          textAlign: TextAlign.center,
                         ),
-                        SizedBox(width: 20),
-                        Expanded(
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: () {
-                                final oid =
-                                    _createdOrderOid ??
-                                    (widget.cartItems.isNotEmpty
-                                        ? widget.cartItems.first.orderId
-                                        : '');
-                                _openInvoice(oid);
-                              },
-                              style: OutlinedButton.styleFrom(
-                                // foregroundColor: Colors.white,
-                                foregroundColor: context.appTextPrimary,
-                                side: BorderSide(
-                                  color: const Color(
-                                    0xFF1A1A2E,
-                                  ).withOpacity(0.3),
-                                  // color: Colors.white.withOpacity(0.3),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(25),
-                                ),
-                              ),
-                              icon: const Icon(Iconsax.bill),
-                              label: const Text(
-                                'عرض فاتورتك',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
+                        const SizedBox(height: 32),
+                        _buildOrderSummaryCard(
+                          isDark: isDark,
+                          titleColor: titleColor,
+                          mutedColor: mutedColor,
+                          currency: currency,
                         ),
                       ],
                     ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              SellersContactScreen(userId: widget.userId),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _brand,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      elevation: 0,
+                      shadowColor: _brand.withValues(alpha: 0.28),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ).copyWith(
+                      elevation: const WidgetStatePropertyAll(3),
+                    ),
+                    icon: const Icon(Iconsax.message, size: 20),
+                    label: Text(
+                      isAr ? 'تواصل مع البائعين' : 'Contact sellers',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          final oid = _createdOrderOid ??
+                              (widget.cartItems.isNotEmpty
+                                  ? widget.cartItems.first.orderId
+                                  : '');
+                          _openInvoice(oid);
+                        },
+                        style: _secondaryButtonStyle(),
+                        icon: const Icon(Iconsax.bill, size: 18),
+                        label: Text(
+                          isAr ? 'عرض فاتورتك' : 'View invoice',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          _clearCartAndUpdateOID();
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  const MainNavigationScreen(),
+                            ),
+                          );
+                        },
+                        style: _secondaryButtonStyle(),
+                        icon: const Icon(Iconsax.home, size: 18),
+                        label: Text(
+                          isAr ? 'الرئيسية' : 'Home',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildSummaryRow(String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            // color: Colors.white.withOpacity(0.7),
-            color: context.appTextSecondary,
-            fontSize: 14,
+  ButtonStyle _secondaryButtonStyle() {
+    return OutlinedButton.styleFrom(
+      foregroundColor: _brand,
+      side: const BorderSide(color: _outline, width: 1.2),
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+      ),
+    );
+  }
+
+  Widget _buildOrderSummaryCard({
+    required bool isDark,
+    required Color titleColor,
+    required Color mutedColor,
+    required String currency,
+  }) {
+    final cardBg = isDark ? AppColors.darkSurface : Colors.white;
+    final borderColor = isDark ? AppColors.darkBorder : _border;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? _brand.withValues(alpha: 0.2)
+                      : _iconBadge,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: const Icon(Iconsax.receipt_2, color: _brand, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                _isAr ? 'ملخص الطلب' : 'Order summary',
+                style: TextStyle(
+                  color: titleColor,
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            value,
-            style: TextStyle(
-              // color: Colors.white,
-              color: context.appTextPrimary,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
+          const SizedBox(height: 18),
+          _buildSummaryRow(
+            label: _isAr ? 'عدد العناصر' : 'Items',
+            value: _isAr
+                ? '${widget.cartItems.length} عنصر'
+                : '${widget.cartItems.length} items',
+            labelColor: mutedColor,
+            valueColor: titleColor,
+            showDivider: true,
+            borderColor: borderColor,
+          ),
+          _buildSummaryRow(
+            label: _isAr ? 'المبلغ الإجمالي' : 'Total amount',
+            value: '${widget.totalAmount.toStringAsFixed(2)} $currency',
+            labelColor: mutedColor,
+            valueColor: _brand,
+            valueBold: true,
+            showDivider: true,
+            borderColor: borderColor,
+          ),
+          _buildSummaryRow(
+            label: _isAr ? 'العنوان' : 'Address',
+            value: widget.shippingAddress.formattedAddress,
+            labelColor: mutedColor,
+            valueColor: titleColor,
+            showDivider: false,
+            borderColor: borderColor,
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? _success.withValues(alpha: 0.12)
+                  : _noticeBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark
+                    ? _success.withValues(alpha: 0.35)
+                    : _noticeBorder,
+              ),
             ),
-            textAlign: TextAlign.end,
+            child: Row(
+              children: [
+                const Icon(Iconsax.info_circle, color: _success, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _isAr
+                        ? 'سيتم التواصل معك قريباً لتأكيد التسليم'
+                        : 'We will contact you soon to confirm delivery',
+                    style: const TextStyle(
+                      color: _success,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryRow({
+    required String label,
+    required String value,
+    required Color labelColor,
+    required Color valueColor,
+    required bool showDivider,
+    required Color borderColor,
+    bool valueBold = false,
+  }) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: labelColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    color: valueColor,
+                    fontSize: 14,
+                    fontWeight:
+                        valueBold ? FontWeight.bold : FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.end,
+                ),
+              ),
+            ],
           ),
         ),
+        if (showDivider)
+          Divider(height: 1, thickness: 1, color: borderColor),
       ],
     );
   }

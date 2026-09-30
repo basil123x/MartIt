@@ -79,13 +79,13 @@ class _ProfileAvatarPreviewScreenState extends State<ProfileAvatarPreviewScreen>
                       fallbackUrl: widget.fallbackUrl,
                       cacheTimestamp: widget.cacheTimestamp,
                       heroTag: widget.heroTag,
-                      fit: BoxFit.contain,
-                      clipOval: false,
-                      backgroundColor: Colors.white24,
-                      initialsStyle: const TextStyle(
+                      fit: BoxFit.cover,
+                      clipOval: true,
+                      backgroundColor: const Color(0xFF2A2A2A),
+                      initialsStyle: TextStyle(
                         color: Colors.white54,
                         fontWeight: FontWeight.bold,
-                        fontSize: 80,
+                        fontSize: previewSize * 0.35,
                       ),
                     ),
                   ),

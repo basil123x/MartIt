@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
+import '../../core/services/localization_service.dart';
+import '../../core/utils/snackbar_helper.dart';
 import '../../core/widgets/smart_avatar_widget.dart';
 import '../chat/chat_screen.dart';
-import '../../core/utils/snackbar_helper.dart';
-import '../../core/utils/theme_extensions.dart';
 
 class SellersContactScreen extends StatefulWidget {
   final String userId;
@@ -17,9 +18,18 @@ class SellersContactScreen extends StatefulWidget {
 }
 
 class _SellersContactScreenState extends State<SellersContactScreen> {
+  static const Color _title = Color(0xFF1A1333);
+  static const Color _brand = Color(0xFF5C33EA);
+  static const Color _sellerTag = Color(0xFF8B7AF0);
+  static const Color _border = Color(0xFFEDEAF7);
+  static const Color _avatarBorder = Color(0xFFE0DBF5);
+  static const Color _iconBadge = Color(0xFFEAE5FC);
+
   List<SellerContactModel> _sellers = [];
   bool _isLoading = true;
   bool _hasError = false;
+
+  bool get _isAr => LocalizationService.instance.currentLanguage == 'ar';
 
   @override
   void initState() {
@@ -59,56 +69,65 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
     }
   }
 
-  Widget _buildSellerAvatar(SellerContactModel seller, {double size = 60}) {
-    return SmartAvatarWidget(
-      userId: seller.id,
-      name: seller.name,
-      size: size,
-      fallbackUrl: seller.avatar,
-      backgroundColor: AppColors.primary,
-      initialsStyle: TextStyle(
-        color: Colors.white,
-        fontWeight: FontWeight.bold,
-        fontSize: size * 0.35,
+  Widget _buildSellerAvatar(SellerContactModel seller, {double size = 56}) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: _avatarBorder, width: 1.5),
+      ),
+      child: ClipOval(
+        child: SmartAvatarWidget(
+          userId: seller.id,
+          name: seller.name,
+          size: size - 3,
+          fallbackUrl: seller.avatar,
+          backgroundColor: _brand,
+          initialsStyle: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: size * 0.32,
+          ),
+        ),
       ),
     );
   }
 
   void _showContactOptions(SellerContactModel seller) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
+      builder: (sheetContext) => Directionality(
+        textDirection: _isAr ? TextDirection.rtl : TextDirection.ltr,
         child: Container(
           decoration: BoxDecoration(
-            gradient: context.bottomBarGradient(),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+            color: isDark ? AppColors.darkSurface : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Handle bar
               Container(
                 margin: const EdgeInsets.only(top: 12),
-                width: 50,
+                width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  // color: Colors.white.withOpacity(0.3),
-                  color: context.appTextPrimary.withOpacity(0.3),
+                  color: isDark
+                      ? Colors.white24
+                      : const Color(0xFFE0DBF5),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-
               const SizedBox(height: 20),
-
-              // Seller Info
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
                   children: [
                     _buildSellerAvatar(seller),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -116,20 +135,25 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                           Text(
                             seller.name,
                             style: TextStyle(
-                              // color: Colors.white,
-                              color: context.appTextPrimary,
+                              color: isDark ? Colors.white : _title,
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'البائع',
-                            style: TextStyle(
-                              // color: Colors.white.withOpacity(0.7),
-                              color: context.appTextSecondary,
-                              fontSize: 14,
-                            ),
+                          const SizedBox(height: 6),
+                          const Row(
+                            children: [
+                              Icon(Iconsax.shop, color: _sellerTag, size: 14),
+                              SizedBox(width: 6),
+                              Text(
+                                'البائع',
+                                style: TextStyle(
+                                  color: _sellerTag,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -137,10 +161,7 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                   ],
                 ),
               ),
-
-              const SizedBox(height: 30),
-
-              // Contact Options
+              const SizedBox(height: 24),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
@@ -149,10 +170,9 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                       icon: Iconsax.message,
                       title: 'دردشة مباشرة',
                       subtitle: 'تواصل مع البائع عبر الدردشة',
+                      isDark: isDark,
                       onTap: () {
-                        Navigator.pop(context);
-                        // Create new conversation (no conversationId = new conversation)
-                        print(seller.convId);
+                        Navigator.pop(sheetContext);
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -162,22 +182,20 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                               receiverAvatar: seller.avatar,
                               receiverToken: seller.token,
                               conversationId: seller.convId,
-                              isOnline:
-                                  false, 
+                              isOnline: false,
                             ),
                           ),
                         );
                       },
                     ),
-
                     const SizedBox(height: 12),
-
                     _buildContactOption(
                       icon: Iconsax.call,
                       title: 'مكالمة هاتفية',
                       subtitle: 'اتصل بالبائع مباشرة',
+                      isDark: isDark,
                       onTap: () {
-                        Navigator.pop(context);
+                        Navigator.pop(sheetContext);
                         showAppSnackbar(
                           context,
                           message: 'ميزة المكالمات ستكون متاحة قريباً',
@@ -185,15 +203,14 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                         );
                       },
                     ),
-
                     const SizedBox(height: 12),
-
                     _buildContactOption(
                       icon: Iconsax.user,
                       title: 'عرض الملف الشخصي',
                       subtitle: 'اطلع على منتجات البائع الأخرى',
+                      isDark: isDark,
                       onTap: () {
-                        Navigator.pop(context);
+                        Navigator.pop(sheetContext);
                         showAppSnackbar(
                           context,
                           message: 'سيتم فتح ملف البائع الشخصي',
@@ -204,8 +221,7 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                   ],
                 ),
               ),
-
-              const SizedBox(height: 30),
+              SizedBox(height: 20 + MediaQuery.of(sheetContext).padding.bottom),
             ],
           ),
         ),
@@ -218,69 +234,71 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    required bool isDark,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          // color: Colors.white.withOpacity(0.1),
-          color: context.appSurface,
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(
-            // color: Colors.white.withOpacity(0.2),
-            color: AppColors.primary.withOpacity(0.2),
-            width: 1,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkElevated : Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isDark ? AppColors.darkBorder : _border,
+            ),
           ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? _brand.withValues(alpha: 0.2)
+                      : _iconBadge,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: Icon(icon, color: _brand, size: 22),
               ),
-              child: Icon(
-                icon,
-                // color: Colors.white,
-                color: AppColors.primary,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      // color: Colors.white,
-                      color: context.appTextPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: isDark ? Colors.white : _title,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      // color: Colors.white.withOpacity(0.7),
-                      color: context.appTextSecondary,
-                      fontSize: 14,
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: isDark
+                            ? AppColors.darkTextSecondary
+                            : const Color(0xFF6B6B80),
+                        fontSize: 13,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            Icon(
-              Iconsax.arrow_square_left,
-              // color: Colors.white.withOpacity(0.5),
-              color: context.appTextSecondary.withOpacity(0.8),
-              size: 20,
-            ),
-          ],
+              Icon(
+                Icons.arrow_forward_ios,
+                color: isDark
+                    ? AppColors.darkTextSecondary
+                    : const Color(0xFF8B7AF0),
+                size: 14,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -288,24 +306,31 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isAr = _isAr;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppColors.darkBackground : Colors.white;
+    final titleColor = isDark ? Colors.white : _title;
+
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: isAr ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
-        // backgroundColor: const Color(0xFF0A0E27),
-        backgroundColor: context.appBackground,
+        backgroundColor: bg,
         appBar: AppBar(
+          forceMaterialTransparency: true,
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
             onPressed: () => Navigator.pop(context),
-            // icon: const Icon(Iconsax.arrow_right_3, color: Colors.white),
-            icon: Icon(Iconsax.arrow_right, color: context.appTextPrimary),
+            icon: Icon(
+              Icons.arrow_back_ios_new,
+              size: 18,
+              color: titleColor,
+            ),
           ),
           title: Text(
-            'تواصل مع البائعين',
+            isAr ? 'تواصل مع البائعين' : 'Contact sellers',
             style: TextStyle(
-              // color: Colors.white,
-              color: context.appTextPrimary,
+              color: titleColor,
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
@@ -313,178 +338,210 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
           centerTitle: true,
         ),
         body: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
-              )
+            ? const Center(child: CircularProgressIndicator(color: _brand))
             : _hasError
-            ? _buildErrorWidget()
-            : _sellers.isEmpty
-            ? _buildEmptyWidget()
-            : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _sellers.length,
-                itemBuilder: (context, index) {
-                  return _buildSellerCard(_sellers[index]);
-                },
-              ),
+                ? _buildErrorWidget(isDark: isDark)
+                : _sellers.isEmpty
+                    ? _buildEmptyWidget(isDark: isDark)
+                    : ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                        itemCount: _sellers.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          return _buildSellerCard(
+                            _sellers[index],
+                            isDark: isDark,
+                          );
+                        },
+                      ),
       ),
     );
   }
 
-  Widget _buildErrorWidget() {
+  Widget _buildErrorWidget({required bool isDark}) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Iconsax.warning_2, size: 80, color: Colors.red),
+          const Icon(Iconsax.warning_2, size: 72, color: Colors.redAccent),
           const SizedBox(height: 16),
           Text(
-            'حدث خطأ في تحميل البائعين',
+            _isAr ? 'حدث خطأ في تحميل البائعين' : 'Failed to load sellers',
             style: TextStyle(
-              // color: Colors.white,
-              color: context.appTextPrimary,
+              color: isDark ? Colors.white : _title,
               fontSize: 18,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: _loadSellers,
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: _brand,
               foregroundColor: Colors.white,
             ),
-            child: const Text('إعادة المحاولة'),
+            child: Text(_isAr ? 'إعادة المحاولة' : 'Retry'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildEmptyWidget() {
+  Widget _buildEmptyWidget({required bool isDark}) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(60),
-            ),
-            child: const Icon(
-              Iconsax.user_octagon,
-              size: 60,
-              color: AppColors.primary,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'لا توجد مشتريات سابقة',
-            style: TextStyle(
-              // color: Colors.white,
-              color: context.appTextPrimary,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'لم تقم بشراء أي منتجات بعد',
-            style: TextStyle(
-              // color: Colors.white.withOpacity(0.7),
-              color: context.appTextSecondary,
-              fontSize: 16,
-            ),
-          ),
-          const SizedBox(height: 32),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(25),
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 112,
+              height: 112,
+              decoration: BoxDecoration(
+                color: isDark
+                    ? _brand.withValues(alpha: 0.15)
+                    : _iconBadge,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Iconsax.user_octagon,
+                size: 52,
+                color: _brand,
               ),
             ),
-            child: const Text(
-              'تصفح المنتجات',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            const SizedBox(height: 24),
+            Text(
+              _isAr ? 'لا توجد مشتريات سابقة' : 'No previous purchases',
+              style: TextStyle(
+                color: isDark ? Colors.white : _title,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 10),
+            Text(
+              _isAr
+                  ? 'لم تقم بشراء أي منتجات بعد'
+                  : 'You have not purchased any products yet',
+              style: TextStyle(
+                color: isDark
+                    ? AppColors.darkTextSecondary
+                    : const Color(0xFF6B6B80),
+                fontSize: 15,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 28),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _brand,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: Text(
+                _isAr ? 'تصفح المنتجات' : 'Browse products',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildSellerCard(SellerContactModel seller) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        gradient: context.surfaceGradient(),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: context.appBorder, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(20),
-        leading: _buildSellerAvatar(seller),
-        title: Text(
-          seller.name,
-          style: TextStyle(
-            // color: Colors.white,
-            color: context.appTextPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Row(
-            children: [
-              Icon(
-                Iconsax.shop,
-                // color: Colors.white.withOpacity(0.6),
-                color: context.appTextSecondary,
-                size: 16,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'البائع',
-                style: TextStyle(
-                  // color: Colors.white.withOpacity(0.6),
-                  color: context.appTextSecondary,
-                  fontSize: 14,
-                ),
+  Widget _buildSellerCard(
+    SellerContactModel seller, {
+    required bool isDark,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showContactOptions(seller),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkSurface : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? AppColors.darkBorder : _border,
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _brand.withValues(alpha: 0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
-        ),
-        trailing: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: AppColors.primary.withOpacity(0.3),
-              width: 1,
-            ),
+          child: Row(
+            children: [
+              // Chat badge — start side of the row content.
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? _brand.withValues(alpha: 0.2)
+                      : _iconBadge,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Iconsax.message,
+                  color: _brand,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      seller.name,
+                      style: TextStyle(
+                        color: isDark ? Colors.white : _title,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const Icon(Iconsax.shop, color: _sellerTag, size: 14),
+                        const SizedBox(width: 6),
+                        Text(
+                          _isAr ? 'البائع' : 'Seller',
+                          style: const TextStyle(
+                            color: _sellerTag,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              _buildSellerAvatar(seller, size: 56),
+            ],
           ),
-          child: const Icon(
-            Iconsax.message,
-            color: AppColors.primary,
-            size: 20,
-          ),
         ),
-        onTap: () => _showContactOptions(seller),
       ),
     );
   }

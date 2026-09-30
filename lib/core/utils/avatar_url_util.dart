@@ -2,7 +2,7 @@ class AvatarUrlUtil {
   static const String _s3Base =
       'https://martit.s3.ap-south-1.amazonaws.com/Users/store_1';
 
-  static String s3Path(String userId) => '$_s3Base/$userId/1.png';
+  static String s3Path(String userId) => '$_s3Base/$userId/1.webp';
 
   static String displayUrl(String userId, {int? timestamp}) {
     final ts = timestamp ?? DateTime.now().millisecondsSinceEpoch;

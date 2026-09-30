@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+
 import '../../core/constants/app_colors.dart';
 import '../../core/models/cart_model.dart';
 import '../../core/services/auth_service.dart';
-import '../../core/utils/item_media_url_util.dart';
-import '../../core/utils/theme_extensions.dart';
+import '../../core/services/localization_service.dart';
+import '../../core/widgets/item_thumbnail_widget.dart';
 import '../shipping/shipping_address_screen.dart';
 
 class OrderSummaryScreen extends StatefulWidget {
@@ -24,27 +25,45 @@ class OrderSummaryScreen extends StatefulWidget {
 }
 
 class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
+  static const Color _title = Color(0xFF1A1333);
+  static const Color _muted = Color(0xFF6B6B80);
+  static const Color _seller = Color(0xFF8B7AF0);
+  static const Color _surfaceSoft = Color(0xFFF5F3FF);
+  static const Color _iconBadge = Color(0xFFEAE5FC);
+  static const Color _border = Color(0xFFEDEAF7);
+  static const Color _brand = Color(0xFF5C33EA);
+  static const Color _freeShipping = Color(0xFF2E9E5B);
+
+  bool get _isAr => LocalizationService.instance.currentLanguage == 'ar';
+
   @override
   Widget build(BuildContext context) {
+    final isAr = _isAr;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppColors.darkBackground : Colors.white;
+    final titleColor = isDark ? Colors.white : _title;
+
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: isAr ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
-        // backgroundColor: const Color(0xFF0A0E27),
-        backgroundColor: context.appBackground,
+        backgroundColor: bg,
         appBar: AppBar(
           forceMaterialTransparency: true,
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
             onPressed: () => Navigator.pop(context),
-            // icon: const Icon(Iconsax.arrow_right_3, color: Colors.white),
-            icon: Icon(Iconsax.arrow_right, color: context.appTextPrimary),
+            // Auto-mirrors with Directionality (RTL → points right).
+            icon: Icon(
+              Icons.arrow_back_ios_new,
+              size: 18,
+              color: titleColor,
+            ),
           ),
           title: Text(
-            'ملخص الطلب',
+            isAr ? 'ملخص الطلب' : 'Order Summary',
             style: TextStyle(
-              // color: Colors.white,
-              color: context.appTextPrimary,
+              color: titleColor,
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
@@ -55,60 +74,69 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Order Items Section
-                    _buildSectionTitle('عناصر الطلب'),
-                    const SizedBox(height: 16),
-                    ...widget.cartItems.map((item) => _buildOrderItem(item)),
-
+                    _buildSectionHeader(
+                      title: isAr ? 'عناصر الطلب' : 'Order items',
+                      icon: Iconsax.shopping_bag,
+                      isDark: isDark,
+                    ),
+                    const SizedBox(height: 14),
+                    ...widget.cartItems.map(
+                      (item) => _buildOrderItem(item, isDark: isDark),
+                    ),
                     const SizedBox(height: 24),
-
-                    // Order Summary Section
-                    _buildSectionTitle('ملخص التكلفة'),
-                    const SizedBox(height: 16),
-                    _buildOrderSummary(),
+                    _buildSectionHeader(
+                      title: isAr ? 'ملخص التكلفة' : 'Cost summary',
+                      icon: Iconsax.receipt_2,
+                      isDark: isDark,
+                    ),
+                    const SizedBox(height: 14),
+                    _buildOrderSummary(isDark: isDark),
                   ],
                 ),
               ),
             ),
-
-            // Continue Button
-            _buildBottomButton(),
+            _buildBottomButton(isDark: isDark),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSectionTitle(String title) {
+  Widget _buildSectionHeader({
+    required String title,
+    required IconData icon,
+    required bool isDark,
+  }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [AppColors.primary.withOpacity(0.2), Colors.transparent],
-        ),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primary.withOpacity(0.3), width: 1),
+        color: isDark ? AppColors.darkSurface : _surfaceSoft,
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
-          Icon(
-            title == 'عناصر الطلب' ? Iconsax.shopping_bag : Iconsax.receipt,
-            color: AppColors.primary,
-            size: 20,
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? _brand.withValues(alpha: 0.2)
+                  : _iconBadge,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, color: _brand, size: 18),
           ),
           const SizedBox(width: 12),
           Text(
             title,
             style: TextStyle(
-              // color: Colors.white,
-              color: context.appTextPrimary,
-              fontSize: 18,
+              color: isDark ? Colors.white : _title,
+              fontSize: 17,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -117,56 +145,39 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
     );
   }
 
-  Widget _buildOrderItem(CartItemModel cartItem) {
-    final itemTotal = double.parse(cartItem.item.price) * cartItem.cartQuantity;
+  Widget _buildOrderItem(CartItemModel cartItem, {required bool isDark}) {
+    final itemTotal =
+        (double.tryParse(cartItem.item.price) ?? 0) * cartItem.cartQuantity;
+    final currency = _isAr ? 'ريال' : 'QAR';
+    final cardBg = isDark ? AppColors.darkSurface : Colors.white;
+    final borderColor = isDark ? AppColors.darkBorder : _border;
+    final nameColor = isDark ? Colors.white : _title;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        gradient: context.surfaceGradient(),
+        color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: context.appBorder, width: 1),
+        border: Border.all(color: borderColor, width: 1),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Product Image
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppColors.primary.withOpacity(0.3),
-                width: 1,
-              ),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(11),
-              child: Image.network(
-                      ItemMediaUrlUtil.thumbnail(
-                        storeId: cartItem.item.store_id,
-                        itemId: cartItem.item.id,
-                        itemIdx: cartItem.item.idx,
-                      ),
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: Colors.grey[800],
-                          child: const Icon(
-                            Iconsax.image,
-                            color: Colors.grey,
-                            size: 30,
-                          ),
-                        );
-                      },
-                    ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: ItemThumbnailWidget(
+              storeId: cartItem.item.store_id,
+              itemId: cartItem.item.id,
+              itemIdx: cartItem.item.idx,
+              preferredUrl: cartItem.item.thumbnail,
+              width: 72,
+              height: 72,
+              fit: BoxFit.cover,
+              iconSize: 28,
             ),
           ),
-
-          const SizedBox(width: 16),
-
-          // Product Details
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,53 +185,65 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                 Text(
                   cartItem.item.name,
                   style: TextStyle(
-                    // color: Colors.white,
-                    color: context.appTextPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+                    color: nameColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'البائع: ${cartItem.seller.name}',
-                  style: TextStyle(
-                    // color: Colors.white.withOpacity(0.6),
-                    color: context.appTextSecondary,
-                    fontSize: 12,
-                  ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    const Icon(Iconsax.shop, size: 14, color: _seller),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        cartItem.seller.name,
+                        style: const TextStyle(
+                          color: _seller,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
+                Divider(height: 1, thickness: 1, color: borderColor),
+                const SizedBox(height: 10),
                 Row(
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
+                        horizontal: 10,
+                        vertical: 5,
                       ),
                       decoration: BoxDecoration(
-                        color: context.isDarkMode
-                            ? AppColors.darkElevated.withOpacity(0.5)
-                            : Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
+                        color: isDark
+                            ? AppColors.darkElevated
+                            : _surfaceSoft,
+                        borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        'الكمية: ${cartItem.cartQuantity}',
+                        _isAr
+                            ? 'الكمية: ${cartItem.cartQuantity}'
+                            : 'Qty: ${cartItem.cartQuantity}',
                         style: TextStyle(
-                          // color: Colors.white,
-                          color: context.appTextPrimary,
+                          color: isDark ? AppColors.darkTextSecondary : _muted,
                           fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                     const Spacer(),
                     Text(
-                      '${itemTotal.toStringAsFixed(2)} ريال',
+                      '${itemTotal.toStringAsFixed(2)} $currency',
                       style: const TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 14,
+                        color: _brand,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -234,86 +257,71 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
     );
   }
 
-  Widget _buildOrderSummary() {
+  Widget _buildOrderSummary({required bool isDark}) {
     final subtotal = widget.totalAmount;
-    const shipping = 0.0; // Free shipping for now
-    const tax = 0.0; // No tax for now
-    final total = subtotal + shipping + tax;
+    const shipping = 0.0;
+    final total = subtotal + shipping;
+    final currency = _isAr ? 'ريال' : 'QAR';
+    final cardBg = isDark ? AppColors.darkSurface : Colors.white;
+    final borderColor = isDark ? AppColors.darkBorder : _border;
+    final labelColor = isDark ? AppColors.darkTextSecondary : _muted;
+    final valueColor = isDark ? Colors.white : _title;
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: context.surfaceGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: context.appBorder, width: 1),
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor, width: 1),
       ),
       child: Column(
         children: [
           _buildSummaryRow(
-            'المجموع الفرعي:',
-            '${subtotal.toStringAsFixed(2)} ريال',
+            label: _isAr ? 'المجموع الفرعي' : 'Subtotal',
+            value: '${subtotal.toStringAsFixed(2)} $currency',
+            labelColor: labelColor,
+            valueColor: valueColor,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           _buildSummaryRow(
-            'الشحن:',
-            shipping == 0 ? 'مجاني' : '${shipping.toStringAsFixed(2)} ريال',
+            label: _isAr ? 'الشحن' : 'Shipping',
+            value: shipping == 0
+                ? (_isAr ? 'مجاني' : 'Free')
+                : '${shipping.toStringAsFixed(2)} $currency',
+            labelColor: labelColor,
+            valueColor: shipping == 0 ? _freeShipping : valueColor,
+            valueBold: shipping == 0,
           ),
-
-          // const SizedBox(height: 12),
-          // _buildSummaryRow(
-          //   'الضريبة:',
-          //   tax == 0 ? 'غير مطبقة' : '${tax.toStringAsFixed(2)} ريال',
-          // ),
           const SizedBox(height: 16),
-
-          Container(
-            height: 1,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.transparent,
-                  AppColors.primary.withOpacity(0.5),
-                  Colors.transparent,
-                ],
-              ),
-            ),
-          ),
-
+          Divider(height: 1, thickness: 1, color: borderColor),
           const SizedBox(height: 16),
-
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'المجموع الكلي:',
+                _isAr ? 'المجموع الكلي' : 'Total',
                 style: TextStyle(
-                  // color: Colors.white,
-                  color: context.appTextPrimary,
-                  fontSize: 18,
+                  color: isDark ? Colors.white : _title,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
               ),
+              const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
+                  horizontal: 14,
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(
-                    color: AppColors.primary.withOpacity(0.5),
-                    width: 1,
-                  ),
+                  color: isDark
+                      ? _brand.withValues(alpha: 0.2)
+                      : _iconBadge,
+                  borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  '${total.toStringAsFixed(2)} ريال',
+                  '${total.toStringAsFixed(2)} $currency',
                   style: const TextStyle(
-                    color: AppColors.primary,
-                    fontSize: 14,
+                    color: _brand,
+                    fontSize: 17,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -325,80 +333,95 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
     );
   }
 
-  Widget _buildSummaryRow(String label, String value) {
+  Widget _buildSummaryRow({
+    required String label,
+    required String value,
+    required Color labelColor,
+    required Color valueColor,
+    bool valueBold = false,
+  }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
           label,
           style: TextStyle(
-            // color: Colors.white.withOpacity(0.8),
-            color: context.appTextSecondary,
+            color: labelColor,
             fontSize: 14,
+            fontWeight: FontWeight.w500,
           ),
         ),
         Text(
           value,
           style: TextStyle(
-            // color: Colors.white,
-            color: context.appTextPrimary,
+            color: valueColor,
             fontSize: 14,
-            fontWeight: FontWeight.w600,
+            fontWeight: valueBold ? FontWeight.w700 : FontWeight.w600,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildBottomButton() {
+  Widget _buildBottomButton({required bool isDark}) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
       decoration: BoxDecoration(
-        gradient: context.bottomBarGradient(),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
-        border: Border.all(color: context.appBorder, width: 1),
+        color: isDark ? AppColors.darkElevated : Colors.white,
+        border: Border(
+          top: BorderSide(
+            color: isDark ? AppColors.darkBorder : _border,
+            width: 1,
+          ),
+        ),
       ),
       child: SafeArea(
+        top: false,
         child: SizedBox(
           width: double.infinity,
           child: ElevatedButton(
             onPressed: () async {
               final currentUid = await AuthService.getCurrentUID();
-              if (currentUid != null) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ShippingAddressScreen(
-                      userId: widget.userId,
-                      uid: currentUid,
-                      cartItems: widget.cartItems,
-                      totalAmount: widget.totalAmount,
-                    ),
+              if (currentUid == null || !mounted) return;
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ShippingAddressScreen(
+                    userId: widget.userId,
+                    uid: currentUid,
+                    cartItems: widget.cartItems,
+                    totalAmount: widget.totalAmount,
                   ),
-                );
-              }
+                ),
+              );
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: _brand,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
+              elevation: 0,
+              shadowColor: _brand.withValues(alpha: 0.35),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(25),
+                borderRadius: BorderRadius.circular(16),
               ),
-              elevation: 8,
+            ).copyWith(
+              elevation: const WidgetStatePropertyAll(4),
+              shadowColor: WidgetStatePropertyAll(
+                _brand.withValues(alpha: 0.28),
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text(
-                  'المتابعة إلى الشحن',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                Text(
+                  _isAr ? 'المتابعة إلى الشحن' : 'Continue to shipping',
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                const SizedBox(width: 8),
-                Transform.flip(
-                  flipX: true,
-                  child: const Icon(Iconsax.truck, size: 20),
-                ),
+                const SizedBox(width: 10),
+                const Icon(Iconsax.truck, size: 20),
               ],
             ),
           ),

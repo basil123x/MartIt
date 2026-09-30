@@ -155,6 +155,28 @@ class _SmartAvatarWidgetState extends State<SmartAvatarWidget> {
     );
   }
 
+  Widget _buildLoadingPlaceholder([BuildContext? context]) {
+    final bg = widget.backgroundColor ??
+        (context != null ? context.appSurfaceVariant : Colors.grey[300]!);
+    final indicatorSize = (widget.size * 0.22).clamp(18.0, 36.0);
+    return Container(
+      width: widget.size,
+      height: widget.size,
+      color: bg,
+      alignment: Alignment.center,
+      child: SizedBox(
+        width: indicatorSize,
+        height: indicatorSize,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: widget.backgroundColor != null
+              ? Colors.white54
+              : AppColors.primary,
+        ),
+      ),
+    );
+  }
+
   Widget _buildContent() {
     if (_stage == _stageInitials) {
       return _buildInitials();
@@ -162,7 +184,13 @@ class _SmartAvatarWidgetState extends State<SmartAvatarWidget> {
 
     final url = _imageUrlForStage();
     if (url == null) {
-      return _buildInitials();
+      // No URL at this stage — advance quietly; never flash initials mid-pipeline.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _stage != _stageInitials) {
+          _advanceStage();
+        }
+      });
+      return _buildLoadingPlaceholder();
     }
 
     final cacheKey = widget.userId.isNotEmpty
@@ -175,25 +203,15 @@ class _SmartAvatarWidgetState extends State<SmartAvatarWidget> {
       width: widget.size,
       height: widget.size,
       fit: widget.fit,
-      placeholder: (context, url) => Container(
-        width: widget.size,
-        height: widget.size,
-        color: context.appSurfaceVariant,
-        child: Center(
-          child: SizedBox(
-            width: widget.size * 0.3,
-            height: widget.size * 0.3,
-            child: const CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
-      ),
+      placeholder: (context, url) => _buildLoadingPlaceholder(context),
       errorWidget: (context, url, error) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && _stage != _stageInitials) {
             _advanceStage();
           }
         });
-        return _buildInitials();
+        // Never flash initials here — wait until all image stages are exhausted.
+        return _buildLoadingPlaceholder(context);
       },
     );
   }

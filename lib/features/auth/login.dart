@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'package:MartIt/core/services/apple_auth_service.dart';
+import 'package:MartIt/core/services/auth_service.dart';
 import 'package:MartIt/core/services/avatar_service.dart';
 import 'package:MartIt/core/services/google_auth_service.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -9,16 +10,19 @@ import 'package:MartIt/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
-import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
+import '../../core/constants/app_theme.dart';
 import '../../core/services/localization_service.dart';
 import '../../core/utils/snackbar_helper.dart';
+import '../../core/utils/theme_extensions.dart';
 import 'phone_login_screen.dart';
 import 'email_login_screen.dart';
-import '../../core/utils/theme_extensions.dart';
+import 'otp_screen.dart';
+import '../../core/services/api_config_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -29,7 +33,273 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final GoogleAuthService googleAuthService = GoogleAuthService();
+  final TextEditingController _phoneController = TextEditingController();
+  final FocusNode _phoneFocus = FocusNode();
   bool _isAppleLoading = false;
+  bool _isPhoneLoading = false;
+  bool _isValidPhone = false;
+  late CountryCode _selectedCountry;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCountry = kPhoneCountries.first;
+    _phoneController.addListener(_onPhoneChanged);
+    _phoneFocus.addListener(() => setState(() {}));
+  }
+
+  void _onPhoneChanged() {
+    final valid = _selectedCountry.isValidPhone(_phoneController.text);
+    setState(() => _isValidPhone = valid);
+  }
+
+  Future<void> _sendOTP() async {
+    if (!_isValidPhone || _isPhoneLoading) return;
+    setState(() => _isPhoneLoading = true);
+    final otp = AuthService.generateOTP();
+    if (!mounted) return;
+    setState(() => _isPhoneLoading = false);
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => OTPScreen(
+          countryCode: _selectedCountry.dialCode,
+          phoneNumber: _phoneController.text,
+          generatedOTP: otp,
+        ),
+      ),
+    );
+  }
+
+  void _showCountryPicker(bool isAr) {
+    final searchController = TextEditingController();
+    var filtered = List<CountryCode>.from(kPhoneCountries);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final cs = Theme.of(context).colorScheme;
+            final martIt = context.martItColors;
+
+            void applyFilter(String query) {
+              final q = query.trim().toLowerCase();
+              setSheetState(() {
+                if (q.isEmpty) {
+                  filtered = List<CountryCode>.from(kPhoneCountries);
+                } else {
+                  filtered = kPhoneCountries.where((c) {
+                    return c.name.toLowerCase().contains(q) ||
+                        c.dialCode.contains(q) ||
+                        c.countryCode.toLowerCase().contains(q);
+                  }).toList();
+                }
+              });
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+              ),
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.75,
+                ),
+                decoration: BoxDecoration(
+                  color: context.appSurface,
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 12),
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: martIt.divider,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      isAr ? 'اختر كود الدولة' : 'Choose country code',
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: TextField(
+                        controller: searchController,
+                        onChanged: applyFilter,
+                        style: TextStyle(
+                          color: cs.onSurface,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        decoration: InputDecoration(
+                          hintText:
+                              isAr ? 'ابحث عن دولتك' : 'Search your country',
+                          hintStyle: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w400,
+                          ),
+                          prefixIcon: Icon(
+                            Iconsax.search_normal_1,
+                            color: cs.onSurfaceVariant,
+                            size: 20,
+                          ),
+                          filled: true,
+                          fillColor: martIt.fieldBg,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(color: martIt.fieldBorder),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(color: martIt.fieldBorder),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(
+                              color: cs.primary,
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Flexible(
+                      child: filtered.isEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.all(32),
+                              child: Text(
+                                isAr ? 'لا توجد نتائج' : 'No results',
+                                style: TextStyle(color: cs.onSurfaceVariant),
+                              ),
+                            )
+                          : ListView.separated(
+                              shrinkWrap: true,
+                              itemCount: filtered.length,
+                              separatorBuilder: (_, __) => Divider(
+                                height: 1,
+                                thickness: 1,
+                                color: martIt.divider,
+                              ),
+                              itemBuilder: (context, index) {
+                                final country = filtered[index];
+                                final selected = country.dialCode ==
+                                    _selectedCountry.dialCode;
+                                return Material(
+                                  color: selected
+                                      ? cs.primaryContainer
+                                      : context.appSurface,
+                                  child: InkWell(
+                                    onTap: () {
+                                      setState(() {
+                                        _selectedCountry = country;
+                                        _phoneController.clear();
+                                        _isValidPhone = false;
+                                      });
+                                      Navigator.pop(sheetContext);
+                                    },
+                                    child: SizedBox(
+                                      height: 64,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                              child: Image.network(
+                                                'https://flagcdn.com/w40/${country.countryCode.toLowerCase()}.png',
+                                                width: 36,
+                                                height: 24,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, __, ___) =>
+                                                    Text(
+                                                  country.dialCode,
+                                                  style: const TextStyle(
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 14),
+                                            Expanded(
+                                              child: Column(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    country.name,
+                                                    style: TextStyle(
+                                                      color: cs.onSurface,
+                                                      fontSize: 15,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    country.dialCode,
+                                                    style: TextStyle(
+                                                      color:
+                                                          cs.onSurfaceVariant,
+                                                      fontSize: 13,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            if (selected)
+                                              Icon(
+                                                Iconsax.tick_circle5,
+                                                color: cs.primary,
+                                                size: 22,
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    ).whenComplete(searchController.dispose);
+  }
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    _phoneFocus.dispose();
+    super.dispose();
+  }
 
   Future<void> _googleSignIn() async {
     try {
@@ -63,7 +333,7 @@ class _LoginScreenState extends State<LoginScreen> {
         String? playerId = OneSignal.User.pushSubscription.id;
 
         var result = await Dio().post(
-          "https://www.globee-trading.com/app2026/sql.php?k=${DateTime.now().millisecond}",
+          ApiConfigService.instance.sqlUrl(),
           data: FormData.fromMap({
             "action": "create_account",
             "uid": uid,
@@ -195,300 +465,476 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final lang = LocalizationService.instance.currentLanguage;
+    final isAr = lang == 'ar';
+    final cs = Theme.of(context).colorScheme;
     return Directionality(
       textDirection: LocalizationService.instance.textDirection,
-      child: Scaffold(
-      backgroundColor: context.appSurface,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: Theme.of(context).colorScheme.onSurface),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              children: [
-                // Logo
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(25),
-                  ),
-                  child: Image.asset(
-                    "assets/images/app-icon2.png",
-                    fit: BoxFit.cover,
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // App Name
-                Text(
-                  AppStrings.appName,
-                  style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 32,
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                Text(
-                  lang == 'ar'
-                      ? 'مرحباً بك في عالم التسوق الذكي'
-                      : 'Welcome to the Smart Shopping World',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppColors.textSecondaryColor(context),
-                    fontSize: 16,
-                  ),
-                ),
-
-                const SizedBox(height: 30),
-
-                _buildLoginOptionButton(
-                  context: context,
-                  imageTxt: "assets/images/social/google.png",
-                  isimg: true,
-                  title: lang == 'ar' ? 'سجل بواسطة جوجل' : 'Sign in with Google',
-                  gradient: LinearGradient(
-                    colors: [
-                      AppColors.primary,
-                      AppColors.primary.withValues(alpha: 0.8),
-                    ],
-                  ),
-                  onTap: () => _googleSignIn(),
-                ),
-
-                const SizedBox(height: 16),
-
-                Visibility(
-                  visible: Platform.isIOS,
-                  child: Column(
-                    children: [
-                      _buildLoginOptionButton(
-                        context: context,
-                        imageTxt: "assets/images/social/apple.png",
-                        isimg: true,
-                        title: _isAppleLoading
-                            ? (lang == 'ar' ? 'جاري التحميل' : 'Loading')
-                            : (lang == 'ar'
-                                ? 'سجل بواسطة أبل'
-                                : 'Sign in with Apple'),
-                        gradient: LinearGradient(
-                          colors: [
-                            AppColors.primary,
-                            AppColors.primary.withValues(alpha: 0.8),
-                          ],
-                        ),
-                        onTap: _isAppleLoading ? null : _appleSignIn,
+      child: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Scaffold(
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(
+                Icons.arrow_back_ios,
+                color: cs.onSurface,
+              ),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          body: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints:
+                        BoxConstraints(minHeight: constraints.maxHeight),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 12),
+                          Container(
+                            width: 100,
+                            height: 100,
+                            decoration: BoxDecoration(
+                              color: context.appSurface,
+                              borderRadius: BorderRadius.circular(25),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: cs.primary.withValues(alpha: 0.18),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(25),
+                              child: Image.asset(
+                                'assets/images/app-icon2.png',
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            AppStrings.appName,
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineLarge
+                                ?.copyWith(
+                                  color: cs.primary,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 32,
+                                ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            isAr
+                                ? 'مرحباً بك في عالم التسوق الذكي'
+                                : 'Welcome to the Smart Shopping World',
+                            textAlign: TextAlign.center,
+                            style:
+                                Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      color: cs.onSurfaceVariant,
+                                      fontSize: 16,
+                                      height: 1.4,
+                                    ),
+                          ),
+                          const SizedBox(height: 36),
+                          _buildPhoneAuthSection(isAr),
+                          const SizedBox(height: 28),
+                          _buildOrDivider(isAr),
+                          const SizedBox(height: 28),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildCircleAuthSlot(
+                                child: _buildCircleAuthButton(
+                                  background: context.appSurface,
+                                  borderColor: context.martItColors.fieldBorder,
+                                  onTap: _googleSignIn,
+                                  child: Image.asset(
+                                    'assets/images/social/google.png',
+                                    width: 26,
+                                    height: 26,
+                                  ),
+                                ),
+                              ),
+                              if (Platform.isIOS) ...[
+                                const SizedBox(width: 16),
+                                _buildCircleAuthSlot(
+                                  child: _buildCircleAuthButton(
+                                    background: Colors.black,
+                                    onTap:
+                                        _isAppleLoading ? null : _appleSignIn,
+                                    child: _isAppleLoading
+                                        ? const SizedBox(
+                                            width: 22,
+                                            height: 22,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : Image.asset(
+                                            'assets/images/social/apple.png',
+                                            width: 24,
+                                            height: 24,
+                                            color: Colors.white,
+                                          ),
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(width: 16),
+                              _buildCircleAuthSlot(
+                                child: _buildCircleAuthButton(
+                                  background: context.appIconPillBg,
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const EmailLoginScreen(),
+                                      ),
+                                    );
+                                  },
+                                  child: Icon(
+                                    Iconsax.sms,
+                                    color: cs.primary,
+                                    size: 24,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              _buildFacebookComingSoon(isAr),
+                            ],
+                          ),
+                          const SizedBox(height: 48),
+                          Text(
+                            isAr
+                                ? 'بالمتابعة، أنت توافق على شروط الاستخدام وسياسة الخصوصية'
+                                : 'By continuing, you agree to our Terms and Privacy Policy',
+                            textAlign: TextAlign.center,
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: cs.onSurfaceVariant,
+                                      height: 1.5,
+                                    ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
-                    ],
-                  ),
-                ),
-
-                _buildLoginOptionButton(
-                  context: context,
-                  icon: Iconsax.mobile,
-                  isimg: false,
-                  title: lang == 'ar'
-                      ? 'التسجيل برقم الهاتف'
-                      : 'Sign in with Phone',
-                  gradient: LinearGradient(
-                    colors: [
-                      AppColors.primary,
-                      AppColors.primary.withValues(alpha: 0.8),
-                    ],
-                  ),
-                  onTap: () async {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const PhoneLoginScreen(),
-                      ),
-                    );
-                  },
-                ),
-
-                const SizedBox(height: 16),
-
-                // Email Login Button
-                _buildLoginOptionButton(
-                  context: context,
-                  icon: Iconsax.sms,
-                  isimg: false,
-                  title: lang == 'ar'
-                      ? 'التسجيل بالبريد الإلكتروني'
-                      : 'Sign in with Email',
-                  gradient: LinearGradient(
-                    colors: [const Color(0xFF6366F1), const Color(0xFF8B5CF6)],
-                  ),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const EmailLoginScreen(),
-                      ),
-                    );
-                  },
-                ),
-
-                const SizedBox(height: 16),
-
-                Opacity(
-                  opacity: 0.4,
-                  child: _buildLoginOptionButton(
-                    context: context,
-                    imageTxt: "assets/images/social/face.png",
-                    isimg: true,
-                    title: lang == 'ar'
-                        ? 'سجل بواسطة الفيسبوك'
-                        : 'Sign in with Facebook',
-                    subtitle: lang == 'ar' ? 'قريباً' : 'Coming Soon',
-                    gradient: LinearGradient(
-                      colors: [
-                        AppColors.primary,
-                        AppColors.primary.withValues(alpha: 0.8),
-                      ],
                     ),
                   ),
-                ),
-
-                const SizedBox(height: 50),
-
-                // Footer
-                Text(
-                  lang == 'ar'
-                      ? 'بالمتابعة، أنت توافق على شروط الاستخدام وسياسة الخصوصية'
-                      : 'By continuing, you agree to our Terms and Privacy Policy',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: AppColors.textHint),
-                ),
-              ],
+                );
+              },
             ),
           ),
         ),
       ),
-    ),
     );
   }
 
-  Widget _buildLoginOptionButton({
-    required BuildContext context,
-    IconData? icon,
-    String? imageTxt,
-    bool? isimg,
-    required String title,
-    String? subtitle,
-    required Gradient gradient,
-    VoidCallback? onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Directionality(
-        textDirection: LocalizationService.instance.textDirection,
-        child: Container(
-          width: double.infinity,
-          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          decoration: BoxDecoration(
-            gradient: gradient,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: gradient.colors.first.withValues(alpha: 0.3),
-                blurRadius: 15,
-                offset: const Offset(0, 8),
+  Widget _buildPhoneAuthSection(bool isAr) {
+    final cs = Theme.of(context).colorScheme;
+    final martIt = context.martItColors;
+    final unfocusedBorder = martIt.fieldBorder;
+    final borderRadius = BorderRadius.circular(16);
+    final hasText = _phoneController.text.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            TextField(
+              controller: _phoneController,
+              focusNode: _phoneFocus,
+              keyboardType: TextInputType.phone,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _sendOTP(),
+              style: TextStyle(
+                color: cs.onSurface,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.2,
               ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(_selectedCountry.maxLength),
+              ],
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: martIt.fieldBg,
+                hintText: isAr ? 'رقم الجوال' : 'Phone number',
+                hintStyle: TextStyle(
+                  color: martIt.mutedText,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 16,
+                  letterSpacing: 0,
                 ),
-                child: isimg != true
-                    ? Icon(icon, color: Colors.white, size: 28)
-                    : Image.asset(imageTxt ?? "", width: 20),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                // Reserve trailing space so text never sits under the status icon.
+                contentPadding: const EdgeInsetsDirectional.only(
+                  start: 12,
+                  end: 44,
+                  top: 16,
+                  bottom: 16,
+                ),
+                prefixIcon: Padding(
+                  padding: const EdgeInsetsDirectional.only(start: 10, end: 6),
+                  child: InkWell(
+                    onTap: () => _showCountryPicker(isAr),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          title,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                        ),
-                        Visibility(
-                          visible: subtitle != null ? true : false,
-                          child: Text(
-                            subtitle ?? "",
-                            style: TextStyle(color: Colors.white),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(3),
+                          child: Image.network(
+                            'https://flagcdn.com/w40/${_selectedCountry.countryCode.toLowerCase()}.png',
+                            width: 28,
+                            height: 20,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Icon(
+                              Iconsax.global,
+                              size: 18,
+                              color: cs.primary,
+                            ),
                           ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _selectedCountry.dialCode,
+                          style: TextStyle(
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Icon(
+                          Iconsax.arrow_down_1,
+                          size: 16,
+                          color: cs.onSurfaceVariant,
+                        ),
+                        Container(
+                          margin: const EdgeInsetsDirectional.only(start: 8),
+                          width: 1,
+                          height: 22,
+                          color: unfocusedBorder,
                         ),
                       ],
                     ),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ],
+                  ),
+                ),
+                prefixIconConstraints: const BoxConstraints(
+                  minWidth: 0,
+                  minHeight: 0,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: borderRadius,
+                  borderSide: BorderSide(color: unfocusedBorder, width: 1.5),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: borderRadius,
+                  borderSide: BorderSide(color: unfocusedBorder, width: 1.5),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: borderRadius,
+                  borderSide: BorderSide(color: cs.primary, width: 2),
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSocialButton({
-    required BuildContext context,
-    required String icon,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        width: 70,
-        height: 70,
-        decoration: BoxDecoration(
-        color: context.appSurface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.lightGrey, width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
+            ),
+            // Absolute slot so error/success icons never shift.
+            PositionedDirectional(
+              start: null,
+              end: 12,
+              top: 0,
+              bottom: 0,
+              child: SizedBox(
+                width: 22,
+                child: Center(
+                  child: AnimatedOpacity(
+                    opacity: hasText ? 1 : 0,
+                    duration: const Duration(milliseconds: 120),
+                    child: Icon(
+                      _isValidPhone
+                          ? Icons.check_circle_rounded
+                          : Icons.cancel_rounded,
+                      size: 22,
+                      color: _isValidPhone
+                          ? const Color(0xFF22C55E)
+                          : const Color(0xFFEF4444),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
-        child: Center(child: Image.asset(icon, width: 32, height: 32)),
+        const SizedBox(height: 10),
+        Align(
+          alignment: isAr ? Alignment.centerRight : Alignment.centerLeft,
+          child: Text(
+            isAr
+                ? 'أدخل رقم هاتفك لاستلام رمز التحقق'
+                : 'Enter your phone number to receive a code',
+            style: TextStyle(
+              color: cs.onSurfaceVariant,
+              fontSize: 13,
+              height: 1.3,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isValidPhone && !_isPhoneLoading ? _sendOTP : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: cs.primary,
+              disabledBackgroundColor: cs.primary.withValues(alpha: 0.35),
+              foregroundColor: cs.onPrimary,
+              disabledForegroundColor: cs.onPrimary.withValues(alpha: 0.7),
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(vertical: 17),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              shadowColor: cs.primary.withValues(alpha: 0.35),
+            ),
+            child: _isPhoneLoading
+                ? SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
+                      color: cs.onPrimary,
+                    ),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Iconsax.sms, size: 22),
+                      const SizedBox(width: 10),
+                      Text(
+                        isAr ? 'إرسال رمز التحقق' : 'Send verification code',
+                        style: TextStyle(
+                          color: cs.onPrimary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOrDivider(bool isAr) {
+    final secondary = Theme.of(context).colorScheme.onSurfaceVariant;
+    final divider = context.appDivider;
+    return Row(
+      children: [
+        Expanded(
+          child: Divider(color: divider, thickness: 1, height: 1),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Text(
+            isAr ? 'أو' : 'or',
+            style: TextStyle(
+              color: secondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Divider(color: divider, thickness: 1, height: 1),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCircleAuthSlot({required Widget child, String? label}) {
+    return SizedBox(
+      width: 56,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          child,
+          const SizedBox(height: 6),
+          SizedBox(
+            height: 14,
+            child: label == null
+                ? const SizedBox.shrink()
+                : Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCircleAuthButton({
+    required Color background,
+    Color? borderColor,
+    required Widget child,
+    VoidCallback? onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Ink(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            color: background,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: borderColor ?? Colors.transparent,
+              width: borderColor != null ? 1.5 : 0,
+            ),
+          ),
+          child: Center(child: child),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFacebookComingSoon(bool isAr) {
+    return Opacity(
+      opacity: 0.4,
+      child: _buildCircleAuthSlot(
+        label: isAr ? 'قريباً' : 'Soon',
+        child: IgnorePointer(
+          child: _buildCircleAuthButton(
+            background: const Color(0xFF1877F2),
+            onTap: null,
+            child: Image.asset(
+              'assets/images/social/face.png',
+              width: 24,
+              height: 24,
+              color: Colors.white,
+            ),
+          ),
+        ),
       ),
     );
   }

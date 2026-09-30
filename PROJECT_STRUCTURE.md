@@ -1,4 +1,4 @@
-# هيكل مشروع Social Marketplace 📁
+# هيكل مشروع MartIt 📁
 
 ## الملفات المنشأة ✅
 
@@ -149,7 +149,7 @@ assets/
 
 ### 🚀 للتشغيل
 ```bash
-cd Globee
+cd MartIt
 flutter pub get
 flutter run
 ```

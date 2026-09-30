@@ -137,7 +137,9 @@ class _CommentsModalState extends State<CommentsModal> {
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     final screenHeight = MediaQuery.of(context).size.height;
 
-    return Container(
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Container(
       height: keyboardHeight > 0
           ? screenHeight *
                 0.9 // عند فتح الكيبورد
@@ -169,6 +171,7 @@ class _CommentsModalState extends State<CommentsModal> {
           if (keyboardHeight > 0) SizedBox(height: keyboardHeight),
         ],
       ),
+    ),
     );
   }
 
@@ -179,17 +182,19 @@ class _CommentsModalState extends State<CommentsModal> {
         border: Border(bottom: BorderSide(color: context.appCardBorder)),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          const SizedBox(width: 40),
+          const Expanded(
+            child: Text(
+              'التعليقات',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ),
           IconButton(
             onPressed: () => Navigator.pop(context),
             icon: const Icon(Iconsax.close_square, size: 24),
           ),
-          const Text(
-            'التعليقات',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(width: 40), // Balance the close button
         ],
       ),
     );
@@ -232,68 +237,88 @@ class _CommentsModalState extends State<CommentsModal> {
   }
 
   Widget _buildCommentItem(CommentModel comment) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // User Avatar
-          SmartAvatarWidget(
-            userId: comment.userId,
-            name: comment.userName,
-            size: 40,
-            fallbackUrl: comment.userAvatar,
-            backgroundColor: AppColors.secondary,
-            initialsStyle: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
+    final cs = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SmartAvatarWidget(
+              userId: comment.userId,
+              name: comment.userName,
+              size: 40,
+              fallbackUrl: comment.userAvatar,
+              backgroundColor: AppColors.secondary,
+              initialsStyle: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-
-          const SizedBox(width: 12),
-
-          // Comment Content
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                // User Name and Time
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      _formatTime(comment.createdAt),
-                      style: const TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
-                    Text(
-                      comment.userName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                // RTL start = next to avatar (right side visually).
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          comment.userName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _formatTime(comment.createdAt),
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: context.appSurfaceVariant,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(14),
+                          topRight: Radius.circular(4),
+                          bottomLeft: Radius.circular(14),
+                          bottomRight: Radius.circular(14),
+                        ),
+                      ),
+                      child: Text(
+                        comment.comment,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: cs.onSurface,
+                          height: 1.35,
+                        ),
                       ),
                     ),
-                  ],
-                ),
-
-                const SizedBox(height: 4),
-
-                // Comment Text
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: context.appSurfaceVariant,
-                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text(
-                    comment.comment,
-                    style: const TextStyle(fontSize: 14),
-                    textAlign: TextAlign.right,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -302,7 +327,7 @@ class _CommentsModalState extends State<CommentsModal> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: context.appSurfaceVariant!)),
+        border: Border(top: BorderSide(color: context.appSurfaceVariant)),
       ),
       child: SafeArea(
         child: Row(

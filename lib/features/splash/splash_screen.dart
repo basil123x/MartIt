@@ -1,18 +1,15 @@
-import 'dart:io';
-
 import 'package:MartIt/features/update/update_screen.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shorebird_code_push/shorebird_code_push.dart';
-import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/constants/app_strings.dart';
+import '../../core/services/api_config_service.dart';
 import '../../core/services/localization_service.dart';
-import '../home/tiktok_feed_screen.dart';
+import '../../core/services/store_update_service.dart';
+import '../home/main_navigation_screen.dart';
 import '../onboarding/onboarding_screen.dart';
-import '../../core/utils/theme_extensions.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -46,56 +43,37 @@ class _SplashScreenState extends State<SplashScreen>
     }
   }
 
-  Future<void> checkForForceUpdate() async {
-    try {
-      final dio = Dio();
-      String platform = "";
-      if (Platform.isIOS) {
-        setState(() {
-          platform = "IOS";
-        });
-      } else {
-        setState(() {
-          platform = "Android";
-        });
-      }
-
-      final response = await dio.get(
-        'https://www.Globee-Trading.com/app2026/get_update_info.php?platform=$platform&k=${DateTime.now().millisecondsSinceEpoch}',
-      );
-
-      if (response.statusCode == 200) {
-        final data = response.data;
-        final latestVersion = data['latest_version'];
-        final forceUpdate = data['force_update'].toString() == "1";
-        final message = data['message'];
-        final storeUrl = data['store_link'];
-
-        final packageInfo = await PackageInfo.fromPlatform();
-        final currentVersion = packageInfo.version;
-
-        if (forceUpdate && currentVersion != latestVersion) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) {
-                return ForceUpdateScreen(message: message, storeUrl: storeUrl);
-              },
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print("Error while checking for update: $e");
-    }
+  Future<void> _checkStoreUpdate() async {
+    await ApiConfigService.instance.refreshFromRemote();
+    if (!mounted) return;
+    final requirement = await StoreUpdateService.instance.check();
+    if (!mounted || requirement == null) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ForceUpdateScreen(
+          message: requirement.message,
+          storeUrl: requirement.storeUrl,
+          currentVersion: requirement.currentVersion,
+          latestVersion: requirement.latestVersion,
+        ),
+      ),
+    );
   }
 
   @override
   void initState() {
     super.initState();
-    checkForForceUpdate();
     _loadVersionInfo();
     _initializeAnimations();
+    _boot();
+  }
+
+  Future<void> _boot() async {
+    await _checkStoreUpdate();
+    if (!mounted) return;
+    final route = ModalRoute.of(context);
+    if (route?.isCurrent != true) return;
     _navigateToHome();
   }
 
@@ -135,9 +113,10 @@ class _SplashScreenState extends State<SplashScreen>
         );
 
     // Slogan Fade Animation
-    _sloganAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _sloganController, curve: Curves.easeIn),
-    );
+    _sloganAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _sloganController, curve: Curves.easeIn));
 
     // Start animations
     _logoController.forward();
@@ -163,7 +142,7 @@ class _SplashScreenState extends State<SplashScreen>
       }
 
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const TikTokFeedScreen()),
+        MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
       );
     });
   }
@@ -178,155 +157,151 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = cs.brightness == Brightness.dark;
+
+    // Light: purple brand / Dark: neon lime on near-black (from AppTheme)
+    final bg = Theme.of(context).scaffoldBackgroundColor;
+    final logoBg = isDark ? cs.surface : cs.primaryContainer;
+    final accent = cs.primary;
+    final tagline = cs.onSurfaceVariant;
+    final slogan = isDark ? cs.onSurfaceVariant : cs.secondary;
+    final version = cs.onSurfaceVariant.withValues(alpha: 0.7);
+
     return Directionality(
       textDirection: LocalizationService.instance.textDirection,
       child: Scaffold(
-      backgroundColor: AppColors.primary,
-      body: Container(
-        color: AppColors.primary,
-        child: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                flex: 3,
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Animated Rive Logo
-                      // Animated Rive Logo
-                      AnimatedBuilder(
-                        animation: _logoAnimation,
-                        builder: (context, child) {
-                          return Transform.scale(
-                            scale: _logoAnimation.value,
-                            child: Container(
-                              width: 150, // كان 200
-                              height: 150, // كان 200
-                              decoration: BoxDecoration(
-                                color: AppColors.primaryDark,
-                                borderRadius: BorderRadius.circular(
-                                  30,
-                                ), // كان 40
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(
-                                  30,
-                                ), // كان 40
-                                child: Padding(
-                                  padding: const EdgeInsets.all(30),
-                                  child: Image.asset(
-                                    "assets/images/Logo-trans.png",
-                                    fit: BoxFit.contain,
+        backgroundColor: bg,
+        body: Container(
+          color: bg,
+          child: SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        AnimatedBuilder(
+                          animation: _logoAnimation,
+                          builder: (context, child) {
+                            return Transform.scale(
+                              scale: _logoAnimation.value,
+                              child: Container(
+                                width: 150,
+                                height: 150,
+                                decoration: BoxDecoration(
+                                  color: logoBg,
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(24),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(30),
+                                    child: ColorFiltered(
+                                      colorFilter: ColorFilter.mode(
+                                        accent,
+                                        BlendMode.srcIn,
+                                      ),
+                                      child: Image.asset(
+                                        "assets/images/Logo-trans.png",
+                                        fit: BoxFit.contain,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          );
-                        },
-                      ),
+                            );
+                          },
+                        ),
 
-                      const SizedBox(height: 30),
+                        const SizedBox(height: 30),
 
-                      // Animated App Name
-                      SlideTransition(
-                        position: _slideAnimation,
-                        child: FadeTransition(
-                          opacity: _textAnimation,
-                          child: Column(
-                            children: [
-                              Text(
-                                AppStrings.appName,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineMedium
-                                    ?.copyWith(
-                                      color: Color(0xFFF08D39),
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 1.2,
-                                    ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                tr('splash.tagline_ar'),
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(
-                                      color: AppColors.white.withValues(
-                                        alpha: 0.9,
+                        SlideTransition(
+                          position: _slideAnimation,
+                          child: FadeTransition(
+                            opacity: _textAnimation,
+                            child: Column(
+                              children: [
+                                Text(
+                                  AppStrings.appName,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium
+                                      ?.copyWith(
+                                        color: accent,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 1.2,
                                       ),
-                                      fontWeight: FontWeight.w300,
-                                    ),
-                              ),
-                            ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  tr('splash.tagline_ar'),
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(
+                                        color: tagline,
+                                        fontWeight: FontWeight.w300,
+                                      ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
 
-                      const SizedBox(height: 14),
+                        const SizedBox(height: 14),
 
-                      // Slogan with fade-in animation
+                        FadeTransition(
+                          opacity: _sloganAnimation,
+                          child: Text(
+                            tr('splash.tagline_en'),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: slogan,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.6,
+                                  fontSize: 16,
+                                ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+
+                        const SizedBox(height: 14),
+                      ],
+                    ),
+                  ),
+                ),
+
+                Expanded(
+                  flex: 1,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
                       FadeTransition(
-                        opacity: _sloganAnimation,
-                        child: Text(
-                          tr('splash.tagline_en'),
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: AppColors.white.withValues(alpha: 0.70),
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.6,
-                                fontSize: 16
-                              ),
-                          textAlign: TextAlign.center,
+                        opacity: _textAnimation,
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(accent),
+                          strokeWidth: 3,
                         ),
                       ),
-
-                      const SizedBox(height: 14),
-
-                      
                     ],
                   ),
                 ),
-              ),
 
-              // Loading Indicator
-              Expanded(
-                flex: 1,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    FadeTransition(
-                      opacity: _textAnimation,
-                      child: const CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          AppColors.white,
-                        ),
-                        strokeWidth: 3,
-                      ),
-                    ),
-
-                    
-                    
-                  ],
-                ),
-              ),
-
-              // Version Info
-              Padding(
-                padding: const EdgeInsets.only(bottom: 30),
-                child: Column(
-                  children: [
-                    FadeTransition(
-                      opacity: _textAnimation,
-                      child: Text(
-                        _appVersion.isNotEmpty
-                            ? '$_appVersion v'
-                            : '${AppConstants.appVersion} v',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.white.withValues(alpha: 0.6),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 30),
+                  child: Column(
+                    children: [
+                      FadeTransition(
+                        opacity: _textAnimation,
+                        child: Text(
+                          _appVersion.isNotEmpty
+                              ? '$_appVersion v'
+                              : '${AppConstants.appVersion} v',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: version),
                         ),
                       ),
-                    ),
-                    // Dynamic version + patch
                       FadeTransition(
                         opacity: _sloganAnimation,
                         child: Column(
@@ -335,26 +310,25 @@ class _SplashScreenState extends State<SplashScreen>
                               const SizedBox(height: 4),
                               Text(
                                 'Patch: #$_patchNumber',
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color: AppColors.white.withValues(alpha: 0.50),
-                                  fontWeight: FontWeight.w400,
-                                  letterSpacing: 0.5,
-                                ),
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: version,
+                                      fontWeight: FontWeight.w400,
+                                      letterSpacing: 0.5,
+                                    ),
                               ),
                             ],
                           ],
                         ),
                       ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ),
     );
   }
 }

@@ -22,12 +22,12 @@ if (isset($_GET['store_id']))
             break;
         default:
             $name = "MartIt";
-            $email = "info@globee-trading.com";
+            $email = "info@mart-it.store";
             break;
     }
 } else {
     $name = "MartIt";
-    $email = "info@globee-trading.com";
+    $email = "info@mart-it.store";
 }
 
 

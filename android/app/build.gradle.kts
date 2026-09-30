@@ -37,8 +37,8 @@ android {
         minSdk = 24
         targetSdk = 36
         multiDexEnabled = true
-        versionCode = 28
-        versionName = "1.2.0"
+        versionCode = 30
+        versionName = "1.2.2"
         
         // Enable 16KB page size support
         ndk {
@@ -96,7 +96,7 @@ flutter {
 dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.multidex:multidex:2.0.1")
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     // NO Play Core libraries - they're deprecated and incompatible with SDK 34+
 }
 

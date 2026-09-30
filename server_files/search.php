@@ -38,7 +38,7 @@ try {
             $storeid = !empty($row['storeid']) ? (string)$row['storeid'] : '1';
             $itemId  = (string)$row['id'];
             $idx     = (string)($row['idx'] ?? '');
-            $thumbnail = item_thumbnail_url($storeid, $itemId, $idx);
+            $thumbnail = item_thumbnail_url($storeid, $itemId, $idx, $row['media'] ?? null);
 
             $items[] = [
                 'id'       => $itemId,

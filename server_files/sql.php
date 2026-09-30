@@ -524,7 +524,8 @@ LIMIT $limit OFFSET $offset";
                 $old_qtt = (int)$oldQttRow['qtt'];
             }
 
-            $sql = "UPDATE Items SET uid = '$uid', barcode = '$barcode' ,name = '$name', eng = '$eng', description = '$description', description_arb = '$description_arb', category = '$category', price = '$price', qtt = '$qtt', Visibility = '$visibility', comments = '$comments', media = '$media'$idx_sql WHERE id = '$itemId'";
+            $has_image_sql = !empty($media) ? ", has_image = 1" : '';
+            $sql = "UPDATE Items SET uid = '$uid', barcode = '$barcode' ,name = '$name', eng = '$eng', description = '$description', description_arb = '$description_arb', category = '$category', price = '$price', qtt = '$qtt', Visibility = '$visibility', comments = '$comments', media = '$media'$has_image_sql$idx_sql WHERE id = '$itemId'";
 
             if ($conx->query($sql)) {
                 $notify_users = martit_process_notify_restock($conx, $itemId, $old_qtt, $qtt);
@@ -673,14 +674,31 @@ if ($store_id == '5') {
     break;
             
         case 'user_status':
-            $uid = isset($_POST['uid']) ? $conx->real_escape_string($_POST['uid']) : '';
-            $sql = "SELECT status FROM Users WHERE uid = '$uid' ";
-            $status = $conx->query($sql)->fetch_array()[0];
+            $uid = isset($_POST['uid']) ? $conx->real_escape_string(trim($_POST['uid'])) : '';
+            if ($uid === '') {
+                $response = array(
+                    'success' => false,
+                    'error' => 'uid required',
+                    'status' => null
+                );
+                break;
+            }
 
-            $response = array(
-                'success' => true,
-                'status' => $status
-            );
+            // Accept either Users.uid or Users.id (app may store either)
+            $sql = "SELECT status FROM Users WHERE uid = '$uid' OR id = '$uid' LIMIT 1";
+            $result = $conx->query($sql);
+            if ($result && ($row = $result->fetch_assoc())) {
+                $response = array(
+                    'success' => true,
+                    'status' => $row['status']
+                );
+            } else {
+                $response = array(
+                    'success' => false,
+                    'error' => 'user not found',
+                    'status' => null
+                );
+            }
             break;
 
         // =====================================
@@ -966,12 +984,21 @@ if ($store_id == '5') {
                 
                 $item = array(
                     'id' => (string)$row['id'],
+                    'idx' => (string)($row['idx'] ?? ''),
+                    'storeid' => $storeid,
+                    'barcode' => (string)($row['barcode'] ?? ''),
                     'name' => (string)$row['name'],
+                    'eng' => (string)($row['eng'] ?? ''),
                     'price' => (string)$row['price'],
                     'quantity' => (int)$row['qtt'],
+                    'qtt' => (int)$row['qtt'],
                     'description' => (string)$row['description'],
+                    'description_arb' => (string)($row['description_arb'] ?? ''),
+                    'category' => (string)($row['category'] ?? ''),
                     'views' => (int)$row['Views'],
-                    'visibility' => (string)$row['Visibility'],
+                    'visibility' => (string)($row['Visibility'] ?? 'Public'),
+                    'comments' => (string)($row['Comments'] ?? $row['comments'] ?? 'on'),
+                    'media_raw' => (string)($row['media'] ?? ''),
                     'media' => $mediaFiles,
                     'seller' => array(
                         'id' => (string)$row['user_id'],
@@ -1075,7 +1102,8 @@ if ($store_id == '5') {
                         $thumbnail = item_thumbnail_url(
                             $storeid_val,
                             $itemId,
-                            $itemIdx
+                            $itemIdx,
+                            $row['media'] ?? null
                         );
                         
                         // Build search result object
@@ -1854,7 +1882,8 @@ if ($store_id == '5') {
                         $thumbnail = item_thumbnail_url(
                             $itemStoreId,
                             (string)$row['item_id'],
-                            (string)($row['item_idx'] ?? '')
+                            (string)($row['item_idx'] ?? ''),
+                            $row['media'] ?? null
                         );
                         
                         $cartItem = array(
@@ -1982,6 +2011,96 @@ if ($store_id == '5') {
                 $response = array(
                     'success' => false,
                     'error' => 'خطأ في إضافة العنوان: ' . $e->getMessage()
+                );
+            }
+            break;
+
+        // =====================================
+        // تحديث عنوان شحن (Update Shipping Address)
+        // =====================================
+        case 'update_shipping_address':
+            $address_id = isset($_POST['address_id']) ? (int)$_POST['address_id'] : 0;
+            $fullname = isset($_POST['fullname']) ? $conx->real_escape_string($_POST['fullname']) : '';
+            $mobile = isset($_POST['mobile']) ? $conx->real_escape_string($_POST['mobile']) : '';
+            $email = isset($_POST['email']) ? $conx->real_escape_string($_POST['email']) : '';
+            $country = isset($_POST['country']) ? $conx->real_escape_string($_POST['country']) : '';
+            $city = isset($_POST['city']) ? $conx->real_escape_string($_POST['city']) : '';
+            $zone_number = isset($_POST['zone_number']) ? $conx->real_escape_string($_POST['zone_number']) : '';
+            $street_number = isset($_POST['street_number']) ? $conx->real_escape_string($_POST['street_number']) : '';
+            $building_number = isset($_POST['building_number']) ? $conx->real_escape_string($_POST['building_number']) : '';
+            $uid = isset($_POST['uid']) ? $conx->real_escape_string($_POST['uid']) : '';
+
+            if ($address_id <= 0 || empty($fullname) || empty($mobile) || empty($uid)) {
+                $response = array(
+                    'success' => false,
+                    'error' => 'بيانات العنوان غير مكتملة'
+                );
+                break;
+            }
+
+            try {
+                $sql = "UPDATE Shipping_Orders SET
+                            Fullname = '$fullname',
+                            MobileNumber = '$mobile',
+                            Email = '$email',
+                            Country = '$country',
+                            City = '$city',
+                            `Zone Number` = '$zone_number',
+                            `Street Number` = '$street_number',
+                            `Building Number` = '$building_number'
+                        WHERE id = $address_id AND uid = '$uid'";
+
+                if ($conx->query($sql)) {
+                    $response = array(
+                        'success' => true,
+                        'message' => 'تم تحديث العنوان بنجاح'
+                    );
+                } else {
+                    $response = array(
+                        'success' => false,
+                        'error' => 'فشل في تحديث العنوان: ' . $conx->error
+                    );
+                }
+            } catch (Exception $e) {
+                $response = array(
+                    'success' => false,
+                    'error' => 'خطأ في تحديث العنوان: ' . $e->getMessage()
+                );
+            }
+            break;
+
+        // =====================================
+        // حذف عنوان شحن (Delete Shipping Address)
+        // =====================================
+        case 'delete_shipping_address':
+            $address_id = isset($_POST['address_id']) ? (int)$_POST['address_id'] : 0;
+            $uid = isset($_POST['uid']) ? $conx->real_escape_string($_POST['uid']) : '';
+
+            if ($address_id <= 0 || empty($uid)) {
+                $response = array(
+                    'success' => false,
+                    'error' => 'معرف العنوان والمستخدم مطلوبان'
+                );
+                break;
+            }
+
+            try {
+                $sql = "DELETE FROM Shipping_Orders WHERE id = $address_id AND uid = '$uid'";
+                if ($conx->query($sql)) {
+                    $response = array(
+                        'success' => true,
+                        'message' => 'تم حذف العنوان بنجاح'
+                    );
+                } else {
+                    $response = array(
+                        'success' => false,
+                        'error' => 'فشل في حذف العنوان: ' . $conx->error
+                    );
+                }
+            } catch (Exception $e) {
+                $response = array(
+                    'success' => false,
+                    'error' => 'خطأ في حذف العنوان: ' . $e->getMessage()
                 );
             }
             break;

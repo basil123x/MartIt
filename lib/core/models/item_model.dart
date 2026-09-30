@@ -66,6 +66,8 @@ class ItemModel {
               itemId: itemId,
               itemIdx: itemIdx,
               index: mediaIndex,
+              extension:
+                  ItemMediaUrlUtil.extensionFromMediaToken(file) ?? "webp",
             ),
           );
           index++;
