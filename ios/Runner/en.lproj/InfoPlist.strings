@@ -1,0 +1,5 @@
+NSCameraUsageDescription = "MartIt uses the camera so you can photograph products you want to sell.";
+NSLocationWhenInUseUsageDescription = "MartIt uses your location to show products available in your country.";
+NSMicrophoneUsageDescription = "MartIt uses the microphone when you record a product video.";
+NSPhotoLibraryAddUsageDescription = "MartIt saves product photos to your library only when you choose to.";
+NSPhotoLibraryUsageDescription = "MartIt needs your photo library so you can add existing pictures to a product.";

@@ -2323,22 +2323,13 @@ if ($store_id == '4') {
         // حذف الحساب نهائياً
         // =====================================
         case 'delete_account_permit':
-            $uid = isset($_POST['uid']) ? $conn->real_escape_string($_POST['uid']) : '';
-            
+            require_once __DIR__ . '/moderation.php';
+            $uid = isset($_POST['uid']) ? $_POST['uid'] : '';
+            $db = (isset($conx) && $conx instanceof mysqli) ? $conx : $conn;
             try {
-                $sql = "DELETE FROM Users WHERE uid = '$uid'";
- 
-                
-                if ($conn->query($sql)) {
-                    $response = [
-                        'success' => true, 
-                        'message' => 'تم حذف الحساب نهائياً بنجاح',
-                    ];
-                } else {
-                    $response = ['success' => false, 'error' => 'فشل في تحديث الحالة: ' . $conn->error];
-                }
-            } catch (Exception $e) {
-                $response = ['success' => false, 'error' => 'خطأ في تحديث حالة الطلب: ' . $e->getMessage()];
+                $response = martit_delete_account($db, $uid);
+            } catch (Throwable $e) {
+                $response = array('success' => false, 'error' => 'delete_failed');
             }
             break;
             

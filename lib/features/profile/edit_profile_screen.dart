@@ -53,7 +53,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   File? _selectedImage;
   String? _uploadedImageUrl;
   String? _userUid;
-  String? _avatarBaseUrl;
   int _avatarCacheTimestamp = DateTime.now().millisecondsSinceEpoch;
   bool _isLoading = false;
   bool _isUploadingImage = false;
@@ -86,12 +85,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return phone.isNotEmpty && phone != _originalPhone.trim();
   }
   */
-
-  static const _avatarPlaceholder = Icon(
-    Iconsax.user,
-    size: 48,
-    color: Colors.grey,
-  );
 
   @override
   void initState() {
@@ -141,12 +134,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       // _phoneController.text = phone;
       _nameChanged = false;
       // _phoneChanged = false;
-      if (_userUid != null && _userUid!.isNotEmpty) {
-        _avatarBaseUrl = AvatarUrlUtil.displayUrl(
-          _userUid!,
-          timestamp: _avatarCacheTimestamp,
-        );
-      }
     });
   }
 
@@ -523,10 +510,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
   */
-
-  void _showErrorSnack(String message) {
-    showAppSnackbar(context, message: message, type: SnackType.error);
-  }
 
   Map<String, dynamic> _buildPopResult() {
     final name = _nameController.text.trim().isNotEmpty

@@ -87,9 +87,11 @@ lcov.info
 *.tmp
 *.temp
 
-# Logs
-logs/
-*.log
+# Apple Sign In key and revocation config (keep outside the web root)
+/private/apple_config.php
+*.p8
+/private/apple_revoke.log
+/private/account_delete.log
 
 # Database files
 *.db

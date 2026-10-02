@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import '../../core/constants/app_theme.dart';
 import '../../core/services/api_service.dart';
+import '../../core/services/moderation_service.dart';
+import '../../core/services/localization_service.dart';
 import '../../core/models/chat_model.dart';
 import '../../core/widgets/smart_avatar_widget.dart';
 import '../../core/utils/theme_extensions.dart';
@@ -85,9 +87,13 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         final List<dynamic> data = result['data'] ?? [];
         print('✅ Found ${data.length} unique conversations');
 
+        final blocked = await ModerationService.blockedUsers(widget.userId);
+        final blockedIds = blocked.map((row) => row['uid']?.toString()).toSet();
         setState(() {
-          _conversations =
-              data.map((item) => ChatConversation.fromJson(item)).toList();
+          _conversations = data
+              .map((item) => ChatConversation.fromJson(item))
+              .where((chat) => !blockedIds.contains(chat.participantId))
+              .toList();
           _isLoading = false;
         });
         _checkAllStatuses();
@@ -113,7 +119,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     final martIt = context.martItColors;
 
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: LocalizationService.instance.textDirection,
       child: Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(

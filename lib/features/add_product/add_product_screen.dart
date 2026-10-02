@@ -19,6 +19,7 @@ import '../../core/widgets/video_player_widget.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/localization_service.dart';
+import '../../core/services/moderation_service.dart';
 import '../../core/utils/snackbar_helper.dart';
 import '../../core/services/background_media_upload_service.dart';
 import '../../core/services/s3_upload_service.dart';
@@ -32,18 +33,11 @@ import '../../core/services/api_config_service.dart';
 // THEME COLORS - MARTIT PURPLE
 // ══════════════════════════════════════════════════════════════════════════════
 class _LuxuryColors {
-  // Light theme backgrounds
-  static const Color bgLight = Color(0xFFF5F5F5);
-  static const Color bgCard = Color(0xFFFFFFFF);
-  static const Color cardBorder = Color(0xFFEDEAF7);
-
   // Deep navy (secondary accents)
   static const Color navyPrimary = Color(0xFF0F172A);
-  static const Color navyDark = Color(0xFF020617);
 
   // MartIt purple accents
   static const Color orangePrimary = Color(0xFF5C33EA);
-  static const Color orangeLight = Color(0xFF8B7AF0);
   static const Color orangeDark = Color(0xFF4A28C4);
 
   // Toggle/Card tint
@@ -51,8 +45,6 @@ class _LuxuryColors {
 
   // Text colors for light theme
   static const Color textPrimary = Color(0xFF1A1333);
-  static const Color textSecondary = Color(0xFF6B6B80);
-  static const Color textHint = Color(0xFF9CA3AF);
 
   // Input field colors
   static const Color inputBg = Color(0xFFF5F3FF);
@@ -114,6 +106,7 @@ class _AddProductScreenState extends State<AddProductScreen>
 
   /// Cached video frame thumbnails keyed by local file path.
   final Map<String, Uint8List> _videoThumbnails = {};
+  final Set<String> _videoThumbFailed = {};
 
   final List<String> _pendingUploadPaths = [];
   final BackgroundMediaUploadService _uploads =
@@ -254,9 +247,11 @@ class _AddProductScreenState extends State<AddProductScreen>
         );
         if (bytes != null && mounted) {
           setState(() => _videoThumbnails[path] = bytes);
+        } else if (mounted) {
+          setState(() => _videoThumbFailed.add(path));
         }
       } catch (e) {
-        print('Video thumbnail error: $e');
+        if (mounted) setState(() => _videoThumbFailed.add(path));
       }
     }
   }
@@ -999,6 +994,13 @@ class _AddProductScreenState extends State<AddProductScreen>
       children: [
         if (thumbBytes != null)
           Image.memory(thumbBytes, fit: BoxFit.cover, width: size, height: size)
+        else if (_videoThumbFailed.contains(path))
+          const ColoredBox(
+            color: Color(0xFF1B1B1F),
+            child: Center(
+              child: Icon(Iconsax.video_play, color: Colors.white70, size: 18),
+            ),
+          )
         else
           ColoredBox(
             color: _LuxuryColors.navyPrimary,
@@ -2390,6 +2392,18 @@ class _AddProductScreenState extends State<AddProductScreen>
 
   void _submitProduct() async {
     if (!_validateProductForm()) {
+      return;
+    }
+    final banned = await ModerationService.containsBannedWords(
+      '${_nameController.text} ${_engnameController.text} ${_descriptionController.text} ${_description_arb_Controller.text}',
+    );
+    if (banned) {
+      if (!mounted) return;
+      showAppSnackbar(
+        context,
+        message: tr('moderation.banned_word'),
+        type: SnackType.error,
+      );
       return;
     }
 

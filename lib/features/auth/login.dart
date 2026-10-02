@@ -609,8 +609,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 16),
-                              _buildFacebookComingSoon(isAr),
                             ],
                           ),
                           const SizedBox(height: 48),
@@ -913,27 +911,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
           child: Center(child: child),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFacebookComingSoon(bool isAr) {
-    return Opacity(
-      opacity: 0.4,
-      child: _buildCircleAuthSlot(
-        label: isAr ? 'قريباً' : 'Soon',
-        child: IgnorePointer(
-          child: _buildCircleAuthButton(
-            background: const Color(0xFF1877F2),
-            onTap: null,
-            child: Image.asset(
-              'assets/images/social/face.png',
-              width: 24,
-              height: 24,
-              color: Colors.white,
-            ),
-          ),
         ),
       ),
     );

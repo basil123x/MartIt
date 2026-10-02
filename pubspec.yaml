@@ -2,7 +2,7 @@ name: MartIt
 description: "MartIt - A TikTok-style shopping app combining short-form content
   with e-commerce."
 publish_to: 'none'
-version: 1.0.0+3
+version: 1.2.7+34
 environment:
   sdk: ^3.9.2
 dependencies:
@@ -47,7 +47,6 @@ dependencies:
   sign_in_with_apple: ^6.1.4
   shimmer: ^3.0.0
   shorebird_code_push: ^2.0.5
-  sim_country_code_plus: ^0.1.4
   terminate_restart: ^1.0.11
   url_launcher: ^6.2.2
   uuid: ^4.2.1
@@ -66,10 +65,13 @@ dev_dependencies:
   hive_generator: ^2.0.1
 flutter_launcher_icons:
   android: "launcher_icon"
+  ios: true
   image_path: "assets/images/app_icon.jpg"
   min_sdk_android: 21
-  adaptive_icon_background: "#FFFFFF"
+  remove_alpha_ios: true
+  adaptive_icon_background: "#EAE5FC"
   adaptive_icon_foreground: "assets/images/app_icon.jpg"
+  adaptive_icon_foreground_inset: 16
 
 flutter:
   uses-material-design: true

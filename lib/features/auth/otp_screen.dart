@@ -3,19 +3,17 @@ import 'dart:async';
 import 'package:MartIt/core/services/otp_local_notification_service.dart';
 import 'package:MartIt/features/auth/login.dart';
 import 'package:MartIt/features/splash/splash_screen.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:onesignal_flutter/onesignal_flutter.dart';
 import '../../core/constants/app_theme.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/localization_service.dart';
 import '../../core/utils/snackbar_helper.dart';
 import '../../core/utils/theme_extensions.dart';
 import 'create_account_screen.dart';
-import '../../core/services/api_config_service.dart';
+import '../../core/services/moderation_service.dart';
 
 class OTPScreen extends StatefulWidget {
   final String phoneNumber;
@@ -136,10 +134,42 @@ class _OTPScreenState extends State<OTPScreen> {
     }
 
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 1));
 
-    if (_enteredOTP != '000000') {
-      if (_enteredOTP == _activeOtp) {
+    try {
+      final reviewer = await ModerationService.verifyReviewerPhone(
+        phone: '${widget.countryCode}${widget.phoneNumber}',
+        code: _enteredOTP,
+      );
+      if (reviewer['success'] == true && reviewer['data'] is Map) {
+        final data = Map<String, dynamic>.from(reviewer['data'] as Map);
+        await const FlutterSecureStorage().write(
+          key: 'user_uid',
+          value: data['id']?.toString() ?? '',
+        );
+        await const FlutterSecureStorage().write(
+          key: 'user_oid',
+          value: data['oid']?.toString() ?? '',
+        );
+        await const FlutterSecureStorage().write(
+          key: 'user_name',
+          value: data['name']?.toString() ?? '',
+        );
+        await const FlutterSecureStorage().write(
+          key: 'user_phone',
+          value: data['phone']?.toString() ?? widget.phoneNumber,
+        );
+        await const FlutterSecureStorage().write(key: 'login_type', value: 'Phone');
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => SplashScreen()),
+        );
+        return;
+      }
+    } catch (_) {
+      // A normal code continues with the local verification below.
+    }
+
+    if (_enteredOTP == _activeOtp) {
         final response = await AuthService.loginWithPhone(widget.phoneNumber);
 
         if (response == false) {
@@ -168,46 +198,6 @@ class _OTPScreenState extends State<OTPScreen> {
         );
         _clearOTP();
       }
-    } else {
-      String? userId = OneSignal.User.pushSubscription.id;
-      final responseuid = await Dio().post(
-        ApiConfigService.instance.sqlUrl(),
-        data: FormData.fromMap({
-          "action": "get_user_details",
-          "phone": widget.phoneNumber,
-        }),
-      );
-      final response = await Dio().post(
-        ApiConfigService.instance.sqlUrl(),
-        data: FormData.fromMap({
-          "action": "get_user_details",
-          "phone": widget.phoneNumber,
-          "fcm_token": userId,
-          "id": responseuid.data['data']['id'],
-        }),
-      );
-      await FlutterSecureStorage().write(
-        key: "user_uid",
-        value: response.data['data']['id'],
-      );
-      await FlutterSecureStorage().write(
-        key: "user_oid",
-        value: response.data['data']['oid'],
-      );
-      await FlutterSecureStorage().write(
-        key: "user_phone",
-        value: response.data['data']['phone'],
-      );
-      await FlutterSecureStorage().write(
-        key: "user_name",
-        value: response.data['data']['name'],
-      );
-      await FlutterSecureStorage().write(key: "login_type", value: "Phone");
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => SplashScreen()),
-      );
-    }
   }
 
   void _clearOTP() {

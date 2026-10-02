@@ -43,7 +43,6 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
 
   final PageController _pageController = PageController();
   final Dio _dio = Dio();
-  int _currentIndex = 0;
   late Future<List<String>> _mediaFuture;
   bool _unavailableReported = false;
 
@@ -106,20 +105,20 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
   }
 
   Future<List<String>> _resolveMediaUrls() async {
-    // Prefer absolute non-S3 URLs (e.g. Unsplash demo assets) — skip S3 probing.
-    final external = <String>[];
+    final direct = <String>[];
     for (final mediaUrl in widget.mediaUrls) {
-      final normalized = mediaUrl.split("]")[0].trim();
-      if (normalized.startsWith("http://") ||
-          normalized.startsWith("https://")) {
-        final isMartitS3 = normalized.contains("martit.s3");
-        if (!isMartitS3 && !external.contains(normalized)) {
-          external.add(normalized);
-        }
+      final normalized = ItemMediaUrlUtil.toPlayableUrl(
+        mediaUrl,
+        storeId: widget.storeid,
+      );
+      if ((normalized.startsWith("http://") ||
+              normalized.startsWith("https://")) &&
+          !direct.contains(normalized)) {
+        direct.add(normalized);
       }
     }
-    if (external.isNotEmpty) {
-      return external;
+    if (direct.isNotEmpty) {
+      return direct;
     }
 
     final urls = <String>[];
@@ -142,7 +141,10 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
     }
 
     for (final mediaUrl in widget.mediaUrls) {
-      final normalized = mediaUrl.split("]")[0].trim();
+      final normalized = ItemMediaUrlUtil.toPlayableUrl(
+        mediaUrl,
+        storeId: widget.storeid,
+      );
       if ((normalized.startsWith("http://") ||
               normalized.startsWith("https://")) &&
           !urls.contains(normalized)) {
@@ -185,9 +187,9 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
             return const SizedBox.shrink();
           }
           return Container(
-            color: Colors.black,
+            color: const Color(0xFFEAE5FC),
             child: const Center(
-              child: Icon(Iconsax.image, size: 64, color: Colors.grey),
+              child: Icon(Iconsax.image, size: 64, color: AppColors.primary),
             ),
           );
         }
@@ -205,11 +207,6 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
           children: [
             PageView.builder(
               controller: _pageController,
-              onPageChanged: (index) {
-                setState(() {
-                  _currentIndex = index;
-                });
-              },
               itemCount: resolvedUrls.length,
               itemBuilder: (context, index) {
                 return _buildSingleMedia(
@@ -242,6 +239,10 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
         fit: widget.fit,
       );
     } else {
+      final screenWidth = MediaQuery.sizeOf(context).width;
+      final cacheWidth = (screenWidth * MediaQuery.devicePixelRatioOf(context))
+          .round()
+          .clamp(1, 2048);
       return SizedBox.expand(
         child: CachedNetworkImage(
           imageUrl: finalFullUrl,
@@ -249,6 +250,8 @@ class _MediaViewerWidgetState extends State<MediaViewerWidget> {
           width: double.infinity,
           height: double.infinity,
           alignment: Alignment.center,
+          memCacheWidth: cacheWidth,
+          maxWidthDiskCache: cacheWidth,
           placeholder: (context, url) => Container(
             color: Colors.black,
             child: const Center(child: SpinKitPulse(color: AppColors.white)),

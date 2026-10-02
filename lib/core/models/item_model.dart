@@ -40,7 +40,12 @@ class ItemModel {
     if (json['media'] is List) {
       mediaList.addAll(
         (json['media'] as List)
-            .map((e) => e.toString())
+            .map(
+              (e) => ItemMediaUrlUtil.toPlayableUrl(
+                e.toString(),
+                storeId: storeId,
+              ),
+            )
             .where((e) => e.isNotEmpty),
       );
     } else if (json['media'] != null && json['media'].toString().isNotEmpty) {
@@ -49,7 +54,12 @@ class ItemModel {
         mediaList.addAll(
           mediaValue
               .split(',')
-              .map((file) => file.trim())
+              .map(
+                (file) => ItemMediaUrlUtil.toPlayableUrl(
+                  file.trim(),
+                  storeId: storeId,
+                ),
+              )
               .where((file) => file.isNotEmpty),
         );
       } else {

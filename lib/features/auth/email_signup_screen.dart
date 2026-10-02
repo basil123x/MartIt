@@ -11,8 +11,6 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/localization_service.dart';
 import '../../core/services/s3_upload_service.dart';
 import '../../core/utils/snackbar_helper.dart';
-import 'package:crypto/crypto.dart';
-import 'dart:convert';
 import '../../core/utils/theme_extensions.dart';
 import '../add_product/media_picker_sheet.dart';
 import '../../core/services/api_config_service.dart';
@@ -144,12 +142,6 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
         options: options,
       ),
     );
-  }
-
-  String _hashPassword(String password) {
-    var bytes = utf8.encode(password);
-    var digest = sha256.convert(bytes);
-    return digest.toString();
   }
 
   bool _validateInputs() {

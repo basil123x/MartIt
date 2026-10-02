@@ -50,7 +50,7 @@
 
   <div class="section">
     <h2>1. Acceptance of Terms</h2>
-    <p>By using <strong>Globee</strong>, you agree to be bound by these Terms & Conditions. If you do not agree, please do not use the app.</p>
+    <p>By using <strong>MartIt</strong>, you agree to be bound by these Terms & Conditions. If you do not agree, please do not use the app.</p>
   </div>
 
   <div class="section">
@@ -75,7 +75,7 @@
 
   <div class="section">
     <h2>6. Intellectual Property</h2>
-    <p>All app content, logos, and trademarks belong to <strong>Globee</strong> and cannot be used without prior written consent.</p>
+    <p>All app content, logos, and trademarks belong to <strong>MartIt</strong> and cannot be used without prior written consent.</p>
   </div>
 
   <div class="section">

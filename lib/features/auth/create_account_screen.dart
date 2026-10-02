@@ -13,6 +13,8 @@ import '../home/main_navigation_screen.dart';
 import '../../core/utils/theme_extensions.dart';
 import '../add_product/media_picker_sheet.dart';
 import '../../core/services/api_config_service.dart';
+import '../../core/services/moderation_service.dart';
+import '../settings/policy_screen.dart';
 
 class CreateAccountScreen extends StatefulWidget {
   final String phoneNumber;
@@ -33,6 +35,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   final ImagePicker _picker = ImagePicker();
   File? _selectedImage;
   bool _isLoading = false;
+  bool _acceptedTerms = false;
 
   Future<void> _pickImage() async {
     final lang = LocalizationService.instance.currentLanguage;
@@ -147,6 +150,15 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       return;
     }
 
+    if (!_acceptedTerms) {
+      showAppSnackbar(
+        context,
+        message: tr('moderation.eula_required'),
+        type: SnackType.error,
+      );
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
@@ -157,6 +169,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         _nameController.text.trim(),
         profileImage: _selectedImage?.path,
       );
+      final uid = await AuthService.getCurrentUserId();
+      if (uid != null && uid.isNotEmpty) {
+        await ModerationService.acceptTerms(uid);
+      }
       final request = await Dio().post(
         ApiConfigService.instance.sqlEndpoint,
         data: FormData.fromMap({"action": "get_tokens"}),
@@ -342,7 +358,50 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: 40),
+                                  const SizedBox(height: 12),
+                                  CheckboxListTile(
+                                    value: _acceptedTerms,
+                                    activeColor: AppColors.primary,
+                                    contentPadding: EdgeInsets.zero,
+                                    controlAffinity: ListTileControlAffinity.leading,
+                                    onChanged: (value) => setState(
+                                      () => _acceptedTerms = value ?? false,
+                                    ),
+                                    title: Text(tr('moderation.eula')),
+                                    subtitle: Wrap(
+                                      children: [
+                                        TextButton(
+                                          onPressed: () => Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => PolicyScreen(
+                                                title: tr('moderation.terms'),
+                                                url: ApiConfigService.instance
+                                                    .endpoint('Terms.php'),
+                                              ),
+                                            ),
+                                          ),
+                                          child: Text(tr('moderation.terms')),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => PolicyScreen(
+                                                title: tr('moderation.privacy'),
+                                                url: ApiConfigService.instance
+                                                    .endpoint(
+                                                      'PrivacyPolicy.php',
+                                                    ),
+                                              ),
+                                            ),
+                                          ),
+                                          child: Text(tr('moderation.privacy')),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
                                   SizedBox(
                                     width: double.infinity,
                                     child: ElevatedButton(

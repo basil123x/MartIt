@@ -6,6 +6,8 @@ import 'package:shimmer/shimmer.dart';
 import '../../core/constants/app_theme.dart';
 import '../../core/services/localization_service.dart';
 import '../../core/services/api_service.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/services/moderation_service.dart';
 import '../../core/widgets/item_thumbnail_widget.dart';
 import '../../core/utils/theme_extensions.dart';
 import '../home/home_feed_screen.dart';
@@ -41,8 +43,32 @@ class _SearchScreenState extends State<SearchScreen> {
     _searchFocusNode.addListener(() {
       if (mounted) setState(() {});
     });
+    BlockedSellers.instance.addListener(_hideBlockedResults);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _searchFocusNode.requestFocus();
+      BlockedSellers.instance.sync();
+    });
+  }
+
+  bool _isBlockedResult(dynamic item) {
+    if (item is! Map) return false;
+    final seller = item['seller'];
+    if (seller is! Map) return false;
+    return BlockedSellers.instance.containsSeller(
+      seller['id']?.toString() ?? '',
+      seller['uid']?.toString() ?? '',
+      seller['name']?.toString() ?? '',
+    );
+  }
+
+  List<dynamic> _withoutBlocked(List<dynamic> items) {
+    return items.where((item) => !_isBlockedResult(item)).toList();
+  }
+
+  void _hideBlockedResults() {
+    if (!mounted) return;
+    setState(() {
+      _searchResults = _withoutBlocked(_searchResults);
     });
   }
 
@@ -75,13 +101,16 @@ class _SearchScreenState extends State<SearchScreen> {
     });
 
     try {
-      final response = await ApiService.searchItems(query);
+      await BlockedSellers.instance.sync();
+      final viewerUid = await AuthService.getCurrentUserId();
+      final response = await ApiService.searchItems(query, viewerUid: viewerUid);
 
       if (!mounted) return;
 
       if (response['success'] == true) {
+        final data = response['data'];
         setState(() {
-          _searchResults = response['data'] ?? [];
+          _searchResults = _withoutBlocked(data is List ? data : <dynamic>[]);
           _isLoading = false;
         });
       } else {
@@ -569,6 +598,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   void dispose() {
+    BlockedSellers.instance.removeListener(_hideBlockedResults);
     _debounce?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();

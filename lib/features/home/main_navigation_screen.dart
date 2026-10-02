@@ -95,6 +95,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     setState(() => _currentUserId = id);
   }
 
+  void _onSignedInAccountMissing() {
+    setState(() => _currentUserId = null);
+    _ensureLoggedIn();
+  }
+
   Future<bool> _ensureLoggedIn() async {
     if (_currentUserId != null && _currentUserId!.isNotEmpty) return true;
     final id = await AuthService.getCurrentUserId();
@@ -434,6 +439,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   : ProfileScreen(
                       userId: _currentUserId!,
                       embeddedInShell: true,
+                      onAccountMissing: _onSignedInAccountMissing,
                     ),
             ],
           ),

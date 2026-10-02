@@ -14,6 +14,8 @@ import '../../core/services/database_service.dart';
 import '../../core/services/localization_service.dart';
 import '../../core/services/background_media_upload_service.dart';
 import '../../core/services/s3_upload_service.dart';
+import '../../core/services/moderation_service.dart';
+import '../../core/widgets/report_sheet.dart';
 import '../../core/models/item_model.dart';
 import '../../core/widgets/media_viewer_widget.dart';
 import '../../core/widgets/uploading_media_frame.dart';
@@ -33,10 +35,15 @@ class ProfileScreen extends StatefulWidget {
   /// When true, hosted inside [MainNavigationScreen] — hide the back control.
   final bool embeddedInShell;
 
+  /// Called after this session's user no longer exists, so the shell can
+  /// drop the cached id and open login.
+  final VoidCallback? onAccountMissing;
+
   const ProfileScreen({
     super.key,
     required this.userId,
     this.embeddedInShell = false,
+    this.onAccountMissing,
   });
 
   @override
@@ -310,6 +317,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         await _resolveOwnership();
         await _loadFreshUserDetails();
         _loadItems();
+      } else if (await _signOutIfAccountMissing(response)) {
+        return;
       } else {
         print('❌ Profile error: ${response['error']}');
         setState(() {
@@ -324,6 +333,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  bool _isMissingAccountError(dynamic response) {
+    if (response is! Map) return false;
+    final error = response['error']?.toString() ?? '';
+    return error == 'المستخدم غير موجود' ||
+        error == 'user not found' ||
+        error == 'uid missing';
+  }
+
+  /// Clears the local session when this profile is the signed-in user and
+  /// the server no longer has that account.
+  Future<bool> _signOutIfAccountMissing(dynamic response) async {
+    if (!_isMissingAccountError(response)) return false;
+    final currentUid = await AuthService.getCurrentUID();
+    if (currentUid == null || currentUid != widget.userId) return false;
+    await AuthService.logout();
+    if (!mounted) return true;
+    final notify = widget.onAccountMissing;
+    if (notify != null) {
+      notify();
+      return true;
+    }
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+    return true;
   }
 
   Future<void> _loadFreshUserDetails() async {
@@ -455,6 +491,81 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadItems();
   }
 
+  Future<void> _reportOrBlockProfile() async {
+    final uid = await AuthService.getCurrentUserId();
+    if (!mounted || uid == null) return;
+    final target =
+        _profile?.uid.isNotEmpty == true ? _profile!.uid : widget.userId;
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(tr('moderation.report')),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                showReportSheet(
+                  context: context,
+                  title: tr('moderation.report'),
+                  onSubmit: (reason, note) async {
+                    final result = await ModerationService.report(
+                      userId: uid,
+                      reason: reason,
+                      note: note,
+                      targetType: 'user',
+                      targetUid: target,
+                    );
+                    if (!mounted) return;
+                    final sent = result['success'] == true;
+                    showAppSnackbar(
+                      context,
+                      message: sent
+                          ? tr('moderation.report_sent')
+                          : tr('common.error'),
+                      type: sent ? SnackType.success : SnackType.error,
+                    );
+                  },
+                );
+              },
+            ),
+            ListTile(
+              title: Text(tr('moderation.block')),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                final result = await ModerationService.blockUser(
+                  blockerUid: uid,
+                  blockedUid: target,
+                );
+                if (!mounted) return;
+                if (result['success'] == true) {
+                  BlockedSellers.instance.block(
+                    [
+                      target,
+                      widget.userId,
+                      _profile?.id ?? '',
+                      _profile?.uid ?? '',
+                    ],
+                    name: _profile?.name ?? '',
+                  );
+                  showAppSnackbar(context, message: tr('moderation.blocked'));
+                  Navigator.pop(context);
+                } else {
+                  showAppSnackbar(
+                    context,
+                    message: tr('common.error'),
+                    type: SnackType.error,
+                  );
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -542,12 +653,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        _profile!.name,
-                        style: TextStyle(
-                          color: cs.onSurface,
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
+                      Flexible(
+                        child: Text(
+                          _profile!.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: cs.onSurface,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
@@ -597,6 +712,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             },
           ),
           actions: [
+            if (!_isOwnProfile)
+              IconButton(
+                onPressed: _reportOrBlockProfile,
+                icon: Icon(Iconsax.user_remove, color: cs.primary),
+              ),
             if (!widget.embeddedInShell)
               IconButton(
                 onPressed: () => Navigator.pop(context),
@@ -692,14 +812,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              Text(
-                _profile!.name,
-                style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
+              SizedBox(
+                width: double.infinity,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    _profile!.name,
+                    maxLines: 1,
+                    softWrap: false,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
-                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Container(
@@ -840,7 +968,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final cs = Theme.of(context).colorScheme;
     return Container(
       color: context.appSurface,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: _filters.map((filter) {
@@ -883,7 +1011,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Container(
       padding: EdgeInsets.fromLTRB(
         8,
-        8,
+        0,
         8,
         widget.embeddedInShell ? 100 : 16,
       ),
@@ -1097,6 +1225,18 @@ class ProfileItemCard extends StatelessWidget {
   final Map<String, dynamic> item;
   final bool showOwnerActions;
   final VoidCallback? onTap;
+
+  static List<String> _itemMediaUrls(Map<String, dynamic> item) {
+    final media = item['media'];
+    if (media is List) {
+      return media.map((e) => e.toString()).where((e) => e.startsWith('http')).toList();
+    }
+    final raw = media?.toString() ?? '';
+    if (raw.startsWith('http')) {
+      return raw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    }
+    return const [];
+  }
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
@@ -1138,7 +1278,7 @@ class ProfileItemCard extends StatelessWidget {
                     child: UploadingMediaFrame(
                       itemId: "${item["id"] ?? ""}",
                       ready: MediaViewerWidget(
-                        mediaUrls: const [],
+                        mediaUrls: _itemMediaUrls(item),
                         itmId: "${item["id"] ?? ""}",
                         itmIdx: "${item["idx"] ?? ""}",
                         storeid:

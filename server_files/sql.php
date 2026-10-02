@@ -11,9 +11,30 @@ CREATE TABLE IF NOT EXISTS NotifyRequests (
 );
 */
 
-// Enable error reporting for debugging
+// Enable error reporting for debugging. Account deletion must stay JSON-only.
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
+$martitIsAccountDelete = (isset($_POST['action']) && $_POST['action'] === 'delete_account_permit')
+    || (isset($_GET['action']) && $_GET['action'] === 'delete_account_permit');
+$GLOBALS['martitDeleteSent'] = false;
+if ($martitIsAccountDelete) {
+    ini_set('display_errors', '0');
+    ob_start();
+    register_shutdown_function(function () {
+        if (!empty($GLOBALS['martitDeleteSent'])) {
+            return;
+        }
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(500);
+        }
+        echo '{"success":false,"error":"delete_failed"}';
+    });
+} else {
+    ini_set('display_errors', '1');
+}
 
 // Set JSON header
 header('Content-Type: application/json');
@@ -23,6 +44,8 @@ if (file_exists(__DIR__ . '/sync_helper.php')) {
     require_once __DIR__ . '/sync_helper.php';
 }
 require_once __DIR__ . '/media_helper.php';
+require_once __DIR__ . '/moderation.php';
+martit_ensure_schema($conx);
 
 // Get action from POST or GET request
 $action = isset($_POST['action']) ? $_POST['action'] : '';
@@ -70,7 +93,10 @@ function martit_process_notify_restock($conx, $item_id, $old_qtt, $new_qtt) {
 }
 
 try {
-    switch ($action) {
+    $moderationResponse = martit_handle_action($conx, $action);
+    if ($moderationResponse !== null) {
+        $response = $moderationResponse;
+    } else switch ($action) {
         
         // =====================================
         // جلب الأصناف (Fetch Items)
@@ -240,7 +266,9 @@ try {
                 FROM Followers " . (!empty($user_id) ? "WHERE buyer_id = '$user_id'" : "WHERE 1=0") . "
             ) followers ON Users.uid = followers.user_id" . $ucsJoin;
 
-            $fetchWherePublic = "Items.Visibility = 'Public' AND Items.country = '$country' AND Items.has_image = 1 $get_store $d3";
+            $blockFilter = martit_block_clause($conx, $user_id);
+            $ownItems = !empty($user_id) ? " OR Items.uid = '$user_id'" : '';
+            $fetchWherePublic = "((Items.Visibility = 'Public' AND Items.country = '$country' AND Items.has_image = 1 $get_store $d3)$ownItems) $blockFilter";
 
             if (!empty($pinnedItemId) && $offset == 0 && empty($itemSrchId)) {
                 $restLimit = max(1, $limit - 1);
@@ -512,6 +540,13 @@ LIMIT $limit OFFSET $offset";
                 $response = array(
                     'success' => false,
                     'error' => 'البيانات المطلوبة ناقصة (uid, name, price)'
+                );
+                break;
+            }
+            if (martit_text_has_banned_word($name . ' ' . $eng . ' ' . $description . ' ' . $description_arb)) {
+                $response = array(
+                    'success' => false,
+                    'error' => 'banned_word'
                 );
                 break;
             }
@@ -1341,41 +1376,7 @@ if ($store_id == '5') {
         // إضافة بلاغ (Add Report)
         // =====================================
         case 'add_report':
-            $item_id = isset($_POST['item_id']) ? $conx->real_escape_string($_POST['item_id']) : '';
-            $user_id = isset($_POST['user_id']) ? $conx->real_escape_string($_POST['user_id']) : '';
-            $reason = isset($_POST['reason']) ? $conx->real_escape_string($_POST['reason']) : '';
-            $created_at = date('Y-m-d H:i:s');
-            
-            if (empty($item_id) || empty($user_id) || empty($reason)) {
-                $response = array(
-                    'success' => false,
-                    'error' => 'جميع البيانات مطلوبة (item_id, user_id, reason)'
-                );
-                break;
-            }
-
-            try {
-                $sql = "INSERT INTO Flags (item_id, user_id, reason, created_at, status) 
-                        VALUES ('$item_id', '$user_id', '$reason', '$created_at', 'pending')";
-
-                if ($conx->query($sql)) {
-                    $response = array(
-                        'success' => true,
-                        'message' => 'تم إرسال البلاغ بنجاح'
-                    );
-                } else {
-                    $response = array(
-                        'success' => false,
-                        'error' => 'فشل في إرسال البلاغ: ' . $conx->error
-                    );
-                }
-                
-            } catch (Exception $e) {
-                $response = array(
-                    'success' => false,
-                    'error' => 'خطأ في إرسال البلاغ: ' . $e->getMessage()
-                );
-            }
+            $response = martit_add_report($conx);
             break;
 
         // =====================================
@@ -1474,7 +1475,9 @@ if ($store_id == '5') {
                     GROUP BY item_id
                 ) cart_count ON Items.id = cart_count.item_id" . $ucsJoin;
 
-                $likesWherePublic = "Items.Visibility = 'Public' AND Items.country = '$country' AND Items.has_image = 1 $get_store $d3";
+                $blockFilter = martit_block_clause($conx, $user_id);
+                $ownItems = !empty($user_id) ? " OR Items.uid = '$user_id'" : '';
+                $likesWherePublic = "((Items.Visibility = 'Public' AND Items.country = '$country' AND Items.has_image = 1 $get_store $d3)$ownItems) $blockFilter";
 
                 if (!empty($pinnedItemId) && $offset == 0 && empty($itemSrchId)) {
                     $restLimit = max(1, $limit - 1);
@@ -2832,22 +2835,14 @@ if ($store_id == '5') {
         // حذف الحساب نهائياً
         // =====================================
         case 'delete_account_permit':
-            $uid = isset($_POST['uid']) ? $conx->real_escape_string($_POST['uid']) : '';
-            
+            $uid = isset($_POST['uid']) ? $_POST['uid'] : '';
             try {
-                $sql = "DELETE FROM Users WHERE uid = '$uid'";
- 
-                
-                if ($conx->query($sql)) {
-                    $response = [
-                        'success' => true, 
-                        'message' => 'تم حذف الحساب نهائياً بنجاح',
-                    ];
-                } else {
-                    $response = ['success' => false, 'error' => 'فشل في تحديث الحالة: ' . $conx->error];
+                $response = martit_delete_account($conx, $uid);
+            } catch (Throwable $e) {
+                if (function_exists('martit_delete_log')) {
+                    martit_delete_log('throwable ' . get_class($e));
                 }
-            } catch (Exception $e) {
-                $response = ['success' => false, 'error' => 'خطأ في تحديث حالة الطلب: ' . $e->getMessage()];
+                $response = array('success' => false, 'error' => 'delete_failed');
             }
             break;
             
@@ -3066,10 +3061,11 @@ if ($store_id == '5') {
             $player_id = isset($_POST['player_id']) ? $conx->real_escape_string($_POST['player_id']) : '';
             $login_type = isset($_POST['login_type']) ? $conx->real_escape_string($_POST['login_type']) : 'Google';
             $store_id = isset($_POST['store_id']) ? $conx->real_escape_string($_POST['store_id']) : '1';
+            $apple_user_id = isset($_POST['apple_user_id']) ? $conx->real_escape_string($_POST['apple_user_id']) : '';
             $date = date('Y-m-d');
             try {
-                    $sql = "INSERT INTO Users (uid, oid, Fullname, Email, player_id, login_type, urlAvatar, Created_At, store_id) 
-                            VALUES ('$uid', '$oid', '$name', '$email', '$player_id', '$login_type', '$avatar_url', '$date', '$store_id')";
+                    $sql = "INSERT INTO Users (uid, oid, Fullname, Email, player_id, login_type, urlAvatar, Created_At, store_id, apple_user_id) 
+                            VALUES ('$uid', '$oid', '$name', '$email', '$player_id', '$login_type', '$avatar_url', '$date', '$store_id', " . ($apple_user_id === '' ? "NULL" : "'$apple_user_id'") . ")";
                     
                     if ($conx->query($sql)) {
                         $response = [
@@ -3303,6 +3299,31 @@ if ($store_id == '5') {
         'success' => false,
         'error' => 'خطأ في قاعدة البيانات: ' . $e->getMessage()
     );
+}
+
+if (!empty($martitIsAccountDelete)) {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    if (!isset($response) || !is_array($response)) {
+        $response = array('success' => false, 'error' => 'delete_failed');
+    }
+    $json = json_encode($response, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+    if ($json === false) {
+        $json = '{"success":false,"error":"delete_failed"}';
+    }
+    if (function_exists('martit_delete_log')) {
+        $sentError = isset($response['error']) ? (string)$response['error'] : '';
+        martit_delete_log(
+            'response sent success=' . (!empty($response['success']) ? '1' : '0') . ' error=' . $sentError
+        );
+    }
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
+    }
+    $GLOBALS['martitDeleteSent'] = true;
+    echo $json;
+    exit;
 }
 
 echo json_encode($response, true);

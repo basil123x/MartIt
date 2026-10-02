@@ -8,6 +8,28 @@ class ItemMediaUrlUtil {
     return value.isEmpty ? "1" : value;
   }
 
+  /// Product photos are stored on S3. Older API responses still point at
+  /// globee.b-cdn.net, which now returns 403, so those links are rewritten.
+  static String toPlayableUrl(String url, {String? storeId}) {
+    final clean = url.trim().split("]").first;
+    final uri = Uri.tryParse(clean);
+    if (uri == null || !uri.hasScheme) return clean;
+
+    final host = uri.host.toLowerCase();
+    if (host == "martit.s3.ap-south-1.amazonaws.com") return clean;
+    final legacyCdn = host == "globee.b-cdn.net" || host.endsWith(".b-cdn.net");
+    if (!legacyCdn) return clean;
+
+    final segments = uri.pathSegments.where((part) => part.isNotEmpty).toList();
+    if (segments.length < 2) return clean;
+    if (segments.first == "users" || segments.first == "GES") return clean;
+
+    final file = segments.last;
+    final itemKey = segments[segments.length - 2];
+    final store = normalizeStoreId(storeId);
+    return "$baseUrl/store_$store/$itemKey/$file";
+  }
+
   /// S3 object folder uses [itemIdx] when set; otherwise falls back to [itemId].
   static String resolveItemPathKey({
     required String? itemIdx,

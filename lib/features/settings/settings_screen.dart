@@ -1,3 +1,4 @@
+import "dart:convert";
 import "dart:io";
 
 import "package:awesome_dialog/awesome_dialog.dart";
@@ -8,6 +9,7 @@ import "package:flutter_secure_storage/flutter_secure_storage.dart";
 import "package:iconsax/iconsax.dart";
 import "package:package_info_plus/package_info_plus.dart";
 import "package:provider/provider.dart";
+import "package:sign_in_with_apple/sign_in_with_apple.dart";
 import "package:url_launcher/url_launcher.dart";
 
 import "../../core/constants/app_colors.dart";
@@ -22,6 +24,9 @@ import "../onboarding/language_selection_screen.dart";
 import "../profile/edit_profile_screen.dart";
 import "policy_screen.dart";
 import '../../core/services/api_config_service.dart';
+import '../../core/services/localization_service.dart';
+import '../../core/services/s3_upload_service.dart';
+import 'blocked_users_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final UserProfileModel? profile;
@@ -36,7 +41,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   static const _storage = FlutterSecureStorage();
 
   String _appVersion = "";
-  String _loginType = "";
   UserProfileModel? _profile;
 
   static String get _privacyUrl =>
@@ -59,13 +63,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     _profile = widget.profile;
     _loadVersion();
-    _loadLoginType();
-  }
-
-  Future<void> _loadLoginType() async {
-    final loginType = await _storage.read(key: "login_type") ?? "";
-    if (!mounted) return;
-    setState(() => _loginType = loginType);
   }
 
   Future<void> _loadVersion() async {
@@ -158,10 +155,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       dialogType: DialogType.warning,
       animType: AnimType.scale,
-      title: "تسجيل الخروج",
-      desc: "هل أنت متأكد أنك تريد تسجيل الخروج؟",
-      btnCancelText: "إلغاء",
-      btnOkText: "تسجيل الخروج",
+      title: tr("settings.logout_title"),
+      desc: tr("settings.logout_body"),
+      btnCancelText: tr("common.cancel"),
+      btnOkText: tr("settings.logout"),
       btnOkColor: Colors.red,
       btnCancelOnPress: () {},
       btnOkOnPress: () async {
@@ -180,11 +177,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       dialogType: DialogType.error,
       animType: AnimType.scale,
-      title: "حذف الحساب",
-      desc:
-          "هل أنت متأكد؟ هذا الإجراء لا يمكن التراجع عنه وسيتم حذف جميع بياناتك نهائياً.",
-      btnCancelText: "إلغاء",
-      btnOkText: "حذف نهائياً",
+      title: tr("moderation.delete_account_title"),
+      desc: tr("moderation.delete_account_body"),
+      btnCancelText: tr("common.cancel"),
+      btnOkText: tr("moderation.delete_forever"),
       btnOkColor: Colors.red,
       btnCancelOnPress: () {},
       btnOkOnPress: () async {
@@ -194,33 +190,144 @@ class _SettingsScreenState extends State<SettingsScreen> {
           return;
         }
 
+        final loginType = (await _storage.read(key: "login_type") ?? "")
+            .toLowerCase();
+        final fields = <String, String>{
+          "action": "delete_account_permit",
+          "uid": uid,
+        };
+
+        if (loginType == "apple") {
+          try {
+            final credential = await SignInWithApple.getAppleIDCredential(
+              scopes: const [],
+            );
+            final appleUserId = credential.userIdentifier ?? "";
+            if (credential.authorizationCode.isEmpty || appleUserId.isEmpty) {
+              _showSnack(tr("moderation.apple_revoke_retry"), isError: true);
+              return;
+            }
+            fields["apple_authorization_code"] = credential.authorizationCode;
+            fields["apple_user_id"] = appleUserId;
+          } on SignInWithAppleAuthorizationException catch (e) {
+            if (e.code == AuthorizationErrorCode.canceled) {
+              _showSnack(tr("moderation.apple_delete_cancelled"), isError: true);
+            } else {
+              _showSnack(tr("moderation.apple_revoke_retry"), isError: true);
+            }
+            return;
+          } catch (_) {
+            _showSnack(tr("moderation.apple_revoke_retry"), isError: true);
+            return;
+          }
+        }
+
         try {
           final response = await Dio().post(
             "${AuthService.baseUrl}/sql.php?k=${DateTime.now().millisecondsSinceEpoch}",
-            data: FormData.fromMap({
-              "action": "delete_account_permit",
-              "uid": uid,
-            }),
+            data: FormData.fromMap(fields),
+            options: Options(
+              validateStatus: (status) => status != null && status < 500,
+              responseType: ResponseType.plain,
+            ),
           );
-
-          if (response.data["success"] == true) {
-            await AuthService.logout();
-            if (!mounted) return;
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const LoginScreen()),
-              (_) => false,
-            );
-          } else {
-            _showSnack(
-              response.data["error"]?.toString() ?? "فشل في حذف الحساب",
-              isError: true,
+          if (kDebugMode) {
+            debugPrint(
+              "delete_account raw: ${response.statusCode} ${response.data}",
             );
           }
+          final data = _decodeDeleteBody(response.data);
+          await _handleDeleteAccountResponse(data);
+        } on DioException catch (e) {
+          if (kDebugMode) {
+            debugPrint(
+              "delete_account raw: ${e.response?.statusCode} ${e.response?.data} $e",
+            );
+          }
+          final data = _decodeDeleteBody(e.response?.data);
+          if (data is Map && _deleteSucceeded(data)) {
+            await _finishDeletedAccount(data);
+            return;
+          }
+          final errorCode = data is Map ? data["error"]?.toString() : null;
+          if (errorCode == "apple_revoke_failed" ||
+              errorCode == "apple_identity_mismatch") {
+            _showSnack(tr("moderation.apple_revoke_retry"), isError: true);
+          } else {
+            _showSnack("حدث خطأ أثناء حذف الحساب", isError: true);
+          }
         } catch (e) {
+          if (kDebugMode) {
+            debugPrint("delete_account raw: $e");
+          }
           _showSnack("حدث خطأ أثناء حذف الحساب", isError: true);
         }
       },
     ).show();
+  }
+
+  dynamic _decodeDeleteBody(dynamic raw) {
+    if (raw is Map) return raw;
+    if (raw is! String) return raw;
+    final text = raw.trim();
+    try {
+      return jsonDecode(text);
+    } catch (_) {
+      final start = text.indexOf("{");
+      final end = text.lastIndexOf("}");
+      if (start >= 0 && end > start) {
+        try {
+          return jsonDecode(text.substring(start, end + 1));
+        } catch (_) {}
+      }
+    }
+    return raw;
+  }
+
+  bool _deleteSucceeded(Map data) {
+    final success = data["success"];
+    return success == true || success == 1 || success == "true";
+  }
+
+  Future<void> _handleDeleteAccountResponse(dynamic data) async {
+    final errorCode = data is Map ? data["error"]?.toString() : null;
+    if (data is Map && _deleteSucceeded(data)) {
+      await _finishDeletedAccount(data);
+      return;
+    }
+    if (errorCode == "apple_revoke_failed" ||
+        errorCode == "apple_identity_mismatch") {
+      _showSnack(tr("moderation.apple_revoke_retry"), isError: true);
+      return;
+    }
+    _showSnack(errorCode ?? "فشل في حذف الحساب", isError: true);
+  }
+
+  Future<void> _finishDeletedAccount(Map data) async {
+    final media = data["media"];
+    if (media is List) {
+      for (final file in media) {
+        try {
+          await S3UploadService.deleteFile(file.toString());
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint("delete_account media: $e");
+          }
+        }
+      }
+    }
+    try {
+      await AuthService.logout();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint("delete_account logout: $e");
+      }
+    }
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (_) => false,
+    );
   }
 
   void _showSnack(String message, {bool isError = false}) {
@@ -236,7 +343,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 20, 4, 8),
       child: Align(
-        alignment: Alignment.centerRight,
+        alignment: AlignmentDirectional.centerStart,
         child: Text(
           title,
           style: TextStyle(
@@ -353,13 +460,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final martIt = context.martItColors;
 
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: LocalizationService.instance.textDirection,
       child: Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
           centerTitle: true,
           title: Text(
-            "الإعدادات",
+            tr("settings.title"),
             style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.bold),
           ),
           leading: IconButton(
@@ -372,53 +479,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _sectionHeader("الحساب"),
+              child: _sectionHeader(tr("settings.account")),
             ),
             _settingsSection(
               children: [
                 _listTile(
                   icon: Iconsax.edit,
-                  title: "تعديل الملف الشخصي",
+                  title: tr("settings.edit_profile"),
                   onTap: _profile != null ? _openEditProfile : null,
                 ),
-                if (_loginType == "Email") ...[
-                  _divider(),
-                  _listTile(
-                    icon: Iconsax.lock,
-                    title: "تغيير كلمة المرور",
-                    trailing: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
+                _divider(),
+                _listTile(
+                  icon: Iconsax.user_remove,
+                  title: tr("moderation.blocked_users"),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const BlockedUsersScreen(),
                       ),
-                      decoration: BoxDecoration(
-                        color: context.isDarkMode
-                            ? AppColors.darkElevated
-                            : Colors.orange.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        "قريباً",
-                        style: TextStyle(
-                          color: Colors.orange.shade800,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                    );
+                  },
+                ),
               ],
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _sectionHeader("التفضيلات"),
+              child: _sectionHeader(tr("settings.preferences")),
             ),
             _settingsSection(
               children: [
                 _switchTile(
                   icon: Iconsax.moon,
-                  title: "الوضع الليلي",
+                  title: tr("settings.dark_mode"),
                   value: appProvider.darkMode,
                   onChanged: (val) async {
                     await appProvider.setDarkMode(val);
@@ -427,19 +520,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _divider(),
                 _switchTile(
                   icon: Iconsax.notification,
-                  title: "الإشعارات",
+                  title: tr("settings.notifications"),
                   value: appProvider.notificationsEnabled,
                   onChanged: appProvider.setNotificationsEnabled,
                 ),
                 _divider(),
                 _listTile(
                   icon: Iconsax.language_square,
-                  title: "اللغة",
+                  title: tr("settings.language"),
                   subtitle: appProvider.language == "ar"
                       ? "العربية"
                       : "English",
                   trailing: Icon(
-                    Icons.chevron_left,
+                    LocalizationService.instance.isArabic
+                        ? Icons.chevron_left
+                        : Icons.chevron_right,
                     size: 22,
                     color: context.appTextSecondary,
                   ),
@@ -449,24 +544,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _sectionHeader("عن التطبيق"),
+              child: _sectionHeader(tr("settings.about")),
             ),
             _settingsSection(
               children: [
                 _listTile(
                   icon: Iconsax.shield,
-                  title: "سياسة الخصوصية",
+                  title: tr("settings.privacy"),
                   onTap: () => _openPolicyPage(
-                    title: "سياسة الخصوصية",
+                    title: tr("settings.privacy"),
                     url: _privacyUrl,
                   ),
                 ),
                 _divider(),
                 _listTile(
                   icon: Iconsax.document,
-                  title: "شروط الاستخدام",
+                  title: tr("settings.terms"),
                   onTap: () =>
-                      _openPolicyPage(title: "شروط الاستخدام", url: _termsUrl),
+                      _openPolicyPage(title: tr("settings.terms"), url: _termsUrl),
+                ),
+                _divider(),
+                _listTile(
+                  icon: Iconsax.sms,
+                  title: tr("moderation.contact_us"),
+                  subtitle: "support@mart-it.store",
+                  onTap: () => launchUrl(Uri.parse("mailto:support@mart-it.store")),
                 ),
                 _divider(),
                 _listTile(
@@ -477,7 +579,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _divider(),
                 _listTile(
                   icon: Iconsax.info_circle,
-                  title: "الإصدار",
+                  title: tr("settings.version"),
                   trailing: Text(
                     _appVersion.isNotEmpty ? _appVersion : "1.2.6",
                     style: TextStyle(color: context.appTextSecondary),
@@ -487,13 +589,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _sectionHeader("الحساب"),
+              child: _sectionHeader(tr("settings.account")),
             ),
             _settingsSection(
               children: [
                 _listTile(
                   icon: Iconsax.logout,
-                  title: "تسجيل الخروج",
+                  title: tr("settings.logout"),
                   iconColor: AppColors.error,
                   iconBg: martIt.dangerBg,
                   titleColor: AppColors.error,
@@ -502,7 +604,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _divider(),
                 _listTile(
                   icon: Iconsax.trash,
-                  title: "حذف الحساب",
+                  title: tr("moderation.delete_account"),
                   iconColor: AppColors.error,
                   iconBg: martIt.dangerBg,
                   titleColor: AppColors.error,

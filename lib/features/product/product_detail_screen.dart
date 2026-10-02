@@ -4,7 +4,9 @@ import '../../core/constants/app_colors.dart';
 import '../../core/services/localization_service.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/moderation_service.dart';
 import '../../core/widgets/media_viewer_widget.dart';
+import '../../core/widgets/report_sheet.dart';
 import '../../core/widgets/smart_avatar_widget.dart';
 import '../auth/login.dart';
 import '../profile/profile_screen.dart';
@@ -65,7 +67,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       if (result['success'] == true && mounted) {
         setState(() => _isSubscribed = result['is_subscribed'] == true);
       }
-    } catch (e) {}
+    } catch (e) {
+      // Leave the current notify state if the check fails.
+    }
   }
 
   Future<void> _addNotifyRequest() async {
@@ -94,7 +98,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           type: SnackType.success,
         );
       }
-    } catch (e) {}
+    } catch (e) {
+      // Keep the button available if the request does not go through.
+    }
   }
 
   Future<void> _loadCartQuantity(String userId) async {
@@ -106,7 +112,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       if (result['success'] == true && mounted) {
         setState(() => _cartQuantity = result['quantity'] ?? 0);
       }
-    } catch (e) {}
+    } catch (e) {
+      // Cart quantity stays at the last known value.
+    }
   }
 
   Future<void> _addToCart() async {
@@ -186,6 +194,79 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
   }
 
+  Future<void> _reportOrBlockProduct() async {
+    final uid = _currentUserId ?? await AuthService.getCurrentUserId();
+    if (!mounted || uid == null || uid.isEmpty) {
+      showAppSnackbar(context, message: tr('common.login_required'), type: SnackType.error);
+      return;
+    }
+    final itemId = widget.item['id']?.toString() ?? '';
+    final sellerId = (widget.item['seller_id'] ?? widget.item['uid'] ?? '').toString();
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(tr('moderation.report')),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                showReportSheet(
+                  context: context,
+                  title: tr('moderation.report'),
+                  onSubmit: (reason, note) async {
+                    final result = await ModerationService.report(
+                      userId: uid,
+                      reason: reason,
+                      note: note,
+                      itemId: itemId,
+                      targetUid: sellerId,
+                    );
+                    if (!mounted) return;
+                    final sent = result['success'] == true;
+                    showAppSnackbar(
+                      context,
+                      message: sent
+                          ? tr('moderation.report_sent')
+                          : tr('common.error'),
+                      type: sent ? SnackType.success : SnackType.error,
+                    );
+                  },
+                );
+              },
+            ),
+            ListTile(
+              title: Text(tr('moderation.block')),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                final result = await ModerationService.blockUser(
+                  blockerUid: uid,
+                  blockedUid: sellerId,
+                );
+                if (!mounted) return;
+                if (result['success'] == true) {
+                  BlockedSellers.instance.block([
+                    sellerId,
+                    (widget.item['seller_uid'] ?? '').toString(),
+                  ]);
+                  showAppSnackbar(context, message: tr('moderation.blocked'));
+                  Navigator.pop(context);
+                } else {
+                  showAppSnackbar(
+                    context,
+                    message: tr('common.error'),
+                    type: SnackType.error,
+                  );
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
@@ -246,6 +327,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ),
                 ),
               ),
+              actions: [
+                IconButton(
+                  onPressed: _reportOrBlockProduct,
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: context.appSurface,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.more_horiz, color: AppColors.primary),
+                  ),
+                ),
+              ],
               flexibleSpace: FlexibleSpaceBar(
                 stretchModes: const [StretchMode.zoomBackground],
                 background: SizedBox.expand(

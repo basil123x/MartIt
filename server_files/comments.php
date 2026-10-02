@@ -1,5 +1,6 @@
 <?php
 include 'xtras/config.php';
+require_once __DIR__ . '/moderation.php';
 
 $db = isset($conx) ? $conx : (isset($conn) ? $conn : null);
 if ($db === null) {
@@ -9,6 +10,7 @@ if ($db === null) {
     ));
     exit;
 }
+martit_ensure_schema($db);
 
 $itemId = isset($_GET['item_id']) ? (int)$_GET['item_id'] : 0;
 
@@ -37,6 +39,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $comment = $db->real_escape_string($comment);
+    if (martit_text_has_banned_word($input['comment'])) {
+        echo json_encode(array(
+            'success' => false,
+            'error' => 'banned_word',
+        ));
+        exit;
+    }
     $sql = "INSERT INTO Comments (item_id, user_id, comment, created_at)
             VALUES ($itemId, $userId, '$comment', NOW())";
 
@@ -62,6 +71,11 @@ if ($itemId <= 0) {
     exit;
 }
 
+$viewerUid = isset($_GET['viewer_uid']) ? $db->real_escape_string($_GET['viewer_uid']) : '';
+$blockSql = $viewerUid !== ''
+    ? " AND Comments.user_id NOT IN (SELECT blocked_uid FROM UserBlocks WHERE blocker_uid = '$viewerUid')"
+    : '';
+
 $sql = "SELECT
     Comments.id,
     Users.uid,
@@ -70,7 +84,7 @@ $sql = "SELECT
     Comments.created_at
 FROM Comments
 LEFT JOIN Users ON Users.id = Comments.user_id
-WHERE Comments.item_id = $itemId
+WHERE Comments.item_id = $itemId $blockSql
 ORDER BY Comments.created_at DESC";
 
 $result = $db->query($sql);

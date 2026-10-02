@@ -7,6 +7,7 @@ import "package:onesignal_flutter/onesignal_flutter.dart";
 import "package:sign_in_with_apple/sign_in_with_apple.dart";
 
 import "api_config_service.dart";
+import "moderation_service.dart";
 
 class AppleAuthResult {
   final String uid;
@@ -54,10 +55,28 @@ class AppleAuthService {
         email = await _storage.read(key: _cacheKey(userIdentifier, "email"));
       }
 
-      if (email == null || email.isEmpty) {
-        throw Exception(
-          "Apple email is unavailable. Sign in with Apple again.",
+      final existingByApple = await ModerationService.userByAppleId(
+        userIdentifier,
+      );
+      if (existingByApple["success"] == true &&
+          existingByApple["data"] is Map) {
+        final userData = Map<String, dynamic>.from(
+          existingByApple["data"] as Map,
         );
+        final knownEmail = userData["email"]?.toString() ?? email ?? "";
+        if (knownEmail.isNotEmpty) {
+          await _updateFcmToken(knownEmail);
+        }
+        return AppleAuthResult(
+          uid: userData["id"]?.toString() ?? "",
+          oid: userData["oid"]?.toString() ?? "",
+          email: knownEmail,
+          name: userData["name"]?.toString() ?? "",
+        );
+      }
+
+      if (email == null || email.isEmpty) {
+        email = "apple_$userIdentifier@users.martit.app";
       }
 
       String fullName = "";
@@ -105,6 +124,10 @@ class AppleAuthService {
       // Existing user — success true with data
       if (checkMap["success"] == true && checkMap["data"] != null) {
         final userData = Map<String, dynamic>.from(checkMap["data"] as Map);
+        await ModerationService.linkAppleId(
+          email: email,
+          appleUserId: userIdentifier,
+        );
         await _updateFcmToken(email);
         return AppleAuthResult(
           uid: userData["id"]?.toString() ?? "",
@@ -120,6 +143,7 @@ class AppleAuthService {
           email: email,
           fullName: fullName,
           cacheBust: cacheBust,
+          appleUserId: userIdentifier,
         );
       }
 
@@ -146,6 +170,7 @@ class AppleAuthService {
     required String email,
     required String fullName,
     required String cacheBust,
+    required String appleUserId,
   }) async {
     final uid = (1000 + Random().nextInt(9000)).toString();
     final oid = (1000 + Random().nextInt(9000)).toString();
@@ -161,6 +186,7 @@ class AppleAuthService {
         "player_id": playerId ?? "",
         "avatar_url": "",
         "store_id": "1",
+        "apple_user_id": appleUserId,
       }),
     );
 

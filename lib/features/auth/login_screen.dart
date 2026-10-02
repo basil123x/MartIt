@@ -40,8 +40,6 @@ class _LoginScreenxState extends State<LoginScreenx> {
       _isLoading = true;
     });
 
-    final otp = AuthService.generateOTP();
-
     setState(() {
       _isLoading = false;
     });

@@ -151,11 +151,16 @@ class ApiService {
   }
 
   // Search items by name
-  static Future<Map<String, dynamic>> searchItems(String query) async {
+  static Future<Map<String, dynamic>> searchItems(
+    String query, {
+    String? viewerUid,
+  }) async {
     try {
+      final viewer = viewerUid == null || viewerUid.isEmpty
+          ? ''
+          : '&viewer_uid=${Uri.encodeQueryComponent(viewerUid)}';
       final response = await Dio().get(
-        '$baseUrl/search.php?q=$query',
-        
+        '$baseUrl/search.php?q=${Uri.encodeQueryComponent(query)}$viewer',
       );
 
       if (response.statusCode == 200) {
@@ -233,10 +238,18 @@ class ApiService {
   }
 
   // Get comments for item
-  static Future<Map<String, dynamic>> getComments(int itemId) async {
+  static Future<Map<String, dynamic>> getComments(
+    int itemId, {
+    String? viewerId,
+  }) async {
     try {
+      final viewer = viewerId == null || viewerId.isEmpty
+          ? ''
+          : '&viewer_uid=$viewerId';
       final response = await http.get(
-        Uri.parse('$baseUrl/comments.php?item_id=$itemId&k=${DateTime.now().millisecondsSinceEpoch}'),
+        Uri.parse(
+          '$baseUrl/comments.php?item_id=$itemId$viewer&k=${DateTime.now().millisecondsSinceEpoch}',
+        ),
         headers: {'Content-Type': 'application/json'},
       );
 

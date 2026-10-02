@@ -10,6 +10,9 @@ import '../../core/models/item_model.dart';
 import '../../core/widgets/smart_avatar_widget.dart';
 import '../../core/utils/snackbar_helper.dart';
 import '../../core/utils/theme_extensions.dart';
+import '../../core/services/localization_service.dart';
+import '../../core/services/moderation_service.dart';
+import '../../core/widgets/report_sheet.dart';
 
 class CommentsModal extends StatefulWidget {
   final String itemId;
@@ -46,7 +49,11 @@ class _CommentsModalState extends State<CommentsModal> {
     });
 
     try {
-      final response = await ApiService.getComments(int.parse(widget.itemId));
+      final viewerId = await AuthService.getCurrentUserId();
+      final response = await ApiService.getComments(
+        int.parse(widget.itemId),
+        viewerId: viewerId,
+      );
 
       if (response['success'] == true) {
         final List<dynamic> commentsData = response['data'] ?? [];
@@ -71,7 +78,18 @@ class _CommentsModalState extends State<CommentsModal> {
   }
 
   Future<void> _sendComment() async {
-    if (_commentController.text.trim().isEmpty) return;
+    final text = _commentController.text.trim();
+    if (text.isEmpty) return;
+
+    if (await ModerationService.containsBannedWords(text)) {
+      if (!mounted) return;
+      showAppSnackbar(
+        context,
+        message: tr('moderation.banned_word'),
+        type: SnackType.error,
+      );
+      return;
+    }
 
     if (!widget.isLoggedIn) {
       Navigator.push(
@@ -132,13 +150,84 @@ class _CommentsModalState extends State<CommentsModal> {
     });
   }
 
+  Future<void> _openCommentActions(CommentModel comment) async {
+    final uid = await AuthService.getCurrentUserId();
+    if (!mounted || uid == null) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: Text(tr('moderation.report')),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  showReportSheet(
+                    context: context,
+                    title: tr('moderation.report'),
+                    onSubmit: (reason, note) async {
+                      final result = await ModerationService.report(
+                        userId: uid,
+                        reason: reason,
+                        note: note,
+                        targetType: 'comment',
+                        itemId: widget.itemId,
+                        commentId: comment.id,
+                        targetUid: comment.userId,
+                      );
+                      if (!mounted) return;
+                      final sent = result['success'] == true;
+                      showAppSnackbar(
+                        context,
+                        message: sent
+                            ? tr('moderation.report_sent')
+                            : tr('common.error'),
+                        type: sent ? SnackType.success : SnackType.error,
+                      );
+                    },
+                  );
+                },
+              ),
+              ListTile(
+                title: Text(tr('moderation.block')),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  final result = await ModerationService.blockUser(
+                    blockerUid: uid,
+                    blockedUid: comment.userId,
+                  );
+                  if (!mounted) return;
+                  if (result['success'] != true) {
+                    showAppSnackbar(
+                      context,
+                      message: tr('common.error'),
+                      type: SnackType.error,
+                    );
+                    return;
+                  }
+                  BlockedSellers.instance.block([comment.userId]);
+                  setState(() {
+                    _comments.removeWhere((item) => item.userId == comment.userId);
+                  });
+                  showAppSnackbar(context, message: tr('moderation.blocked'));
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     final screenHeight = MediaQuery.of(context).size.height;
 
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: LocalizationService.instance.textDirection,
       child: Container(
       height: keyboardHeight > 0
           ? screenHeight *
@@ -284,6 +373,11 @@ class _CommentsModalState extends State<CommentsModal> {
                           color: cs.onSurfaceVariant,
                           fontSize: 12,
                         ),
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        icon: Icon(Icons.more_horiz, color: cs.onSurfaceVariant),
+                        onPressed: () => _openCommentActions(comment),
                       ),
                     ],
                   ),

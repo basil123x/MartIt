@@ -19,7 +19,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.1</string>
+	<string>1.2.7</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleURLTypes</key>
@@ -43,19 +43,15 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>We use the camera to capture photos of construction sites and projects as part of visit documentation and reports.</string>
-	<key>NSCarrierUsageDescription</key>
-	<string>This app needs access to carrier info to get the SIM country code</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>We use your location to improve visit accuracy while you are using the app.</string>
+	<string>MartIt uses the camera so you can photograph products you want to sell.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>We use your location to show nearby projects and provide accurate visit tracking.</string>
+	<string>MartIt uses your location to show products available in your country.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>We use the microphone only if you choose to record voice notes related to site visits or project updates.</string>
+	<string>MartIt uses the microphone when you record a product video.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>We need permission to save project photos and visit images to your photo library for your records and reports.</string>
+	<string>MartIt saves product photos to your library only when you choose to.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>We need access to your photo library so you can select existing images to attach to site visits, reports, or project updates.</string>
+	<string>MartIt needs your photo library so you can add existing pictures to a product.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -90,15 +86,13 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
 	<key>com.apple.developer.applesignin</key>
 	<array>

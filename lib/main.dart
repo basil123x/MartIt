@@ -85,23 +85,14 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final isDark = prefs.getBool(AppProvider.darkModeKey) ?? false;
 
-  runApp(
-    MartItApp(
-      initialDarkMode: isDark,
-      forcedUpdate: storeUpdate,
-    ),
-  );
+  runApp(MartItApp(initialDarkMode: isDark, forcedUpdate: storeUpdate));
 }
 
 class MartItApp extends StatefulWidget {
   final bool? initialDarkMode;
   final StoreUpdateRequirement? forcedUpdate;
 
-  const MartItApp({
-    super.key,
-    this.initialDarkMode,
-    this.forcedUpdate,
-  });
+  const MartItApp({super.key, this.initialDarkMode, this.forcedUpdate});
 
   @override
   State<MartItApp> createState() => _MartItAppState();

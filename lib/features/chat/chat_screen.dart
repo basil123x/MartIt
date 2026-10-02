@@ -8,6 +8,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/constants/app_theme.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/localization_service.dart';
 import '../../core/models/chat_model.dart';
 import '../../core/widgets/smart_avatar_widget.dart';
 import '../../core/utils/snackbar_helper.dart';
@@ -48,9 +49,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   String? _currentUserName;
   String? _currentUserAvatar;
   String? _currentConversationId;
-  bool _isOnline = false;
   Timer? _statusUpdateTimer;
-  Timer? _statusCheckTimer;
   Timer? _messagePollingTimer; // ✅ Timer للـ polling
 
   @override
@@ -67,7 +66,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _messageController.dispose();
     _scrollController.dispose();
     _statusUpdateTimer?.cancel();
-    _statusCheckTimer?.cancel();
     _messagePollingTimer?.cancel(); // ✅ إلغاء الـ polling timer
     super.dispose();
   }
@@ -76,7 +74,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _checkUserStatus(); // تحديث فوري
+      _loadMessages(isPolling: true);
     }
   }
 
@@ -90,12 +88,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       }
     });
 
-    // ✅ تحقق من حالة الطرف الآخر كل 3 ثواني (سريع وفوري)
-    _statusCheckTimer = Timer.periodic(const Duration(seconds: 3), (
-      timer,
-    ) async {
-      await _checkUserStatus();
-    });
   }
 
   Future<void> _initializeChat() async {
@@ -108,7 +100,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       // Update own status immediately
       await ApiService.updateOnlineStatus(userId: _currentUserId!);
       await _loadMessages();
-      await _checkUserStatus();
 
       // ✅ بدء polling للرسائل كل 3 ثواني
       _startMessagePolling();
@@ -120,21 +111,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _messagePollingTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       _loadMessages(isPolling: true);
     });
-  }
-
-  Future<void> _checkUserStatus() async {
-    try {
-      final result = await ApiService.getUserStatus(userId: widget.receiverId);
-      if (result['success'] == true && mounted) {
-        final minutesAgo = result['minutes_ago'] ?? 999;
-        setState(() {
-          // ✅ متصل لو آخر ظهور أقل من دقيقة
-          _isOnline = minutesAgo < 1;
-        });
-      }
-    } catch (e) {
-      print('Error checking user status: $e');
-    }
   }
 
   Future<void> _loadMessages({bool isPolling = false}) async {
@@ -308,7 +284,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final cs = Theme.of(context).colorScheme;
 
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: LocalizationService.instance.textDirection,
       child: Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(

@@ -534,9 +534,6 @@ class _CameraScreenState extends State<CameraScreen> {
                 ),
                 itemCount: capturedFiles.length,
                 itemBuilder: (context, index) {
-                  final file = File(capturedFiles[index]);
-                  final isVideo = capturedFiles[index].endsWith('.mp4');
-
                   return Stack(
                     children: [
                       ClipRRect(

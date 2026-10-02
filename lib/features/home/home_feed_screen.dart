@@ -3,11 +3,9 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:MartIt/core/services/onesignal_service.dart';
-import 'package:MartIt/core/services/onesignal_service_web.dart';
 import 'package:MartIt/features/add_product/media_picker_sheet.dart';
 import 'package:MartIt/features/add_product/add_product_screen.dart';
 import 'package:MartIt/features/auth/login.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -24,17 +22,16 @@ import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/localization_service.dart';
+import '../../core/services/moderation_service.dart';
 import '../../core/models/item_model.dart';
 import '../../core/widgets/smart_avatar_widget.dart';
 import '../../core/widgets/media_viewer_widget.dart';
-import '../../core/widgets/item_thumbnail_widget.dart';
 import '../../core/widgets/home_tour_overlay.dart';
 import '../../core/widgets/uploading_media_frame.dart';
 import '../../core/utils/snackbar_helper.dart';
 import '../../core/utils/theme_extensions.dart';
 import '../../core/utils/item_media_url_util.dart';
 import '../../core/demo/demo_cars_feed.dart';
-import '../product/product_detail_screen.dart';
 import '../search/search_screen.dart';
 import '../profile/profile_screen.dart';
 import '../comments/comments_modal.dart';
@@ -42,10 +39,7 @@ import '../camera/camera_screen.dart';
 import '../cart/cart_screen.dart';
 import '../../core/models/cart_model.dart';
 import '../chat/conversations_screen.dart';
-import '../orders/my_orders_screen.dart';
-import '../orders/customer_orders_screen.dart';
 import 'package:http/http.dart' as http;
-import '../../core/services/api_config_service.dart';
 
 class HomeFeedScreen extends StatefulWidget {
   final String? initialItemId;
@@ -95,9 +89,7 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
   bool _isLoggedIn = false;
   List<ItemModel> _items = [];
   bool _isLoading = false;
-  bool _hasError = false;
   int _currentPage = 0;
-  String? _currentItemId;
   String? _currentUserId;
   List<String> _categories = [];
   String?
@@ -112,7 +104,6 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
   String? _pendingPinnedItemId;
   Set<String> _notifySubscribed = {};
   bool _showHeartAnimation = false;
-  bool _heartIsLiked = true;
   AnimationController? _heartAnimController;
   Animation<double>? _heartScaleAnim;
   Animation<double>? _heartOpacityAnim;
@@ -165,6 +156,7 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
     _loadViewMode();
     _checkLoginStatus();
     _gridScrollController.addListener(_onGridScroll);
+    BlockedSellers.instance.addListener(_dropBlockedSellers);
 
     _heartAnimController = AnimationController(
       vsync: this,
@@ -195,8 +187,6 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
   }
 
   void _triggerHeartAnimation(bool isLiking) {
-    _heartIsLiked = isLiking;
-
     if (isLiking) {
       setState(() {
         _showHeartAnimation = true;
@@ -258,20 +248,6 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
         category: _selectedCategory,
       );
     }
-  }
-
-  void _scrollGridToTop() {
-    if (!_gridScrollController.hasClients) return;
-    _gridScrollController.animateTo(
-      0,
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeOut,
-    );
-  }
-
-  double _gridHeaderHeight(BuildContext context) {
-    final statusBarHeight = MediaQuery.of(context).padding.top;
-    return statusBarHeight + 126;
   }
 
   int _gridCartQuantity(ItemModel item) {
@@ -580,51 +556,6 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
     );
   }
 
-  Widget _itemThumbnail({
-    required ItemModel item,
-    double? width,
-    double? height,
-    double iconSize = 30,
-    bool showPlayBadge = true,
-    Color? placeholderColor,
-  }) {
-    return UploadingMediaFrame(
-      itemId: item.id,
-      ready: ItemThumbnailWidget(
-        storeId: item.storeid,
-        itemId: item.id,
-        itemIdx: item.idx,
-        preferredUrl: item.media.isNotEmpty ? item.media.first : null,
-        width: width,
-        height: height,
-        fit: BoxFit.cover,
-        iconSize: iconSize,
-        showPlayBadge: showPlayBadge,
-        placeholderColor: placeholderColor,
-      ),
-    );
-  }
-
-  void _openItemFromGrid(ItemModel item) {
-    final index = _items.indexWhere((i) => i.id == item.id);
-    if (index < 0) return;
-
-    setState(() {
-      _currentIndex = index;
-      _currentItemId = item.id;
-    });
-
-    if (!_isTikTokMode) {
-      _setViewMode(_viewModeTiktok);
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_pageController.hasClients) {
-        _pageController.jumpToPage(index);
-      }
-    });
-  }
-
   void _trackLeavingItem(int itemIndex) {
     if (_itemViewStartTime == null ||
         itemIndex < 0 ||
@@ -655,7 +586,6 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
 
     setState(() {
       _currentIndex = newIndex;
-      _currentItemId = _items[newIndex].id;
     });
 
     _itemViewStartTime = DateTime.now();
@@ -688,18 +618,6 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
         _currentUserId == item.seller.id ||
         _currentUserId == _sellerUserId(item.seller);
   }
-
-  bool _sheetIsDark(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark;
-
-  Color _sheetBackground(BuildContext context) =>
-      _sheetIsDark(context) ? AppColors.darkBackground : Colors.white;
-
-  Color _sheetTileBackground(BuildContext context) =>
-      _sheetIsDark(context) ? AppColors.darkSurface : const Color(0xFFF5F5F5);
-
-  Color _sheetOnSurface(BuildContext context) =>
-      Theme.of(context).colorScheme.onSurface;
 
   bool _sameSeller(SellerModel a, SellerModel b) {
     return _sellerUserId(a) == _sellerUserId(b);
@@ -760,6 +678,7 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
     if (isLoggedIn && currentUserIdx != null) {
       final scores = await ApiService.getUserScores(currentUserIdx);
       print('🎯 User category scores: ${scores['top_categories']}');
+      await BlockedSellers.instance.sync();
     }
 
     // ✅ تحميل المنتجات أولاً، ثم التصنيفات ستُحمّل تلقائياً
@@ -767,7 +686,8 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
     _loadItems(
       uid: _currentUserId,
       isRefresh: true,
-      initiItem: (pinId != null && pinId.isNotEmpty) ? pinId : '',
+      // Empty search id keeps the full feed. The pin is sent separately.
+      initiItem: '',
       pinnedItemId: (pinId != null && pinId.isNotEmpty) ? pinId : null,
     );
   }
@@ -837,14 +757,12 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
 
     setState(() {
       _isLoading = true;
-      _hasError = false;
       if (isRefresh) {
         _currentPage = 0;
         // Keep existing items visible while refreshing so chrome (e.g. floating
         // cart) is not torn down by the empty-loading branch in build().
         if (pinnedItemId != null && pinnedItemId.isNotEmpty) {
           _currentIndex = 0;
-          _currentItemId = pinnedItemId;
         }
       }
     });
@@ -866,13 +784,13 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
             items.insert(0, pinnedItem);
           }
         }
+        items = _withoutBlocked(items);
         setState(() {
           if (isRefresh) {
             _items = items;
             // Never wipe cart badge state on feed refresh.
             if (pinnedItemId != null && pinnedItemId.isNotEmpty) {
               _currentIndex = 0;
-              _currentItemId = pinnedItemId;
             }
           } else {
             _items.addAll(items);
@@ -884,14 +802,9 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
             _itemViewStartTime = DateTime.now();
           }
         });
-        if (isRefresh &&
-            pinnedItemId != null &&
-            pinnedItemId.isNotEmpty &&
-            _pageController.hasClients) {
+        if (isRefresh && pinnedItemId != null && pinnedItemId.isNotEmpty) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_pageController.hasClients) {
-              _pageController.jumpToPage(0);
-            }
+            _jumpFeedToFirstPage();
           });
         }
         if (items.isNotEmpty && isRefresh) {
@@ -955,6 +868,14 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
         );
       }
 
+      items = await _fillPastBlocked(
+        items,
+        startOffset: isRefresh ? 10 : _items.length + 10,
+        userId: currentUserId,
+        uid: uid,
+        category: category,
+        country: simCountry,
+      );
       setState(() {
         if (isRefresh) {
           _items = items;
@@ -962,7 +883,6 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
           // refresh, category change). Full cart is re-synced from API below.
           if (pinnedItemId != null && pinnedItemId.isNotEmpty) {
             _currentIndex = 0;
-            _currentItemId = pinnedItemId;
           }
         } else {
           _items.addAll(items);
@@ -975,14 +895,9 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
         }
       });
 
-      if (isRefresh &&
-          pinnedItemId != null &&
-          pinnedItemId.isNotEmpty &&
-          _pageController.hasClients) {
+      if (isRefresh && pinnedItemId != null && pinnedItemId.isNotEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_pageController.hasClients) {
-            _pageController.jumpToPage(0);
-          }
+          _jumpFeedToFirstPage();
         });
       }
 
@@ -1005,7 +920,6 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
     } catch (e) {
       print('API Error: $e');
       setState(() {
-        _hasError = true;
         _isLoading = false;
       });
 
@@ -1131,25 +1045,30 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
     }
   }
 
+  void _jumpFeedToFirstPage() {
+    if (!mounted || _items.isEmpty || !_pageController.hasClients) return;
+    _pageController.jumpToPage(0);
+  }
+
   Future<void> _openPinnedFeedItem(String itemId) async {
     setState(() {
       _selectedCategory = null;
       _currentIndex = 0;
-      _currentItemId = itemId;
     });
 
     await _loadItems(
       isRefresh: true,
       uid: _currentUserId,
       category: null,
+      // Do not send itemSrchId here. That filter replaces the whole feed
+      // with one id, and a miss comes back empty and crashes the pager.
+      initiItem: '',
       pinnedItemId: itemId,
     );
 
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_pageController.hasClients) {
-        _pageController.jumpToPage(0);
-      }
+      _jumpFeedToFirstPage();
     });
   }
 
@@ -1540,6 +1459,7 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
       controller: _pageController,
       scrollDirection: Axis.vertical,
       onPageChanged: (index) {
+        if (_items.isEmpty) return;
         final actualIndex = index % _items.length;
         _onPageChanged(actualIndex);
 
@@ -1565,178 +1485,6 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
     );
   }
 
-  Widget _buildGridFeed({Key? key}) {
-    final topPadding = _gridHeaderHeight(context);
-
-    return RefreshIndicator(
-      key: key,
-      color: AppColors.primary,
-      onRefresh: () => _loadItems(
-        isRefresh: true,
-        uid: _currentUserId,
-        category: _selectedCategory,
-      ),
-      child: GridView.builder(
-        controller: _gridScrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(12, topPadding, 12, 24),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          childAspectRatio: 0.62,
-        ),
-        itemCount: _items.length + (_isLoading ? 2 : 0),
-        itemBuilder: (context, index) {
-          if (index >= _items.length) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(
-                  color: AppColors.primary,
-                  strokeWidth: 2,
-                ),
-              ),
-            );
-          }
-          return _buildGridProductCard(_items[index]);
-        },
-      ),
-    );
-  }
-
-  Map<String, dynamic> _productDetailItemMap(ItemModel item) {
-    return {
-      'id': item.id,
-      'idx': item.idx,
-      'storeid': item.storeid,
-      'name': item.name,
-      'eng': item.nameEn,
-      'price': item.price,
-      'qtt': item.quantity,
-      'description': item.description,
-      'description_arb': item.descriptionArb,
-      'seller_name': item.seller.name,
-      'seller_id': item.seller.id,
-    };
-  }
-
-  Widget _buildGridProductCard(ItemModel item) {
-    final showCart = !_isLoggedIn || !_isOwnProduct(item);
-
-    return Material(
-      color: context.appSurface,
-      borderRadius: BorderRadius.circular(16),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                ProductDetailScreen(item: _productDetailItemMap(item)),
-          ),
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(16),
-                ),
-                child: SizedBox(
-                  height: 160,
-                  width: double.infinity,
-                  child: _itemThumbnail(
-                    item: item,
-                    height: 160,
-                    iconSize: 40,
-                    placeholderColor: context.appSurfaceVariant,
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.localizedName(
-                        LocalizationService.instance.currentLanguage,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      textDirection: TextDirection.rtl,
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        color: context.appTextPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Icon(Iconsax.shop, size: 12, color: Colors.grey[500]),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            item.seller.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textDirection: TextDirection.rtl,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '${item.price} ريال',
-                            style: const TextStyle(
-                              color: AppColors.secondary,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                        if (showCart)
-                          _InlineCartControl(
-                            cartQuantity: _gridCartQuantity(item),
-                            stockQuantity: item.quantity,
-                            variant: _InlineCartVariant.grid,
-                            onAdd: () => _onGridCartAdd(item),
-                            onRemove: () => _onGridCartRemove(item),
-                            onNotify: () => _onGridNotifyWhenAvailable(item),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildEmptyFeedState() {
     final lang = LocalizationService.instance.currentLanguage;
     final textColor = _isTikTokMode ? Colors.white : context.appTextPrimary;
@@ -1758,8 +1506,11 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
           ),
           const SizedBox(height: 16),
           ElevatedButton(
-            onPressed: () =>
-                _loadItems(isRefresh: true, category: _selectedCategory),
+            onPressed: () => _loadItems(
+              isRefresh: true,
+              initiItem: '',
+              category: _selectedCategory,
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
@@ -1767,124 +1518,6 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
             child: Text(lang == 'ar' ? 'إعادة المحاولة' : 'Retry'),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildCategoriesContent() {
-    if (_isLoadingCategories) {
-      return const Center(
-        child: SizedBox(
-          width: 24,
-          height: 24,
-          child: CircularProgressIndicator(
-            color: AppColors.primary,
-            strokeWidth: 2,
-          ),
-        ),
-      );
-    }
-
-    if (_categories.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return ListView.builder(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: _categories.length + 1,
-      itemBuilder: (context, index) => _buildCategoryItemAt(index),
-    );
-  }
-
-  Widget _buildCategoryItemAt(int index) {
-    final lang = LocalizationService.instance.currentLanguage;
-    if (index == 0) {
-      return _buildCategoryChip(
-        label: lang == 'ar' ? 'الكل' : 'All',
-        isSelected: _selectedCategory == null,
-        onTap: () {
-          if (_selectedCategory == null) return;
-
-          setState(() {
-            _selectedCategory = null;
-          });
-          _loadItems(isRefresh: true, uid: _currentUserId, category: null);
-        },
-      );
-    }
-
-    final category = _categories[index - 1];
-    return _buildCategoryChip(
-      label: category,
-      isSelected: _selectedCategory == category,
-      onTap: () {
-        if (_selectedCategory == category) return;
-
-        setState(() {
-          _selectedCategory = category;
-        });
-        _loadItems(isRefresh: true, uid: _currentUserId, category: category);
-      },
-    );
-  }
-
-  Widget _buildCategoryChip({
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    final unselectedBg = _isTikTokMode
-        ? Colors.white.withOpacity(0.2)
-        : Colors.white;
-    final unselectedBorder = _isTikTokMode
-        ? Colors.white.withOpacity(0.3)
-        : Colors.grey.shade300;
-    final labelColor = isSelected
-        ? Colors.white
-        : (_isTikTokMode ? Colors.white : context.appTextPrimary);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(left: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : unselectedBg,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected ? AppColors.primary : unselectedBorder,
-            width: 1.5,
-          ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: AppColors.primary.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: labelColor,
-              fontSize: 14,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-              shadows: _isTikTokMode && !isSelected
-                  ? const [
-                      Shadow(
-                        offset: Offset(1, 1),
-                        blurRadius: 2,
-                        color: Colors.black45,
-                      ),
-                    ]
-                  : null,
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -2055,17 +1688,30 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
                   vertical: 7,
                 ),
                 decoration: BoxDecoration(
-                  color: item.seller.isFollowing
-                      ? Colors.white24
-                      : _brandPrimary,
+                  color: item.seller.isFollowing ? Colors.white : _brandPrimary,
                   borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: item.seller.isFollowing
+                        ? _brandPrimary
+                        : Colors.white,
+                    width: 1.5,
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black54,
+                      blurRadius: 6,
+                      offset: Offset(0, 1),
+                    ),
+                  ],
                 ),
                 child: Text(
                   item.seller.isFollowing
                       ? (lang == 'ar' ? 'يتابع' : 'Following')
                       : (lang == 'ar' ? 'متابعة' : 'Follow'),
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: item.seller.isFollowing
+                        ? _brandPrimary
+                        : Colors.white,
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                   ),
@@ -2187,6 +1833,48 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
     );
   }
 
+  Widget _feedOverlayText(
+    String text, {
+    required double fontSize,
+    FontWeight fontWeight = FontWeight.w700,
+    int maxLines = 1,
+  }) {
+    final fill = TextStyle(
+      color: Colors.white,
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      height: 1.25,
+    );
+    final stroke = fill.copyWith(
+      foreground: Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4
+        ..strokeJoin = StrokeJoin.round
+        ..color = Colors.black,
+    );
+    return Stack(
+      children: [
+        Text(
+          text,
+          maxLines: maxLines,
+          overflow: TextOverflow.ellipsis,
+          style: stroke,
+        ),
+        Text(
+          text,
+          maxLines: maxLines,
+          overflow: TextOverflow.ellipsis,
+          style: fill.copyWith(
+            shadows: const [
+              Shadow(offset: Offset(0, 1), blurRadius: 8, color: Colors.black),
+              Shadow(offset: Offset(0, 0), blurRadius: 2, color: Colors.black),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildBottomInfo() {
     if (_items.isEmpty || _currentIndex >= _items.length) {
       return const SizedBox();
@@ -2194,6 +1882,10 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
 
     final lang = LocalizationService.instance.currentLanguage;
     final item = _items[_currentIndex];
+    final title = item.localizedName(lang);
+    final description = item.localizedDescription(lang).trim();
+    final showDescription =
+        description.isNotEmpty && description != title.trim();
 
     final isAr = LocalizationService.instance.currentLanguage == 'ar';
     return Positioned(
@@ -2203,60 +1895,47 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
       child: Container(
         key: _tourInfoKey,
         padding: const EdgeInsets.fromLTRB(16, 48, 16, 12),
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.bottomCenter,
-            end: Alignment.topCenter,
-            colors: [Color(0xCC000000), Color(0x66000000), Colors.transparent],
-          ),
-        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               children: [
-                const Icon(Iconsax.user, color: Colors.white, size: 16),
+                const Icon(
+                  Iconsax.user,
+                  color: Colors.white,
+                  size: 16,
+                  shadows: [
+                    Shadow(color: Colors.black, blurRadius: 4),
+                    Shadow(color: Colors.black, offset: Offset(0, 1)),
+                  ],
+                ),
                 const SizedBox(width: 8),
                 Flexible(
-                  child: Text(
+                  child: _feedOverlayText(
                     item.seller.name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      shadows: [
-                        Shadow(
-                          offset: Offset(0, 1),
-                          blurRadius: 4,
-                          color: Colors.black54,
-                        ),
-                      ],
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              item.localizedName(LocalizationService.instance.currentLanguage),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-                shadows: [
-                  Shadow(
-                    offset: Offset(0, 1),
-                    blurRadius: 4,
-                    color: Colors.black54,
-                  ),
-                ],
-              ),
+            _feedOverlayText(
+              title,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
               maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
+            if (showDescription) ...[
+              const SizedBox(height: 6),
+              _feedOverlayText(
+                description,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                maxLines: 2,
+              ),
+            ],
             const SizedBox(height: 10),
             Row(
               children: [
@@ -2289,20 +1968,10 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
                 if (item.quantity == 0)
                   _buildOutOfStockNotifyChip(item, lang)
                 else
-                  Text(
+                  _feedOverlayText(
                     '${item.quantity} ${item.quantity >= 3 && item.quantity <= 9 ? "Pcs" : "Pc"}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      shadows: [
-                        Shadow(
-                          offset: Offset(0, 1),
-                          blurRadius: 4,
-                          color: Colors.black54,
-                        ),
-                      ],
-                    ),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
                   ),
               ],
             ),
@@ -2378,6 +2047,8 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
                   autoPlayVideo: true,
                   showControls: false,
                   showIndicators: item.media.length > 1,
+                  // Feed photo fit. Change this back to BoxFit.contain to restore the old framing.
+                  fit: BoxFit.cover,
                 )
               : const Center(
                   child: Icon(Iconsax.image, color: Colors.white, size: 80),
@@ -2403,12 +2074,7 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
       if (_isOwnProduct(item)) return item.seller;
     }
     final uid = _currentUserId ?? '';
-    return SellerModel(
-      id: uid,
-      uid: uid,
-      name: '',
-      avatar: '',
-    );
+    return SellerModel(id: uid, uid: uid, name: '', avatar: '');
   }
 
   ItemModel _itemFromPublishSnapshot(Map snapshot, String itemId) {
@@ -2510,29 +2176,25 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
     setState(() {
       _selectedCategory = null;
       _currentIndex = 0;
-      _currentItemId = itemId;
       if (snapshotItem != null) {
         _items.removeWhere((item) => item.id == itemId);
         _items.insert(0, snapshotItem);
       }
     });
 
-    if (_pageController.hasClients) {
-      _pageController.jumpToPage(0);
-    }
+    _jumpFeedToFirstPage();
 
     await _loadItems(
       isRefresh: true,
       uid: _currentUserId,
       category: null,
+      initiItem: '',
       pinnedItemId: itemId,
     );
 
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_pageController.hasClients) {
-        _pageController.jumpToPage(0);
-      }
+      _jumpFeedToFirstPage();
     });
   }
 
@@ -2671,383 +2333,6 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
     );
   }
 
-  void _showMoreOptions() async {
-    final lang = LocalizationService.instance.currentLanguage;
-    final item = (_items.isNotEmpty && _currentIndex < _items.length)
-        ? _items[_currentIndex]
-        : null;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        final isDark = _sheetIsDark(sheetContext);
-        return DraggableScrollableSheet(
-          initialChildSize: 0.65,
-          minChildSize: 0.45,
-          maxChildSize: 0.75,
-          builder: (context, scrollController) => Container(
-            decoration: BoxDecoration(
-              color: _sheetBackground(sheetContext),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(28),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.12),
-                  blurRadius: 20,
-                  offset: const Offset(0, -6),
-                ),
-              ],
-            ),
-            child: ListView(
-              controller: scrollController,
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.white30 : Colors.grey[400],
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                if (item != null) _buildMoreSheetHeader(item),
-                const Divider(height: 32, thickness: 0.5),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildMoreGridCard(
-                        icon: Iconsax.user,
-                        label: lang == 'ar' ? 'الملف الشخصي' : 'Profile',
-                        backgroundColor: const Color(0xFFE3F2FD),
-                        iconColor: const Color(0xFF1565C0),
-                        onTap: _showCurrentUserProfile,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildMoreGridCard(
-                        icon: Iconsax.shopping_cart,
-                        label: lang == 'ar' ? 'سلة التسوق' : 'Shopping Cart',
-                        backgroundColor: const Color(0xFFE8F5E9),
-                        iconColor: const Color(0xFF2E7D32),
-                        onTap: _showShoppingCart,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildMoreGridCard(
-                        icon: Iconsax.bag_tick,
-                        label: lang == 'ar'
-                            ? 'طلبات العملاء'
-                            : 'Customer Orders',
-                        backgroundColor: const Color(0xFFF3E5F5),
-                        iconColor: const Color(0xFF7B1FA2),
-                        onTap: _showCustomerOrders,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildMoreGridCard(
-                        icon: Iconsax.bag,
-                        label: lang == 'ar' ? 'طلباتي' : 'My Orders',
-                        backgroundColor: const Color(0xFFFFF3E0),
-                        iconColor: AppColors.secondary,
-                        onTap: _showMyOrders,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildMoreGridCard(
-                        icon: Iconsax.message,
-                        label: lang == 'ar' ? 'المحادثات' : 'Conversations',
-                        backgroundColor: const Color(0xFFE0F2F1),
-                        iconColor: const Color(0xFF00695C),
-                        onTap: _showConversations,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildMoreGridCard(
-                        icon: Iconsax.document_text,
-                        label: lang == 'ar' ? 'الوصف' : 'Description',
-                        backgroundColor: const Color(0xFFFFFDE7),
-                        iconColor: const Color(0xFFF9A825),
-                        onTap: _showItemDescription,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _buildMoreGridCard(
-                  icon: Iconsax.warning_2,
-                  label: lang == 'ar' ? 'بلغ عن المحتوى' : 'Report Content',
-                  backgroundColor: const Color(0xFFFFEBEE),
-                  iconColor: const Color(0xFFC62828),
-                  onTap: _showReportOptions,
-                  fullWidth: true,
-                ),
-                const SizedBox(height: 12),
-                _buildMoreGridCard(
-                  icon: Iconsax.user_remove,
-                  label: lang == 'ar' ? 'حظر المستخدم' : 'Block User',
-                  backgroundColor: const Color(0xFFFFEBEE),
-                  iconColor: const Color(0xFFC62828),
-                  onTap: _showBlockUserOptions,
-                  fullWidth: true,
-                ),
-                const SizedBox(height: 12),
-                _buildMoreGridCard(
-                  icon: Iconsax.logout,
-                  label: lang == 'ar' ? 'تسجيل الخروج' : 'Logout',
-                  backgroundColor: const Color(0xFFFFEBEE),
-                  iconColor: const Color(0xFFC62828),
-                  onTap: _handleLogout,
-                  fullWidth: true,
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(sheetContext),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      side: const BorderSide(color: Colors.red),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text(
-                      lang == 'ar' ? 'إغلاق' : 'Close',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  height: MediaQuery.of(sheetContext).padding.bottom + 16,
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildMoreSheetHeader(ItemModel item) {
-    return Row(
-      children: [
-        ClipOval(
-          child: _itemThumbnail(
-            item: item,
-            width: 60,
-            height: 60,
-            iconSize: 24,
-            showPlayBadge: false,
-            placeholderColor: context.appSurfaceVariant,
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                item.name,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 17,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${item.price} ريال',
-                style: const TextStyle(
-                  color: AppColors.secondary,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMoreGridCard({
-    required IconData icon,
-    required String label,
-    required Color backgroundColor,
-    required Color iconColor,
-    required VoidCallback onTap,
-    bool fullWidth = false,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark ? AppColors.darkSurface : backgroundColor;
-    final resolvedIconColor = isDark ? Colors.white70 : iconColor;
-    final labelColor = isDark
-        ? Colors.white70
-        : iconColor.withValues(alpha: 0.9);
-
-    return Material(
-      color: cardColor,
-      borderRadius: BorderRadius.circular(16),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          width: fullWidth ? double.infinity : null,
-          padding: EdgeInsets.symmetric(
-            vertical: fullWidth ? 14 : 18,
-            horizontal: fullWidth ? 16 : 8,
-          ),
-          child: fullWidth
-              ? Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(icon, size: 28, color: resolvedIconColor),
-                    const SizedBox(width: 12),
-                    Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: labelColor,
-                      ),
-                    ),
-                  ],
-                )
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(icon, size: 28, color: resolvedIconColor),
-                    const SizedBox(height: 10),
-                    Text(
-                      label,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: labelColor,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-        ),
-      ),
-    );
-  }
-
-  void _showShoppingCart() async {
-    Navigator.pop(context); // Close bottom sheet
-    await _openCartScreen();
-  }
-
-  void _showConversations() async {
-    Navigator.pop(context); // Close bottom sheet
-
-    final currentUserId = await AuthService.getCurrentUserId();
-    if (currentUserId == null) {
-      showAppSnackbar(
-        context,
-        message: _lang == 'ar'
-            ? 'يجب تسجيل الدخول أولاً'
-            : 'Please login first',
-        type: SnackType.error,
-      );
-      return;
-    }
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ConversationsScreen(userId: currentUserId),
-      ),
-    );
-  }
-
-  void _showCustomerOrders() async {
-    Navigator.pop(context); // Close bottom sheet
-
-    final currentUserId = await AuthService.getCurrentUserId();
-    if (currentUserId == null) {
-      showAppSnackbar(
-        context,
-        message: _lang == 'ar'
-            ? 'يجب تسجيل الدخول أولاً'
-            : 'Please login first',
-        type: SnackType.error,
-      );
-      return;
-    }
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const CustomerOrdersScreen()),
-    );
-  }
-
-  void _showMyOrders() async {
-    Navigator.pop(context); // Close bottom sheet
-
-    final currentUserId = await AuthService.getCurrentUserId();
-    if (currentUserId == null) {
-      showAppSnackbar(
-        context,
-        message: _lang == 'ar'
-            ? 'يجب تسجيل الدخول أولاً'
-            : 'Please login first',
-        type: SnackType.error,
-      );
-      return;
-    }
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const MyOrdersScreen()),
-    );
-  }
-
-  void _handleLogout() async {
-    Navigator.pop(context); // Close bottom sheet
-    await AuthService.logout();
-    if (!mounted) return;
-    setState(() {
-      _isLoggedIn = false;
-      _currentUserId = null;
-    });
-    showAppSnackbar(
-      context,
-      message: _lang == 'ar'
-          ? 'تم تسجيل الخروج بنجاح'
-          : 'Logged out successfully',
-      type: SnackType.success,
-    );
-  }
-
   String _formatCount(int count) {
     if (count >= 1000000) {
       return '${(count / 1000000).toStringAsFixed(1)}M';
@@ -3055,27 +2340,6 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
       return '${(count / 1000).toStringAsFixed(1)}K';
     }
     return count.toString();
-  }
-
-  void _showCurrentUserProfile() async {
-    Navigator.pop(context); // Close bottom sheet
-
-    // Get current user ID from AuthService
-    final currentUserId = await AuthService.getCurrentUserId();
-    if (currentUserId != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ProfileScreen(userId: currentUserId),
-        ),
-      );
-    } else {
-      showAppSnackbar(
-        context,
-        message: 'لم يتم العثور على بيانات المستخدم',
-        type: SnackType.error,
-      );
-    }
   }
 
   void _pickImageFromGallery() async {
@@ -3096,10 +2360,7 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
 
   List<String> _asMediaPaths(dynamic result) {
     if (result is! List || result.isEmpty) return const [];
-    return result
-        .map((e) => e.toString())
-        .where((e) => e.isNotEmpty)
-        .toList();
+    return result.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
   }
 
   void _openAddProductFromCamera(dynamic result) {
@@ -3223,640 +2484,8 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
   }
 
   // Show item description with statistics
-  void _showItemDescription() async {
-    Navigator.pop(context); // Close more options bottom sheet
-
-    if (_currentIndex >= _items.length) return;
-
-    final item = _items[_currentIndex];
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        final isDark = _sheetIsDark(sheetContext);
-        return DraggableScrollableSheet(
-          initialChildSize: 0.5,
-          minChildSize: 0.35,
-          maxChildSize: 0.6,
-          builder: (context, scrollController) => Container(
-            decoration: BoxDecoration(
-              color: _sheetBackground(sheetContext),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(28),
-              ),
-            ),
-            child: FutureBuilder<Map<String, dynamic>>(
-              future: ApiService.getItemStats(item.id),
-              builder: (context, snapshot) {
-                final bottomInset =
-                    MediaQuery.of(sheetContext).padding.bottom + 16;
-
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: AppColors.primary),
-                  );
-                }
-
-                if (snapshot.hasError ||
-                    !snapshot.hasData ||
-                    snapshot.data!['success'] != true) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(
-                        'فشل في تحميل البيانات',
-                        style: TextStyle(
-                          color: _sheetOnSurface(context),
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  );
-                }
-
-                final stats = snapshot.data!['data'];
-                final description = (stats['description'] ?? '')
-                    .toString()
-                    .trim();
-                final hasDescription = description.isNotEmpty;
-                final createdAt = stats['created_at']?.toString() ?? '';
-                final dateValue = createdAt.isNotEmpty
-                    ? createdAt.split(' ').first
-                    : '—';
-
-                return ListView(
-                  controller: scrollController,
-                  padding: EdgeInsets.only(bottom: bottomInset),
-                  children: [
-                    const SizedBox(height: 12),
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: isDark ? Colors.white30 : Colors.grey[400],
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Row(
-                        children: [
-                          Text(
-                            'وصف المنتج',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: _sheetOnSurface(context),
-                            ),
-                          ),
-                          const Spacer(),
-                          IconButton(
-                            onPressed: () => Navigator.pop(sheetContext),
-                            icon: Icon(
-                              Iconsax.close_circle,
-                              color: isDark ? Colors.white70 : Colors.grey[500],
-                              size: 28,
-                            ),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Divider(
-                      height: 24,
-                      thickness: 0.5,
-                      color: Theme.of(context).dividerColor,
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 16,
-                      ),
-                      child: Text(
-                        hasDescription
-                            ? description
-                            : 'لا يوجد وصف لهذا المنتج',
-                        style: TextStyle(
-                          fontSize: 15,
-                          height: 1.6,
-                          color: hasDescription
-                              ? _sheetOnSurface(context)
-                              : (isDark ? Colors.white54 : Colors.grey),
-                          fontStyle: hasDescription
-                              ? FontStyle.normal
-                              : FontStyle.italic,
-                        ),
-                        textDirection: TextDirection.rtl,
-                        textAlign: TextAlign.right,
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _buildDescriptionStatCard(
-                              icon: Iconsax.heart,
-                              label: 'الإعجابات',
-                              value: _formatCount(stats['likes'] ?? 0),
-                              gradientColors: const [
-                                Color(0xFFFF8A80),
-                                Color(0xFFE57373),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _buildDescriptionStatCard(
-                              icon: Iconsax.eye,
-                              label: 'المشاهدات',
-                              value: _formatCount(stats['views'] ?? 0),
-                              gradientColors: const [
-                                Color(0xFF81D4FA),
-                                Color(0xFF4FC3F7),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _buildDescriptionStatCard(
-                              icon: Iconsax.calendar,
-                              label: 'تاريخ النشر',
-                              value: dateValue,
-                              gradientColors: const [
-                                Color(0xFFA5D6A7),
-                                Color(0xFF66BB6A),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildDescriptionStatCard({
-    required IconData icon,
-    required String label,
-    required String value,
-    required List<Color> gradientColors,
-  }) {
-    return Container(
-      height: 90,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: gradientColors,
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: Colors.white, size: 24),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.8),
-              fontSize: 11,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatDate(String dateString) {
-    if (dateString.isEmpty) return 'غير محدد';
-
-    try {
-      final date = DateTime.parse(dateString);
-      final now = DateTime.now();
-      final difference = now.difference(date);
-
-      if (difference.inDays > 0) {
-        return '${difference.inDays} يوم';
-      } else if (difference.inHours > 0) {
-        return '${difference.inHours} ساعة';
-      } else if (difference.inMinutes > 0) {
-        return '${difference.inMinutes} دقيقة';
-      } else {
-        return 'الآن';
-      }
-    } catch (e) {
-      return dateString;
-    }
-  }
-
   // Show report options
-  void _showReportOptions() async {
-    Navigator.pop(context); // Close more options bottom sheet
-
-    _showReasonSelectionSheet(
-      title: 'بلغ عن المحتوى',
-      subtitle: 'اختر سبب البلاغ',
-      confirmLabel: 'تأكيد البلاغ',
-      accentColor: Colors.red,
-      headerIcon: Iconsax.warning_2,
-      reasons: const [
-        'محتوى غير لائق',
-        'محتوى مضلل',
-        'انتهاك حقوق الطبع والنشر',
-        'محتوى عنيف',
-        'محتوى إباحي',
-        'بريد عشوائي',
-        'محتوى مخالف للقوانين',
-        'تحرش أو تنمر',
-        'معلومات شخصية',
-        'محتوى مزيف',
-        'أخرى',
-      ],
-      onConfirm: _submitReport,
-    );
-  }
-
-  void _showReasonSelectionSheet({
-    required String title,
-    required String subtitle,
-    required String confirmLabel,
-    required Color accentColor,
-    required IconData headerIcon,
-    required List<String> reasons,
-    required Future<void> Function(String reason) onConfirm,
-  }) {
-    String? selectedReason;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            final isDark = _sheetIsDark(context);
-            final maxHeight = MediaQuery.of(context).size.height * 0.75;
-            final bottomInset = MediaQuery.of(context).padding.bottom;
-
-            return Container(
-              constraints: BoxConstraints(maxHeight: maxHeight),
-              decoration: BoxDecoration(
-                color: _sheetBackground(context),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(24),
-                ),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(height: 12),
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white30 : Colors.grey[400],
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: accentColor.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(headerIcon, color: accentColor, size: 26),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: _sheetOnSurface(context),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: isDark ? Colors.white70 : Colors.grey[600],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Flexible(
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      padding: EdgeInsets.zero,
-                      itemCount: reasons.length,
-                      separatorBuilder: (_, __) => Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: Theme.of(context).dividerColor,
-                        indent: 20,
-                        endIndent: 20,
-                      ),
-                      itemBuilder: (context, index) {
-                        final reason = reasons[index];
-                        final isSelected = selectedReason == reason;
-                        return _buildReasonListItem(
-                          label: reason,
-                          accentColor: accentColor,
-                          isSelected: isSelected,
-                          onTap: () {
-                            setSheetState(() => selectedReason = reason);
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(20, 16, 20, bottomInset + 16),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: selectedReason == null
-                            ? null
-                            : () async {
-                                final reason = selectedReason!;
-                                Navigator.pop(sheetContext);
-                                await onConfirm(reason);
-                              },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          disabledBackgroundColor: isDark
-                              ? AppColors.darkElevated
-                              : Colors.grey[300],
-                          disabledForegroundColor: isDark
-                              ? Colors.white54
-                              : Colors.grey[500],
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          elevation: 0,
-                        ),
-                        child: Text(
-                          confirmLabel,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildReasonListItem({
-    required String label,
-    required Color accentColor,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    final isDark = _sheetIsDark(context);
-    return Material(
-      color: isSelected
-          ? AppColors.primary.withValues(alpha: 0.08)
-          : _sheetTileBackground(context),
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? AppColors.darkElevated
-                      : const Color(0xFFF5F5F5),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Iconsax.info_circle,
-                  size: 20,
-                  color: accentColor.withValues(alpha: 0.85),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  label,
-                  textAlign: TextAlign.right,
-                  textDirection: TextDirection.rtl,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: _sheetOnSurface(context),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              if (isSelected)
-                const Icon(
-                  Iconsax.tick_circle5,
-                  color: AppColors.primary,
-                  size: 22,
-                )
-              else
-                const SizedBox(width: 22),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _submitReport(String reason) async {
-    if (_currentIndex >= _items.length) return;
-
-    final item = _items[_currentIndex];
-    final currentUserId = await AuthService.getCurrentUserId();
-    final currentUserName = await AuthService.getCurrentName();
-
-    if (currentUserId == null) {
-      showAppSnackbar(
-        context,
-        message: _lang == 'ar'
-            ? 'يجب تسجيل الدخول أولاً'
-            : 'Please login first',
-        type: SnackType.error,
-      );
-      return;
-    }
-
-    try {
-      final result = await ApiService.addReport(
-        itemId: item.id,
-        userId: currentUserId,
-        reason: reason,
-      );
-
-      if (result['success'] == true) {
-        showAppSnackbar(
-          context,
-          message: _lang == 'ar'
-              ? 'تم إرسال البلاغ بنجاح'
-              : 'Report sent successfully',
-          type: SnackType.success,
-        );
-        final request = await Dio().post(
-          ApiConfigService.instance.sqlEndpoint,
-          data: FormData.fromMap({"action": "get_tokens"}),
-        );
-        List playerIds = request.data['player_ids'];
-        List<String> setPlayers = [];
-        for (var player_id in playerIds) {
-          setPlayers.add(player_id['player_id'].toString());
-          await OneSignalServiceWebSys.sendNotificationToMultipleUsers(
-            playerIds: setPlayers,
-            title: "ابلاغ جديد",
-            message: "لديكم إبلاغ جديد من المستخدم $currentUserName",
-          );
-        }
-      } else {
-        showAppSnackbar(
-          context,
-          message: result['error'] ?? 'فشل في إرسال البلاغ',
-          type: SnackType.error,
-        );
-      }
-    } catch (e) {
-      showAppSnackbar(
-        context,
-        message: 'حدث خطأ أثناء إرسال البلاغ',
-        type: SnackType.error,
-      );
-    }
-  }
-
   // Show block user options
-  void _showBlockUserOptions() async {
-    Navigator.pop(context); // Close more options bottom sheet
-
-    _showReasonSelectionSheet(
-      title: 'حظر المستخدم',
-      subtitle: 'اختر سبب الحظر',
-      confirmLabel: 'تأكيد الحظر',
-      accentColor: Colors.orange,
-      headerIcon: Iconsax.user_remove,
-      reasons: const [
-        'محتوى مسيء',
-        'تحرش',
-        'بريد عشوائي',
-        'محتوى مزعج',
-        'انتهاك الخصوصية',
-        'محتوى مخالف',
-        'سلوك غير لائق',
-        'أخرى',
-      ],
-      onConfirm: _submitBlockUser,
-    );
-  }
-
-  Future<void> _submitBlockUser(String reason) async {
-    if (_currentIndex >= _items.length) return;
-
-    final item = _items[_currentIndex];
-    final currentUserId = await AuthService.getCurrentUserId();
-
-    if (currentUserId == null) {
-      showAppSnackbar(
-        context,
-        message: _lang == 'ar'
-            ? 'يجب تسجيل الدخول أولاً'
-            : 'Please login first',
-        type: SnackType.error,
-      );
-      return;
-    }
-
-    try {
-      // Use the same report system but with a different reason format
-      final result = await ApiService.addReport(
-        itemId: item.id,
-        userId: currentUserId,
-        reason: 'حظر المستخدم: $reason',
-      );
-
-      if (result['success'] == true) {
-        showAppSnackbar(
-          context,
-          message: _lang == 'ar'
-              ? 'تم إرسال طلب الحظر بنجاح'
-              : 'Block request sent',
-          type: SnackType.success,
-        );
-        final request = await Dio().post(
-          ApiConfigService.instance.sqlEndpoint,
-          data: FormData.fromMap({"action": "get_tokens"}),
-        );
-        List playerIds = request.data['player_ids'];
-        List<String> setPlayers = [];
-        for (var player_id in playerIds) {
-          setPlayers.add(player_id['player_id'].toString());
-          await OneSignalServiceWebSys.sendNotificationToMultipleUsers(
-            playerIds: setPlayers,
-            title: "حظر مستخدم جديد",
-            message: "حظر المستخدم: $reason",
-          );
-        }
-      } else {
-        showAppSnackbar(
-          context,
-          message: result['error'] ?? 'فشل في إرسال طلب الحظر',
-          type: SnackType.error,
-        );
-      }
-    } catch (e) {
-      showAppSnackbar(
-        context,
-        message: 'حدث خطأ أثناء إرسال طلب الحظر',
-        type: SnackType.error,
-      );
-    }
-  }
-
   void _handleLike(ItemModel item) async {
     if (!_isLoggedIn) {
       Navigator.push(
@@ -3996,8 +2625,150 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
     }
   }
 
+  void _dropBlockedSellers() {
+    if (!mounted || _items.isEmpty) return;
+    final next = _withoutBlocked(_items);
+    if (next.length == _items.length) return;
+    final cleared = next.isEmpty;
+    setState(() {
+      _items = next;
+      if (_currentIndex >= _items.length) {
+        _currentIndex = _items.isEmpty ? 0 : _items.length - 1;
+      }
+    });
+    if (cleared && !_isLoading) {
+      _loadItems(isRefresh: true, initiItem: '');
+      return;
+    }
+    if (_items.isNotEmpty &&
+        _pageController.hasClients &&
+        (_pageController.page ?? 0) >= _items.length) {
+      _pageController.jumpToPage(_items.length - 1);
+    }
+  }
+
+  bool _isBlockedSeller(SellerModel seller) {
+    final me = _currentUserId;
+    if (me != null &&
+        me.isNotEmpty &&
+        (seller.uid == me || seller.id == me)) {
+      return false;
+    }
+    return BlockedSellers.instance.containsSeller(seller.id, seller.uid);
+  }
+
+  List<ItemModel> _withoutBlocked(List<ItemModel> items) {
+    return items.where((entry) => !_isBlockedSeller(entry.seller)).toList();
+  }
+
+  ItemModel _itemFromOwnRow(Map<String, dynamic> row) {
+    final rawMedia = row['media'];
+    final media = rawMedia is List
+        ? rawMedia.map((e) => e.toString()).where((e) => e.isNotEmpty).toList()
+        : <String>[];
+    final sellerUid = row['seller_id']?.toString().isNotEmpty == true
+        ? row['seller_id'].toString()
+        : (_currentUserId ?? '');
+    return ItemModel(
+      id: row['id'].toString(),
+      idx: row['idx']?.toString() ?? '',
+      storeid: row['storeid']?.toString() ?? '1',
+      name: row['name']?.toString() ?? '',
+      nameEn: row['eng']?.toString() ?? '',
+      price: row['price']?.toString() ?? '0',
+      quantity: int.tryParse(
+            (row['qtt'] ?? row['quantity'])?.toString() ?? '0',
+          ) ??
+          0,
+      description: row['description']?.toString() ?? '',
+      descriptionArb: row['description_arb']?.toString() ?? '',
+      views: int.tryParse(row['views']?.toString() ?? '0') ?? 0,
+      media: media,
+      seller: SellerModel(
+        id: _currentUserId ?? sellerUid,
+        uid: sellerUid,
+        name: row['seller_name']?.toString() ?? '',
+        avatar: '',
+      ),
+      interactions: InteractionsModel(
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        cartQuantity: 0,
+      ),
+    );
+  }
+
+  Future<List<ItemModel>> _loadOwnFeedItems() async {
+    final uid = _currentUserId;
+    if (uid == null || uid.isEmpty) return [];
+    final response = await ApiService.getUserProfileItems(
+      uid,
+      limit: 20,
+      offset: 0,
+      sort: 'newest',
+    );
+    if (response is! Map || response['success'] != true) return [];
+    final data = response['data'];
+    if (data is! List) return [];
+    return data
+        .whereType<Map>()
+        .map((row) => _itemFromOwnRow(Map<String, dynamic>.from(row)))
+        .where((item) => item.name.trim().isNotEmpty)
+        .toList();
+  }
+
+  /// A blocked seller can occupy the whole first page. Keep asking for the
+  /// next page until a visible product shows up, instead of leaving the feed
+  /// on the empty state.
+  Future<List<ItemModel>> _fillPastBlocked(
+    List<ItemModel> visible, {
+    required int startOffset,
+    required String? userId,
+    required String? uid,
+    required String? category,
+    required String country,
+  }) async {
+    final hadRows = visible.isNotEmpty;
+    visible = _withoutBlocked(visible);
+    var offset = startOffset;
+    // Only page forward when the server actually returned rows that all
+    // belonged to the blocked seller. An empty response means that seller
+    // was the whole public page, so fall through to the viewer's own items.
+    for (var hop = 0; hop < 4 && visible.isEmpty && hadRows; hop++) {
+      List<ItemModel> more;
+      if (_isLoggedIn && userId != null && userId.isNotEmpty) {
+        more = await ApiService.fetchItemsWithLikes(
+          userId: userId,
+          limit: 10,
+          offset: offset,
+          initialItemId: '',
+          category: category,
+          country: country,
+        );
+      } else {
+        more = await ApiService.fetchItems(
+          page: hop + 1,
+          userId: uid,
+          initialItemId: '',
+          category: category,
+          country: country,
+        );
+      }
+      if (more.isEmpty) break;
+      offset += more.length;
+      visible = _withoutBlocked(more);
+      if (more.length < 10) break;
+    }
+    if (visible.isEmpty) {
+      visible = await _loadOwnFeedItems();
+    }
+    return visible;
+  }
+
   @override
   void dispose() {
+    BlockedSellers.instance.removeListener(_dropBlockedSellers);
     _pageController.dispose();
     _gridScrollController.removeListener(_onGridScroll);
     _gridScrollController.dispose();
@@ -4006,7 +2777,7 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
   }
 }
 
-enum _InlineCartVariant { feed, grid }
+enum _InlineCartVariant { feed }
 
 /// Expanding cart control: collapsed cart/+ icon → pill with − / qty / +.
 /// At qty == 1, the first "−" tap morphs into trash; trash removes & collapses.

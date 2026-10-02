@@ -1,0 +1,5 @@
+NSCameraUsageDescription = "يستخدم MartIt الكاميرا لتصوير المنتجات التي تريد بيعها.";
+NSLocationWhenInUseUsageDescription = "يستخدم MartIt موقعك لعرض المنتجات المتاحة في بلدك.";
+NSMicrophoneUsageDescription = "يستخدم MartIt الميكروفون عند تسجيل فيديو لمنتج.";
+NSPhotoLibraryAddUsageDescription = "يحفظ MartIt صور المنتجات في مكتبتك فقط عندما تختار ذلك.";
+NSPhotoLibraryUsageDescription = "يحتاج MartIt إلى مكتبة الصور لإضافة صور موجودة إلى منتج.";

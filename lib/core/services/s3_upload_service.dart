@@ -19,7 +19,6 @@ class S3UploadService {
   static const String _accessKey = "AKIARVJRTCELH4VUZZ73";
   static const String _secretKey = "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";
   static const String _region = "ap-south-1";
-  static const String _bucket = "martit";
   static const String _baseUrl = "https://martit.s3.ap-south-1.amazonaws.com";
   static const String _storeFolder = "store_1";
   static const String _host = "martit.s3.ap-south-1.amazonaws.com";
