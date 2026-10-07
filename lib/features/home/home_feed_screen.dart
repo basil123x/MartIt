@@ -2047,8 +2047,7 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
                   autoPlayVideo: true,
                   showControls: false,
                   showIndicators: item.media.length > 1,
-                  // Feed photo fit. Change this back to BoxFit.contain to restore the old framing.
-                  fit: BoxFit.cover,
+                  fit: BoxFit.contain,
                 )
               : const Center(
                   child: Icon(Iconsax.image, color: Colors.white, size: 80),
@@ -2649,9 +2648,7 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
 
   bool _isBlockedSeller(SellerModel seller) {
     final me = _currentUserId;
-    if (me != null &&
-        me.isNotEmpty &&
-        (seller.uid == me || seller.id == me)) {
+    if (me != null && me.isNotEmpty && (seller.uid == me || seller.id == me)) {
       return false;
     }
     return BlockedSellers.instance.containsSeller(seller.id, seller.uid);
@@ -2676,10 +2673,8 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
       name: row['name']?.toString() ?? '',
       nameEn: row['eng']?.toString() ?? '',
       price: row['price']?.toString() ?? '0',
-      quantity: int.tryParse(
-            (row['qtt'] ?? row['quantity'])?.toString() ?? '0',
-          ) ??
-          0,
+      quantity:
+          int.tryParse((row['qtt'] ?? row['quantity'])?.toString() ?? '0') ?? 0,
       description: row['description']?.toString() ?? '',
       descriptionArb: row['description_arb']?.toString() ?? '',
       views: int.tryParse(row['views']?.toString() ?? '0') ?? 0,

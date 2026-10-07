@@ -1286,6 +1286,7 @@ class ProfileItemCard extends StatelessWidget {
                         autoPlayVideo: false,
                         showControls: false,
                         showIndicators: false,
+                        fit: BoxFit.cover,
                       ),
                     ),
                   ),

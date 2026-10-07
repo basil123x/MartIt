@@ -298,8 +298,9 @@ class _SplashScreenState extends State<SplashScreen>
                           _appVersion.isNotEmpty
                               ? '$_appVersion v'
                               : '${AppConstants.appVersion} v',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: version),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(color: version),
                         ),
                       ),
                       FadeTransition(

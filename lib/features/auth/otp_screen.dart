@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:MartIt/core/services/otp_local_notification_service.dart';
 import 'package:MartIt/features/auth/login.dart';
 import 'package:MartIt/features/splash/splash_screen.dart';
 import 'package:flutter/material.dart';
@@ -42,7 +41,7 @@ class _OTPScreenState extends State<OTPScreen> {
   bool _isLoading = false;
   String _enteredOTP = '';
   late String _activeOtp;
-  int _resendRemaining = _resendSeconds;
+  int _resendRemaining = 0;
   Timer? _resendTimer;
 
   @override
@@ -59,16 +58,36 @@ class _OTPScreenState extends State<OTPScreen> {
       });
     }
 
-    _startResendTimer();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       _focusNodes[0].requestFocus();
-      await _deliverOtpNotification(_activeOtp);
+      await _deliverOtp(isResend: false);
     });
   }
 
-  Future<void> _deliverOtpNotification(String otp) async {
-    await OtpLocalNotificationService.showOtpNotification(otp: otp);
+  Future<bool> _deliverOtp({required bool isResend}) async {
+    setState(() => _isLoading = true);
+    final sent = await AuthService.deliverOtp(
+      phone: '${widget.countryCode}${widget.phoneNumber}',
+      code: _activeOtp,
+    );
+    if (!mounted) return false;
+    setState(() => _isLoading = false);
+    if (!sent) {
+      _showError(tr('common.error'));
+      return false;
+    }
+    _startResendTimer();
+    if (isResend) {
+      showAppSnackbar(
+        context,
+        message: LocalizationService.instance.currentLanguage == 'ar'
+            ? 'تم إرسال كود جديد'
+            : 'New code sent',
+        type: SnackType.success,
+      );
+    }
+    return true;
   }
 
   void _startResendTimer() {
@@ -216,20 +235,16 @@ class _OTPScreenState extends State<OTPScreen> {
   Future<void> _resendOTP() async {
     if (_resendRemaining > 0 || _isLoading) return;
 
+    final previous = _activeOtp;
     final newOtp = AuthService.generateOTP();
     setState(() => _activeOtp = newOtp);
-    _clearOTP();
-    _startResendTimer();
-    await _deliverOtpNotification(newOtp);
-
+    final sent = await _deliverOtp(isResend: true);
     if (!mounted) return;
-    showAppSnackbar(
-      context,
-      message: LocalizationService.instance.currentLanguage == 'ar'
-          ? 'تم إرسال كود جديد'
-          : 'New code sent',
-      type: SnackType.success,
-    );
+    if (!sent) {
+      setState(() => _activeOtp = previous);
+      return;
+    }
+    _clearOTP();
   }
 
   @override

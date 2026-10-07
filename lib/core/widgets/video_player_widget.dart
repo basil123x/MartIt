@@ -17,7 +17,10 @@ class VideoPlayerWidget extends StatefulWidget {
     this.autoPlay = false,
     this.showControls = true,
     this.fit = BoxFit.contain,
-  }) : assert(networkUrl != null || filePath != null, 'Either networkUrl or filePath must be provided');
+  }) : assert(
+         networkUrl != null || filePath != null,
+         'Either networkUrl or filePath must be provided',
+       );
 
   @override
   State<VideoPlayerWidget> createState() => _VideoPlayerWidgetState();
@@ -38,14 +41,16 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
   void _initializeVideo() async {
     try {
       if (widget.networkUrl != null) {
-        _controller = VideoPlayerController.networkUrl(Uri.parse(widget.networkUrl!));
+        _controller = VideoPlayerController.networkUrl(
+          Uri.parse(widget.networkUrl!),
+        );
       } else if (widget.filePath != null) {
         _controller = VideoPlayerController.file(File(widget.filePath!));
       }
 
       await _controller!.initialize();
       await _controller!.setLooping(true);
-      
+
       if (mounted) {
         setState(() {
           _isInitialized = true;
@@ -126,9 +131,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
       return Container(
         color: Colors.black,
         child: const Center(
-          child: CircularProgressIndicator(
-            color: Colors.white,
-          ),
+          child: CircularProgressIndicator(color: Colors.white),
         ),
       );
     }
@@ -168,12 +171,8 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
                   color: Colors.black.withOpacity(0.3),
                   shape: BoxShape.circle,
                 ),
-                padding: const EdgeInsets.all(20),
-                child: const Icon(
-                  Iconsax.play,
-                  color: Colors.white,
-                  size: 50,
-                ),
+                padding: const EdgeInsets.all(8),
+                child: const Icon(Iconsax.play, color: Colors.white, size: 22),
               ),
 
             // Controls
@@ -207,9 +206,9 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
                           backgroundColor: Colors.white.withOpacity(0.26),
                         ),
                       ),
-                      
+
                       const SizedBox(height: 8),
-                      
+
                       // Controls row
                       Row(
                         children: [
@@ -222,9 +221,9 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
                               size: 24,
                             ),
                           ),
-                          
+
                           const SizedBox(width: 8),
-                          
+
                           // Time display
                           ValueListenableBuilder(
                             valueListenable: _controller!,
@@ -238,9 +237,9 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
                               );
                             },
                           ),
-                          
+
                           const Spacer(),
-                          
+
                           // Fullscreen button (optional)
                           IconButton(
                             onPressed: () {

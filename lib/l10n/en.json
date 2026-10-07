@@ -19,7 +19,7 @@
   },
   "auth": {
     "phone_login_title": "Login with Phone Number",
-    "phone_login_subtitle": "We will send you a verification code via SMS",
+    "phone_login_subtitle": "We will send you a verification code on WhatsApp",
     "send_otp": "Send Verification Code",
     "choose_country_code": "Choose Country Code",
     "enter_phone": "Enter your phone number",

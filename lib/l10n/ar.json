@@ -19,7 +19,7 @@
   },
   "auth": {
     "phone_login_title": "تسجيل الدخول برقم الهاتف",
-    "phone_login_subtitle": "سنرسل لك رمز التحقق عبر رسالة نصية",
+    "phone_login_subtitle": "سنرسل لك رمز التحقق عبر واتساب",
     "send_otp": "إرسال كود التحقق",
     "choose_country_code": "اختر كود الدولة",
     "enter_phone": "أدخل رقم هاتفك",

@@ -50,6 +50,27 @@ class AuthService {
     return await _storage.read(key: _profileImageKey);
   }
 
+  static Future<bool> deliverOtp({
+    required String phone,
+    required String code,
+    String name = '',
+  }) async {
+    try {
+      final response = await Dio().post(
+        ApiConfigService.instance.endpoint('send_otp.php'),
+        data: FormData.fromMap({
+          'phone': phone,
+          'code': code,
+          'name': name,
+        }),
+      );
+      final data = response.data;
+      return data is Map && data['success'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // Generate random OTP
   static String generateOTP() {
     final random = Random();
@@ -57,7 +78,6 @@ class AuthService {
     for (int i = 0; i < 6; i++) {
       otp += random.nextInt(10).toString();
     }
-    print('Generated OTP: $otp'); // For development purposes
     return otp;
   }
 

@@ -498,8 +498,8 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
 
                                   Text(
                                     lang == 'ar'
-                                        ? 'سنرسل لك رمز التحقق عبر رسالة نصية'
-                                        : 'We will send you a verification code via SMS',
+                                        ? 'سنرسل لك رمز التحقق عبر واتساب'
+                                        : 'We will send you a verification code on WhatsApp',
                                     textAlign: TextAlign.center,
                                     style: Theme.of(context).textTheme.bodyLarge
                                         ?.copyWith(
