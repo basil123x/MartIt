@@ -23,6 +23,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/database_service.dart';
 import '../../core/services/localization_service.dart';
 import '../../core/services/moderation_service.dart';
+import '../../core/widgets/moderation_actions.dart';
 import '../../core/models/item_model.dart';
 import '../../core/widgets/smart_avatar_widget.dart';
 import '../../core/widgets/media_viewer_widget.dart';
@@ -1975,6 +1976,25 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
                   ),
               ],
             ),
+            if (!_isOwnProduct(item)) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _safetyChip(
+                    icon: Iconsax.flag,
+                    label: tr('moderation.report'),
+                    onTap: () => _reportListing(item),
+                  ),
+                  _safetyChip(
+                    icon: Iconsax.user_remove,
+                    label: tr('moderation.block'),
+                    onTap: () => _blockListingSeller(item),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -2483,9 +2503,64 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
     }
   }
 
-  // Show item description with statistics
-  // Show report options
-  // Show block user options
+  Future<void> _reportListing(ItemModel item) {
+    final sellerId = item.seller.uid.isNotEmpty
+        ? item.seller.uid
+        : item.seller.id;
+    return reportContent(
+      context,
+      targetType: 'product',
+      itemId: item.id,
+      targetUid: sellerId,
+      title: tr('moderation.report_listing'),
+    );
+  }
+
+  Future<void> _blockListingSeller(ItemModel item) async {
+    final sellerId = item.seller.uid.isNotEmpty
+        ? item.seller.uid
+        : item.seller.id;
+    await blockAbusiveUser(
+      context,
+      blockedUid: sellerId,
+      name: item.seller.name,
+      extraIds: [item.seller.id, item.seller.uid],
+    );
+  }
+
+  Widget _safetyChip({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white70),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 14),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _handleLike(ItemModel item) async {
     if (!_isLoggedIn) {
       Navigator.push(

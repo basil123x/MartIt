@@ -4,6 +4,7 @@ import 'package:iconsax/iconsax.dart';
 import '../../core/constants/app_theme.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/moderation_service.dart';
+import '../../core/widgets/moderation_actions.dart';
 import '../../core/services/localization_service.dart';
 import '../../core/models/chat_model.dart';
 import '../../core/widgets/smart_avatar_widget.dart';
@@ -36,14 +37,70 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   @override
   void initState() {
     super.initState();
+    BlockedSellers.instance.addListener(_hideBlockedConversations);
     _loadConversations();
     _startStatusChecks();
   }
 
   @override
   void dispose() {
+    BlockedSellers.instance.removeListener(_hideBlockedConversations);
     _statusCheckTimer?.cancel();
     super.dispose();
+  }
+
+  bool _isBlockedConversation(ChatConversation conversation) {
+    return BlockedSellers.instance.containsSeller(
+      conversation.participantId,
+      conversation.participantId,
+      conversation.participantName,
+    );
+  }
+
+  void _hideBlockedConversations() {
+    if (!mounted) return;
+    setState(() {
+      _conversations.removeWhere(_isBlockedConversation);
+    });
+  }
+
+  Future<void> _openConversationSafety(ChatConversation conversation) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Iconsax.flag),
+              title: Text(tr('moderation.report_user')),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                reportContent(
+                  context,
+                  targetType: 'user',
+                  targetUid: conversation.participantId,
+                  title: tr('moderation.report_user'),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Iconsax.user_remove),
+              title: Text(tr('moderation.block')),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                final blocked = await blockAbusiveUser(
+                  context,
+                  blockedUid: conversation.participantId,
+                  name: conversation.participantName,
+                );
+                if (blocked && mounted) _hideBlockedConversations();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _startStatusChecks() {
@@ -87,12 +144,17 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         final List<dynamic> data = result['data'] ?? [];
         print('✅ Found ${data.length} unique conversations');
 
+        await BlockedSellers.instance.sync();
         final blocked = await ModerationService.blockedUsers(widget.userId);
         final blockedIds = blocked.map((row) => row['uid']?.toString()).toSet();
         setState(() {
           _conversations = data
               .map((item) => ChatConversation.fromJson(item))
-              .where((chat) => !blockedIds.contains(chat.participantId))
+              .where(
+                (chat) =>
+                    !blockedIds.contains(chat.participantId) &&
+                    !_isBlockedConversation(chat),
+              )
               .toList();
           _isLoading = false;
         });
@@ -281,6 +343,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     return ColoredBox(
       color: context.appSurface,
       child: InkWell(
+        onLongPress: () => _openConversationSafety(conversation),
         onTap: () {
           Navigator.push(
             context,
@@ -364,7 +427,11 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
+              IconButton(
+                tooltip: tr('moderation.safety'),
+                onPressed: () => _openConversationSafety(conversation),
+                icon: Icon(Iconsax.more, color: cs.primary),
+              ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [

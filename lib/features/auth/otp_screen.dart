@@ -14,6 +14,7 @@ import '../../core/utils/snackbar_helper.dart';
 import '../../core/utils/theme_extensions.dart';
 import 'create_account_screen.dart';
 import '../../core/services/moderation_service.dart';
+import '../../core/services/terms_acceptance_service.dart';
 
 class OTPScreen extends StatefulWidget {
   final String phoneNumber;
@@ -159,6 +160,7 @@ class _OTPScreenState extends State<OTPScreen> {
           value: data['phone']?.toString() ?? widget.phoneNumber,
         );
         await const FlutterSecureStorage().write(key: 'login_type', value: 'Phone');
+        await TermsAcceptanceService.syncCurrentAccount();
         if (!mounted) return;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => SplashScreen()),
@@ -183,6 +185,7 @@ class _OTPScreenState extends State<OTPScreen> {
             ),
           );
         } else {
+          await TermsAcceptanceService.syncCurrentAccount();
           if (!mounted) return;
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => SplashScreen()),

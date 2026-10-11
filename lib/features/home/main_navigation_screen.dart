@@ -4,6 +4,8 @@ import 'package:iconsax/iconsax.dart';
 
 import '../../core/services/auth_service.dart';
 import '../../core/services/localization_service.dart';
+import '../../core/services/moderation_service.dart';
+import '../../core/services/terms_acceptance_service.dart';
 import '../auth/login.dart';
 import '../chat/conversations_screen.dart';
 import '../profile/profile_screen.dart';
@@ -93,6 +95,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     final id = await AuthService.getCurrentUserId();
     if (!mounted) return;
     setState(() => _currentUserId = id);
+    if (id != null && id.isNotEmpty) {
+      final accepted = !await TermsAcceptanceService.needsAcceptanceFor(id);
+      if (!accepted && mounted) {
+        final ok = await TermsAcceptanceService.ensureAccepted(
+          context,
+          allowDecline: false,
+        );
+        if (ok) await TermsAcceptanceService.syncWithAccount(id);
+      }
+      await BlockedSellers.instance.sync();
+    }
   }
 
   void _onSignedInAccountMissing() {

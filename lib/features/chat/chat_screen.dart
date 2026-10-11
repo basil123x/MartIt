@@ -9,6 +9,8 @@ import '../../core/constants/app_theme.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/localization_service.dart';
+import '../../core/services/moderation_service.dart';
+import '../../core/widgets/moderation_actions.dart';
 import '../../core/models/chat_model.dart';
 import '../../core/widgets/smart_avatar_widget.dart';
 import '../../core/utils/snackbar_helper.dart';
@@ -51,17 +53,35 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   String? _currentConversationId;
   Timer? _statusUpdateTimer;
   Timer? _messagePollingTimer; // ✅ Timer للـ polling
+  bool _isBlocked = false;
+
+  bool _receiverIsBlocked() {
+    return BlockedSellers.instance.containsSeller(
+      widget.receiverId,
+      widget.receiverId,
+      widget.receiverName ?? '',
+    );
+  }
+
+  void _onBlocksChanged() {
+    final blocked = _receiverIsBlocked();
+    if (mounted && blocked != _isBlocked) {
+      setState(() => _isBlocked = blocked);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    BlockedSellers.instance.addListener(_onBlocksChanged);
     _initializeChat();
     _startStatusUpdates();
   }
 
   @override
   void dispose() {
+    BlockedSellers.instance.removeListener(_onBlocksChanged);
     WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
     _scrollController.dispose();
@@ -97,6 +117,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _currentConversationId = widget.conversationId;
 
     if (_currentUserId != null) {
+      await BlockedSellers.instance.sync();
+      _isBlocked = _receiverIsBlocked();
+      if (_isBlocked) {
+        if (mounted) setState(() {});
+        return;
+      }
       // Update own status immediately
       await ApiService.updateOnlineStatus(userId: _currentUserId!);
       await _loadMessages();
@@ -179,6 +205,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     double? lat,
     double? lng,
   }) async {
+    if (_isBlocked || _receiverIsBlocked()) {
+      showAppSnackbar(context, message: tr('moderation.blocked_chat'));
+      return;
+    }
     final messageText = locationMessage ?? _messageController.text.trim();
     if (messageText.isEmpty || _isSending) return;
 
@@ -318,19 +348,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ),
           actions: [
             IconButton(
-              onPressed: () {
-                showAppSnackbar(
-                  context,
-                  message: 'ميزة المكالمات الصوتية ستكون متاحة قريباً',
-                  type: SnackType.info,
-                );
-              },
-              icon: Icon(Iconsax.call, color: cs.primary),
+              tooltip: tr('moderation.report'),
+              onPressed: _reportConversation,
+              icon: Icon(Iconsax.flag, color: cs.primary),
+            ),
+            IconButton(
+              tooltip: tr('moderation.block'),
+              onPressed: _blockReceiver,
+              icon: Icon(Iconsax.user_remove, color: cs.primary),
             ),
           ],
         ),
-        body: Column(
+        body: _isBlocked
+            ? _buildBlockedState()
+            : Column(
           children: [
+            _buildSafetyBar(),
             Expanded(
               child: _isLoading && _isFirstLoad
                   ? Center(
@@ -348,6 +381,111 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         ),
             ),
             _buildMessageInput(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _reportConversation() {
+    return reportContent(
+      context,
+      targetType: 'message',
+      commentId: widget.conversationId ?? '',
+      targetUid: widget.receiverId,
+      title: tr('moderation.report_user'),
+    );
+  }
+
+  Future<void> _reportMessage(ChatMessage message) {
+    return reportContent(
+      context,
+      targetType: 'message',
+      commentId: message.id,
+      targetUid: message.senderId,
+      title: tr('moderation.report_message'),
+    );
+  }
+
+  Future<void> _blockReceiver() async {
+    final blocked = await blockAbusiveUser(
+      context,
+      blockedUid: widget.receiverId,
+      name: widget.receiverName ?? '',
+    );
+    if (blocked && mounted) {
+      setState(() => _isBlocked = true);
+    }
+  }
+
+  Future<void> _unblockReceiver() async {
+    final uid = await AuthService.getCurrentUserId();
+    if (uid == null) return;
+    await ModerationService.unblockUser(
+      blockerUid: uid,
+      blockedUid: widget.receiverId,
+    );
+    BlockedSellers.instance.unblock(
+      widget.receiverId,
+      name: widget.receiverName ?? '',
+    );
+    if (!mounted) return;
+    setState(() => _isBlocked = false);
+    showAppSnackbar(context, message: tr('moderation.unblocked'));
+    await _loadMessages();
+    if (_messagePollingTimer == null) _startMessagePolling();
+  }
+
+  Widget _buildSafetyBar() {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.primaryContainer.withValues(alpha: 0.65),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextButton.icon(
+              onPressed: _reportConversation,
+              icon: Icon(Iconsax.flag, size: 18, color: cs.primary),
+              label: Text(tr('moderation.report')),
+            ),
+          ),
+          Expanded(
+            child: TextButton.icon(
+              onPressed: _blockReceiver,
+              icon: Icon(Iconsax.user_remove, size: 18, color: cs.primary),
+              label: Text(tr('moderation.block')),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBlockedState() {
+    final cs = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Iconsax.user_remove, size: 64, color: cs.primary),
+            const SizedBox(height: 16),
+            Text(
+              tr('moderation.blocked_chat'),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: cs.onSurface,
+                fontSize: 16,
+                height: 1.4,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 20),
+            FilledButton(
+              onPressed: _unblockReceiver,
+              child: Text(tr('moderation.unblock')),
+            ),
           ],
         ),
       ),
@@ -421,7 +559,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final align =
         isMyMessage ? MainAxisAlignment.end : MainAxisAlignment.start;
 
-    return Container(
+    return GestureDetector(
+      onLongPress: isMyMessage ? null : () => _reportMessage(message),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 12),
       child: Row(
         textDirection: TextDirection.ltr,
@@ -527,6 +667,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ],
         ],
       ),
+    ),
     );
   }
 

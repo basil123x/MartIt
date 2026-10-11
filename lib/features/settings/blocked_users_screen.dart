@@ -31,10 +31,23 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
       return;
     }
     try {
-      final users = await ModerationService.blockedUsers(uid);
+      await BlockedSellers.instance.sync();
+      final remote = await ModerationService.blockedUsers(uid);
+      final merged = <Map<String, dynamic>>[];
+      final seen = <String>{};
+      for (final row in [...remote, ...BlockedSellers.instance.snapshot()]) {
+        final id = row['uid']?.toString() ?? '';
+        if (id.isEmpty || seen.contains(id)) continue;
+        seen.add(id);
+        final name = row['name']?.toString() ?? '';
+        merged.add({
+          ...row,
+          'name': name.isEmpty ? id : name,
+        });
+      }
       if (mounted) {
         setState(() {
-          _users = users;
+          _users = merged;
           _loading = false;
         });
       }

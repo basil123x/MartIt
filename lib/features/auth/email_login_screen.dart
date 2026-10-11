@@ -7,6 +7,7 @@ import '../../core/services/localization_service.dart';
 import '../../core/utils/snackbar_helper.dart';
 import 'email_otp_screen.dart';
 import '../../core/utils/theme_extensions.dart';
+import '../../core/services/terms_acceptance_service.dart';
 
 class EmailLoginScreen extends StatefulWidget {
   const EmailLoginScreen({super.key});
@@ -85,6 +86,8 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
 
   void _login() async {
     final lang = LocalizationService.instance.currentLanguage;
+    if (!await TermsAcceptanceService.ensureAccepted(context)) return;
+    if (!mounted) return;
 
     if (!_isValidEmail) {
       _showError(lang == 'ar'

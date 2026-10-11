@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:MartIt/features/chat/chat_screen.dart';
-import 'package:MartIt/firebase_options.dart';
 import 'package:MartIt/shared/providers/app_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -23,7 +22,6 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,

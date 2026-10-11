@@ -12,7 +12,7 @@ import '../../core/utils/snackbar_helper.dart';
 import '../../core/utils/theme_extensions.dart';
 import '../../core/services/localization_service.dart';
 import '../../core/services/moderation_service.dart';
-import '../../core/widgets/report_sheet.dart';
+import '../../core/widgets/moderation_actions.dart';
 
 class CommentsModal extends StatefulWidget {
   final String itemId;
@@ -36,6 +36,7 @@ class _CommentsModalState extends State<CommentsModal> {
   List<CommentModel> _comments = [];
   bool _isLoading = true;
   bool _isSending = false;
+  String? _myUserId;
 
   @override
   void initState() {
@@ -57,9 +58,18 @@ class _CommentsModalState extends State<CommentsModal> {
 
       if (response['success'] == true) {
         final List<dynamic> commentsData = response['data'] ?? [];
+        await BlockedSellers.instance.sync();
+        _myUserId = viewerId;
         setState(() {
           _comments = commentsData
               .map((comment) => CommentModel.fromJson(comment))
+              .where(
+                (comment) => !BlockedSellers.instance.containsSeller(
+                  comment.userId,
+                  comment.userId,
+                  comment.userName,
+                ),
+              )
               .toList();
           _isLoading = false;
         });
@@ -150,75 +160,32 @@ class _CommentsModalState extends State<CommentsModal> {
     });
   }
 
-  Future<void> _openCommentActions(CommentModel comment) async {
-    final uid = await AuthService.getCurrentUserId();
-    if (!mounted || uid == null) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                title: Text(tr('moderation.report')),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  showReportSheet(
-                    context: context,
-                    title: tr('moderation.report'),
-                    onSubmit: (reason, note) async {
-                      final result = await ModerationService.report(
-                        userId: uid,
-                        reason: reason,
-                        note: note,
-                        targetType: 'comment',
-                        itemId: widget.itemId,
-                        commentId: comment.id,
-                        targetUid: comment.userId,
-                      );
-                      if (!mounted) return;
-                      final sent = result['success'] == true;
-                      showAppSnackbar(
-                        context,
-                        message: sent
-                            ? tr('moderation.report_sent')
-                            : tr('common.error'),
-                        type: sent ? SnackType.success : SnackType.error,
-                      );
-                    },
-                  );
-                },
-              ),
-              ListTile(
-                title: Text(tr('moderation.block')),
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  final result = await ModerationService.blockUser(
-                    blockerUid: uid,
-                    blockedUid: comment.userId,
-                  );
-                  if (!mounted) return;
-                  if (result['success'] != true) {
-                    showAppSnackbar(
-                      context,
-                      message: tr('common.error'),
-                      type: SnackType.error,
-                    );
-                    return;
-                  }
-                  BlockedSellers.instance.block([comment.userId]);
-                  setState(() {
-                    _comments.removeWhere((item) => item.userId == comment.userId);
-                  });
-                  showAppSnackbar(context, message: tr('moderation.blocked'));
-                },
-              ),
-            ],
-          ),
-        );
-      },
+  Future<void> _reportComment(CommentModel comment) {
+    return reportContent(
+      context,
+      targetType: 'comment',
+      itemId: widget.itemId,
+      commentId: comment.id,
+      targetUid: comment.userId,
+      title: tr('moderation.report_comment'),
     );
+  }
+
+  Future<void> _blockCommenter(CommentModel comment) async {
+    final blocked = await blockAbusiveUser(
+      context,
+      blockedUid: comment.userId,
+      name: comment.userName,
+    );
+    if (!blocked || !mounted) return;
+    setState(() {
+      _comments.removeWhere(
+        (item) =>
+            item.userId == comment.userId ||
+            item.userName.trim().toLowerCase() ==
+                comment.userName.trim().toLowerCase(),
+      );
+    });
   }
 
   @override
@@ -374,11 +341,13 @@ class _CommentsModalState extends State<CommentsModal> {
                           fontSize: 12,
                         ),
                       ),
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        icon: Icon(Icons.more_horiz, color: cs.onSurfaceVariant),
-                        onPressed: () => _openCommentActions(comment),
-                      ),
+                      if (comment.userId != _myUserId)
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          tooltip: tr('moderation.safety'),
+                          icon: Icon(Iconsax.flag, color: cs.primary, size: 18),
+                          onPressed: () => _reportComment(comment),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 6),
@@ -408,6 +377,21 @@ class _CommentsModalState extends State<CommentsModal> {
                       ),
                     ),
                   ),
+                  if (comment.userId != _myUserId)
+                    Row(
+                      children: [
+                        TextButton.icon(
+                          onPressed: () => _reportComment(comment),
+                          icon: const Icon(Iconsax.flag, size: 16),
+                          label: Text(tr('moderation.report')),
+                        ),
+                        TextButton.icon(
+                          onPressed: () => _blockCommenter(comment),
+                          icon: const Icon(Iconsax.user_remove, size: 16),
+                          label: Text(tr('moderation.block')),
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ),

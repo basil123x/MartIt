@@ -4,9 +4,8 @@ import '../../core/constants/app_colors.dart';
 import '../../core/services/localization_service.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
-import '../../core/services/moderation_service.dart';
 import '../../core/widgets/media_viewer_widget.dart';
-import '../../core/widgets/report_sheet.dart';
+import '../../core/widgets/moderation_actions.dart';
 import '../../core/widgets/smart_avatar_widget.dart';
 import '../auth/login.dart';
 import '../profile/profile_screen.dart';
@@ -194,14 +193,30 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
   }
 
+  String get _sellerId =>
+      (widget.item['seller_id'] ?? widget.item['uid'] ?? '').toString();
+
+  Future<void> _reportListing() {
+    return reportContent(
+      context,
+      targetType: 'product',
+      itemId: widget.item['id']?.toString() ?? '',
+      targetUid: _sellerId,
+      title: tr('moderation.report_listing'),
+    );
+  }
+
+  Future<void> _blockSeller() async {
+    final blocked = await blockAbusiveUser(
+      context,
+      blockedUid: _sellerId,
+      name: widget.item['seller_name']?.toString() ?? '',
+      extraIds: [(widget.item['seller_uid'] ?? '').toString()],
+    );
+    if (blocked && mounted) Navigator.pop(context);
+  }
+
   Future<void> _reportOrBlockProduct() async {
-    final uid = _currentUserId ?? await AuthService.getCurrentUserId();
-    if (!mounted || uid == null || uid.isEmpty) {
-      showAppSnackbar(context, message: tr('common.login_required'), type: SnackType.error);
-      return;
-    }
-    final itemId = widget.item['id']?.toString() ?? '';
-    final sellerId = (widget.item['seller_id'] ?? widget.item['uid'] ?? '').toString();
     await showModalBottomSheet<void>(
       context: context,
       builder: (sheetContext) => SafeArea(
@@ -209,61 +224,46 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              title: Text(tr('moderation.report')),
+              leading: const Icon(Iconsax.flag),
+              title: Text(tr('moderation.report_listing')),
               onTap: () {
                 Navigator.pop(sheetContext);
-                showReportSheet(
-                  context: context,
-                  title: tr('moderation.report'),
-                  onSubmit: (reason, note) async {
-                    final result = await ModerationService.report(
-                      userId: uid,
-                      reason: reason,
-                      note: note,
-                      itemId: itemId,
-                      targetUid: sellerId,
-                    );
-                    if (!mounted) return;
-                    final sent = result['success'] == true;
-                    showAppSnackbar(
-                      context,
-                      message: sent
-                          ? tr('moderation.report_sent')
-                          : tr('common.error'),
-                      type: sent ? SnackType.success : SnackType.error,
-                    );
-                  },
-                );
+                _reportListing();
               },
             ),
             ListTile(
+              leading: const Icon(Iconsax.user_remove),
               title: Text(tr('moderation.block')),
-              onTap: () async {
+              onTap: () {
                 Navigator.pop(sheetContext);
-                final result = await ModerationService.blockUser(
-                  blockerUid: uid,
-                  blockedUid: sellerId,
-                );
-                if (!mounted) return;
-                if (result['success'] == true) {
-                  BlockedSellers.instance.block([
-                    sellerId,
-                    (widget.item['seller_uid'] ?? '').toString(),
-                  ]);
-                  showAppSnackbar(context, message: tr('moderation.blocked'));
-                  Navigator.pop(context);
-                } else {
-                  showAppSnackbar(
-                    context,
-                    message: tr('common.error'),
-                    type: SnackType.error,
-                  );
-                }
+                _blockSeller();
               },
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSafetyButtons() {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _reportListing,
+            icon: const Icon(Iconsax.flag, size: 18),
+            label: Text(tr('moderation.report')),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _blockSeller,
+            icon: const Icon(Iconsax.user_remove, size: 18),
+            label: Text(tr('moderation.block')),
+          ),
+        ),
+      ],
     );
   }
 
@@ -479,7 +479,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         ],
                       ),
                       const SizedBox(height: 16),
+                      if (!_isOwnProduct) _buildSafetyButtons(),
                       const Divider(),
+                      const SizedBox(height: 12),
+                    ],
+
+                    if (sellerName.isEmpty && !_isOwnProduct) ...[
+                      _buildSafetyButtons(),
                       const SizedBox(height: 12),
                     ],
 

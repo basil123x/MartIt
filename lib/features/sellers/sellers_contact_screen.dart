@@ -4,6 +4,8 @@ import 'package:iconsax/iconsax.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/localization_service.dart';
+import '../../core/services/moderation_service.dart';
+import '../../core/widgets/moderation_actions.dart';
 import '../../core/utils/snackbar_helper.dart';
 import '../../core/widgets/smart_avatar_widget.dart';
 import '../chat/chat_screen.dart';
@@ -48,9 +50,17 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
 
       if (result['success'] == true) {
         final List<dynamic> data = result['data'] ?? [];
+        await BlockedSellers.instance.sync();
         setState(() {
           _sellers = data
               .map((item) => SellerContactModel.fromJson(item))
+              .where(
+                (seller) => !BlockedSellers.instance.containsSeller(
+                  seller.id,
+                  seller.id,
+                  seller.name,
+                ),
+              )
               .toList();
           _isLoading = false;
         });
@@ -216,6 +226,42 @@ class _SellersContactScreenState extends State<SellersContactScreen> {
                           message: 'سيتم فتح ملف البائع الشخصي',
                           type: SnackType.info,
                         );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _buildContactOption(
+                      icon: Iconsax.flag,
+                      title: tr('moderation.report_user'),
+                      subtitle: tr('moderation.section_reporting_body'),
+                      isDark: isDark,
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        reportContent(
+                          context,
+                          targetType: 'user',
+                          targetUid: seller.id,
+                          title: tr('moderation.report_user'),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _buildContactOption(
+                      icon: Iconsax.user_remove,
+                      title: tr('moderation.block'),
+                      subtitle: tr('moderation.block_confirm_body'),
+                      isDark: isDark,
+                      onTap: () async {
+                        Navigator.pop(sheetContext);
+                        final blocked = await blockAbusiveUser(
+                          context,
+                          blockedUid: seller.id,
+                          name: seller.name,
+                        );
+                        if (blocked && mounted) {
+                          setState(() {
+                            _sellers.removeWhere((row) => row.id == seller.id);
+                          });
+                        }
                       },
                     ),
                   ],

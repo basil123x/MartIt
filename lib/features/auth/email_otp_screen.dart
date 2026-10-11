@@ -13,6 +13,7 @@ import '../../core/utils/snackbar_helper.dart';
 import 'email_signup_screen.dart';
 import '../../core/utils/theme_extensions.dart';
 import '../../core/services/api_config_service.dart';
+import '../../core/services/terms_acceptance_service.dart';
 
 class EmailOTPScreen extends StatefulWidget {
   final String email;
@@ -107,6 +108,7 @@ class _EmailOTPScreenState extends State<EmailOTPScreen> {
             name: userData["name"]?.toString() ?? "",
           );
           await _updateFcmToken();
+          await TermsAcceptanceService.syncWithAccount(userData["id"]?.toString());
           if (mounted) {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(builder: (context) => const SplashScreen()),

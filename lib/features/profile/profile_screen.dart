@@ -15,7 +15,7 @@ import '../../core/services/localization_service.dart';
 import '../../core/services/background_media_upload_service.dart';
 import '../../core/services/s3_upload_service.dart';
 import '../../core/services/moderation_service.dart';
-import '../../core/widgets/report_sheet.dart';
+import '../../core/widgets/moderation_actions.dart';
 import '../../core/models/item_model.dart';
 import '../../core/widgets/media_viewer_widget.dart';
 import '../../core/widgets/uploading_media_frame.dart';
@@ -65,6 +65,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final ScrollController _scrollController = ScrollController();
   bool _isCollapsed = false;
   bool _isOwnProfile = false;
+  bool _viewerBlocked = false;
   int _avatarCacheTimestamp = DateTime.now().millisecondsSinceEpoch;
 
   final BackgroundMediaUploadService _uploads =
@@ -104,10 +105,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _resolveOwnership() async {
     final uid = await AuthService.getCurrentUID();
     if (!mounted) return;
+    await BlockedSellers.instance.sync();
+    final blocked = !(uid != null &&
+            uid.isNotEmpty &&
+            (uid == widget.userId || uid == _itemsOwnerUid)) &&
+        BlockedSellers.instance.containsSeller(
+          widget.userId,
+          _profile?.uid ?? '',
+          _profile?.name ?? '',
+        );
     setState(() {
       _isOwnProfile = uid != null &&
           uid.isNotEmpty &&
           (uid == widget.userId || uid == _itemsOwnerUid);
+      _viewerBlocked = blocked;
     });
     _mergePendingUploads();
   }
@@ -491,11 +502,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadItems();
   }
 
-  Future<void> _reportOrBlockProfile() async {
+  String get _blockTarget =>
+      _profile?.uid.isNotEmpty == true ? _profile!.uid : widget.userId;
+
+  Future<void> _reportProfile() {
+    return reportContent(
+      context,
+      targetType: 'user',
+      targetUid: _blockTarget,
+      title: tr('moderation.report_user'),
+    );
+  }
+
+  Future<void> _blockProfile() async {
+    final blocked = await blockAbusiveUser(
+      context,
+      blockedUid: _blockTarget,
+      name: _profile?.name ?? '',
+      extraIds: [
+        widget.userId,
+        _profile?.id ?? '',
+        _profile?.uid ?? '',
+      ],
+    );
+    if (!blocked || !mounted) return;
+    if (widget.embeddedInShell) {
+      setState(() => _viewerBlocked = true);
+    } else {
+      Navigator.pop(context);
+    }
+  }
+
+  Future<void> _unblockProfile() async {
     final uid = await AuthService.getCurrentUserId();
-    if (!mounted || uid == null) return;
-    final target =
-        _profile?.uid.isNotEmpty == true ? _profile!.uid : widget.userId;
+    if (uid == null) return;
+    await ModerationService.unblockUser(
+      blockerUid: uid,
+      blockedUid: _blockTarget,
+    );
+    BlockedSellers.instance.unblock(_blockTarget, name: _profile?.name ?? '');
+    if (!mounted) return;
+    setState(() => _viewerBlocked = false);
+    showAppSnackbar(context, message: tr('moderation.unblocked'));
+    _loadProfile();
+  }
+
+  Future<void> _reportOrBlockProfile() async {
     await showModalBottomSheet<void>(
       context: context,
       builder: (sheetContext) => SafeArea(
@@ -503,61 +555,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              title: Text(tr('moderation.report')),
+              leading: const Icon(Iconsax.flag),
+              title: Text(tr('moderation.report_user')),
               onTap: () {
                 Navigator.pop(sheetContext);
-                showReportSheet(
-                  context: context,
-                  title: tr('moderation.report'),
-                  onSubmit: (reason, note) async {
-                    final result = await ModerationService.report(
-                      userId: uid,
-                      reason: reason,
-                      note: note,
-                      targetType: 'user',
-                      targetUid: target,
-                    );
-                    if (!mounted) return;
-                    final sent = result['success'] == true;
-                    showAppSnackbar(
-                      context,
-                      message: sent
-                          ? tr('moderation.report_sent')
-                          : tr('common.error'),
-                      type: sent ? SnackType.success : SnackType.error,
-                    );
-                  },
-                );
+                _reportProfile();
               },
             ),
             ListTile(
+              leading: const Icon(Iconsax.user_remove),
               title: Text(tr('moderation.block')),
-              onTap: () async {
+              onTap: () {
                 Navigator.pop(sheetContext);
-                final result = await ModerationService.blockUser(
-                  blockerUid: uid,
-                  blockedUid: target,
-                );
-                if (!mounted) return;
-                if (result['success'] == true) {
-                  BlockedSellers.instance.block(
-                    [
-                      target,
-                      widget.userId,
-                      _profile?.id ?? '',
-                      _profile?.uid ?? '',
-                    ],
-                    name: _profile?.name ?? '',
-                  );
-                  showAppSnackbar(context, message: tr('moderation.blocked'));
-                  Navigator.pop(context);
-                } else {
-                  showAppSnackbar(
-                    context,
-                    message: tr('common.error'),
-                    type: SnackType.error,
-                  );
-                }
+                _blockProfile();
               },
             ),
           ],
@@ -566,8 +576,77 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _buildBlockedProfile() {
+    final cs = Theme.of(context).colorScheme;
+    return Scaffold(
+      backgroundColor: context.appBackground,
+      appBar: AppBar(
+        title: Text(tr('moderation.blocked_users')),
+        leading: widget.embeddedInShell
+            ? null
+            : IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: Icon(Icons.arrow_back_ios, color: cs.primary, size: 18),
+              ),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Iconsax.user_remove, size: 64, color: cs.primary),
+              const SizedBox(height: 16),
+              Text(
+                tr('moderation.blocked_profile'),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 16,
+                  height: 1.4,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: _unblockProfile,
+                child: Text(tr('moderation.unblock')),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileSafetyActions() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _reportProfile,
+              icon: const Icon(Iconsax.flag, size: 18),
+              label: Text(tr('moderation.report')),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _blockProfile,
+              icon: const Icon(Iconsax.user_remove, size: 18),
+              label: Text(tr('moderation.block')),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_viewerBlocked) return _buildBlockedProfile();
     return Scaffold(
       backgroundColor: context.appBackground,
       body: _isLoading
@@ -735,6 +814,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
         ),
+
+        if (!_isOwnProfile)
+          SliverToBoxAdapter(child: _buildProfileSafetyActions()),
 
         // Own-account order shortcuts
         SliverToBoxAdapter(child: _buildOrdersShortcuts()),

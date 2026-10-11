@@ -20,6 +20,7 @@ import "../../core/utils/snackbar_helper.dart";
 import "../../core/utils/theme_extensions.dart";
 import "../../shared/providers/app_provider.dart";
 import "../auth/login.dart";
+import "../auth/terms_of_use_screen.dart";
 import "../onboarding/language_selection_screen.dart";
 import "../profile/edit_profile_screen.dart";
 import "policy_screen.dart";
@@ -45,8 +46,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   static String get _privacyUrl =>
       ApiConfigService.instance.endpoint('PrivacyPolicy.php');
-  static String get _termsUrl =>
-      ApiConfigService.instance.endpoint('Terms.php');
 
   // TODO: Replace with the real App Store numeric ID once MartIt is live
   // on the App Store (e.g. "1234567890"). Leave empty until published.
@@ -560,8 +559,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _listTile(
                   icon: Iconsax.document,
                   title: tr("settings.terms"),
-                  onTap: () =>
-                      _openPolicyPage(title: tr("settings.terms"), url: _termsUrl),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const TermsOfUseScreen(
+                        requireAcceptance: false,
+                      ),
+                    ),
+                  ),
                 ),
                 _divider(),
                 _listTile(

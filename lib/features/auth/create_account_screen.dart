@@ -13,8 +13,9 @@ import '../home/main_navigation_screen.dart';
 import '../../core/utils/theme_extensions.dart';
 import '../add_product/media_picker_sheet.dart';
 import '../../core/services/api_config_service.dart';
-import '../../core/services/moderation_service.dart';
+import '../../core/services/terms_acceptance_service.dart';
 import '../settings/policy_screen.dart';
+import 'terms_of_use_screen.dart';
 
 class CreateAccountScreen extends StatefulWidget {
   final String phoneNumber;
@@ -36,6 +37,26 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   File? _selectedImage;
   bool _isLoading = false;
   bool _acceptedTerms = false;
+
+  @override
+  void initState() {
+    super.initState();
+    TermsAcceptanceService.hasAccepted().then((accepted) {
+      if (mounted && accepted) setState(() => _acceptedTerms = true);
+    });
+  }
+
+  Future<void> _openTerms() async {
+    final accepted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const TermsOfUseScreen(requireAcceptance: true),
+      ),
+    );
+    if (accepted == true && mounted) {
+      setState(() => _acceptedTerms = true);
+    }
+  }
 
   Future<void> _pickImage() async {
     final lang = LocalizationService.instance.currentLanguage;
@@ -171,7 +192,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       );
       final uid = await AuthService.getCurrentUserId();
       if (uid != null && uid.isNotEmpty) {
-        await ModerationService.acceptTerms(uid);
+        await TermsAcceptanceService.syncWithAccount(uid);
       }
       final request = await Dio().post(
         ApiConfigService.instance.sqlEndpoint,
@@ -364,24 +385,19 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                     activeColor: AppColors.primary,
                                     contentPadding: EdgeInsets.zero,
                                     controlAffinity: ListTileControlAffinity.leading,
-                                    onChanged: (value) => setState(
-                                      () => _acceptedTerms = value ?? false,
-                                    ),
+                                    onChanged: (value) async {
+                                      if (value == true) {
+                                        await _openTerms();
+                                      } else {
+                                        setState(() => _acceptedTerms = false);
+                                      }
+                                    },
                                     title: Text(tr('moderation.eula')),
                                     subtitle: Wrap(
                                       children: [
                                         TextButton(
-                                          onPressed: () => Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) => PolicyScreen(
-                                                title: tr('moderation.terms'),
-                                                url: ApiConfigService.instance
-                                                    .endpoint('Terms.php'),
-                                              ),
-                                            ),
-                                          ),
-                                          child: Text(tr('moderation.terms')),
+                                          onPressed: _openTerms,
+                                          child: Text(tr('moderation.eula_title')),
                                         ),
                                         TextButton(
                                           onPressed: () => Navigator.push(

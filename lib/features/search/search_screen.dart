@@ -8,6 +8,7 @@ import '../../core/services/localization_service.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/moderation_service.dart';
+import '../../core/widgets/moderation_actions.dart';
 import '../../core/widgets/item_thumbnail_widget.dart';
 import '../../core/utils/theme_extensions.dart';
 import '../home/home_feed_screen.dart';
@@ -474,6 +475,42 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  Map<String, dynamic>? _sellerMap(dynamic item) {
+    if (item is! Map) return null;
+    final seller = item['seller'];
+    if (seller is Map) return Map<String, dynamic>.from(seller);
+    return null;
+  }
+
+  Future<void> _reportSearchItem(dynamic item) {
+    final seller = _sellerMap(item);
+    return reportContent(
+      context,
+      targetType: 'product',
+      itemId: item is Map ? item['id']?.toString() ?? '' : '',
+      targetUid: seller?['uid']?.toString().isNotEmpty == true
+          ? seller!['uid'].toString()
+          : seller?['id']?.toString() ?? '',
+      title: tr('moderation.report_listing'),
+    );
+  }
+
+  Future<void> _blockSearchSeller(dynamic item) async {
+    final seller = _sellerMap(item);
+    if (seller == null) return;
+    await blockAbusiveUser(
+      context,
+      blockedUid: seller['uid']?.toString().isNotEmpty == true
+          ? seller['uid'].toString()
+          : seller['id']?.toString() ?? '',
+      name: seller['name']?.toString() ?? '',
+      extraIds: [
+        seller['id']?.toString() ?? '',
+        seller['uid']?.toString() ?? '',
+      ],
+    );
+  }
+
   Widget _buildSearchResultItem(dynamic item, bool isAr) {
     final cs = Theme.of(context).colorScheme;
     final martIt = context.martItColors;
@@ -550,7 +587,31 @@ class _SearchScreenState extends State<SearchScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        TextButton.icon(
+                          onPressed: () => _reportSearchItem(item),
+                          icon: const Icon(Iconsax.flag, size: 16),
+                          label: Text(tr('moderation.report')),
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton.icon(
+                          onPressed: () => _blockSearchSeller(item),
+                          icon: const Icon(Iconsax.user_remove, size: 16),
+                          label: Text(tr('moderation.block')),
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
                     Text(
                       '${item['price']} ${isAr ? 'ريال' : 'QAR'}',
                       style: TextStyle(

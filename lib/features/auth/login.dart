@@ -23,6 +23,7 @@ import 'phone_login_screen.dart';
 import 'email_login_screen.dart';
 import 'otp_screen.dart';
 import '../../core/services/api_config_service.dart';
+import '../../core/services/terms_acceptance_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -38,6 +39,9 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isAppleLoading = false;
   bool _isPhoneLoading = false;
   bool _isValidPhone = false;
+  bool _termsAccepted = false;
+  bool _promptedTerms = false;
+  bool _termsRouteOpen = false;
   late CountryCode _selectedCountry;
 
   @override
@@ -46,6 +50,30 @@ class _LoginScreenState extends State<LoginScreen> {
     _selectedCountry = kPhoneCountries.first;
     _phoneController.addListener(_onPhoneChanged);
     _phoneFocus.addListener(() => setState(() {}));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _requireTerms(automatic: true);
+    });
+  }
+
+  Future<bool> _requireTerms({bool automatic = false}) async {
+    if (_termsAccepted || await TermsAcceptanceService.hasAccepted()) {
+      if (mounted) setState(() => _termsAccepted = true);
+      return true;
+    }
+    if (_termsRouteOpen) return false;
+    if (automatic && _promptedTerms) return false;
+    _promptedTerms = true;
+    _termsRouteOpen = true;
+    if (!mounted) return false;
+    final accepted = await TermsAcceptanceService.ensureAccepted(context);
+    _termsRouteOpen = false;
+    if (!mounted) return false;
+    setState(() => _termsAccepted = accepted);
+    return accepted;
+  }
+
+  Future<void> _syncAcceptedTerms() {
+    return TermsAcceptanceService.syncCurrentAccount();
   }
 
   void _onPhoneChanged() {
@@ -54,6 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _sendOTP() async {
+    if (!await _requireTerms()) return;
     if (!_isValidPhone || _isPhoneLoading) return;
     setState(() => _isPhoneLoading = true);
     final otp = AuthService.generateOTP();
@@ -302,6 +331,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _googleSignIn() async {
+    if (!await _requireTerms()) return;
     try {
       User? user = await GoogleAuthService().signInWithGoogle();
       if (user != null) {
@@ -357,6 +387,7 @@ class _LoginScreenState extends State<LoginScreen> {
             photoUrl: user.photoURL,
           );
 
+          await _syncAcceptedTerms();
           if (mounted) {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(builder: (context) => SplashScreen()),
@@ -396,6 +427,7 @@ class _LoginScreenState extends State<LoginScreen> {
               photoUrl: user.photoURL,
             );
 
+            await _syncAcceptedTerms();
             if (mounted) {
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(builder: (context) => SplashScreen()),
@@ -419,6 +451,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _appleSignIn() async {
+    if (!await _requireTerms()) return;
     if (_isAppleLoading) return;
 
     setState(() {
@@ -440,6 +473,7 @@ class _LoginScreenState extends State<LoginScreen> {
         photoUrl: null,
       );
 
+      await _syncAcceptedTerms();
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const SplashScreen()),
@@ -543,7 +577,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                       height: 1.4,
                                     ),
                           ),
-                          const SizedBox(height: 36),
+                          const SizedBox(height: 24),
+                          if (!_termsAccepted) _buildTermsGate(),
+                          if (!_termsAccepted) const SizedBox(height: 16),
                           _buildPhoneAuthSection(isAr),
                           const SizedBox(height: 28),
                           _buildOrDivider(isAr),
@@ -593,7 +629,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               _buildCircleAuthSlot(
                                 child: _buildCircleAuthButton(
                                   background: context.appIconPillBg,
-                                  onTap: () {
+                                  onTap: () async {
+                                    if (!await _requireTerms()) return;
+                                    if (!mounted) return;
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
@@ -611,17 +649,17 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 48),
-                          Text(
-                            isAr
-                                ? 'بالمتابعة، أنت توافق على شروط الاستخدام وسياسة الخصوصية'
-                                : 'By continuing, you agree to our Terms and Privacy Policy',
-                            textAlign: TextAlign.center,
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: cs.onSurfaceVariant,
-                                      height: 1.5,
-                                    ),
+                          const SizedBox(height: 28),
+                          TextButton(
+                            onPressed: () => _requireTerms(),
+                            child: Text(
+                              tr('moderation.eula_title'),
+                              style: TextStyle(
+                                color: cs.primary,
+                                fontWeight: FontWeight.w700,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -632,6 +670,45 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildTermsGate() {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.primaryContainer,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.primary, width: 1.4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            tr('moderation.eula_must_accept'),
+            style: TextStyle(
+              color: cs.onSurface,
+              fontWeight: FontWeight.w700,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 10),
+          FilledButton(
+            onPressed: () => _requireTerms(),
+            style: FilledButton.styleFrom(
+              backgroundColor: cs.primary,
+              foregroundColor: cs.onPrimary,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(tr('moderation.eula_review')),
+          ),
+        ],
       ),
     );
   }
@@ -792,7 +869,11 @@ class _LoginScreenState extends State<LoginScreen> {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: _isValidPhone && !_isPhoneLoading ? _sendOTP : null,
+            onPressed: _isPhoneLoading
+                ? null
+                : !_termsAccepted
+                    ? () => _requireTerms()
+                    : (_isValidPhone ? _sendOTP : null),
             style: ElevatedButton.styleFrom(
               backgroundColor: cs.primary,
               disabledBackgroundColor: cs.primary.withValues(alpha: 0.35),

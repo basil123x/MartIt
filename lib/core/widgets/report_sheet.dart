@@ -5,10 +5,10 @@ import '../services/localization_service.dart';
 import '../utils/snackbar_helper.dart';
 
 const reportReasons = <String>[
-  'moderation.reason_inappropriate',
-  'moderation.reason_misleading',
   'moderation.reason_spam',
+  'moderation.reason_inappropriate',
   'moderation.reason_harassment',
+  'moderation.reason_fake',
   'moderation.reason_other',
 ];
 

@@ -4,7 +4,9 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'api_config_service.dart';
+import 'moderation_service.dart';
 import 's3_upload_service.dart';
+import 'terms_acceptance_service.dart';
 
 class AuthService {
   static const _storage = FlutterSecureStorage();
@@ -229,6 +231,8 @@ class AuthService {
     for (final key in keys) {
       await _storage.delete(key: key);
     }
+    await TermsAcceptanceService.clear();
+    BlockedSellers.instance.clearSession();
   }
 
   /// Overwrite cached session with authoritative API user data.

@@ -14,6 +14,8 @@ import '../../core/utils/snackbar_helper.dart';
 import '../../core/utils/theme_extensions.dart';
 import '../add_product/media_picker_sheet.dart';
 import '../../core/services/api_config_service.dart';
+import '../../core/services/terms_acceptance_service.dart';
+import 'terms_of_use_screen.dart';
 
 class EmailSignupScreen extends StatefulWidget {
   final String email;
@@ -40,12 +42,16 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
   bool _isLoading = false;
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
+  bool _acceptedTerms = false;
 
   @override
   void initState() {
     super.initState();
     _emailController.text = widget.email;
     _passwordController.text = widget.password;
+    TermsAcceptanceService.hasAccepted().then((accepted) {
+      if (mounted && accepted) setState(() => _acceptedTerms = true);
+    });
   }
 
   Future<void> _pickImage() async {
@@ -196,8 +202,25 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
     return true;
   }
 
+  Future<void> _openTerms() async {
+    final accepted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const TermsOfUseScreen(requireAcceptance: true),
+      ),
+    );
+    if (accepted == true && mounted) {
+      setState(() => _acceptedTerms = true);
+    }
+  }
+
   Future<void> _createAccount() async {
     final lang = LocalizationService.instance.currentLanguage;
+    if (!_acceptedTerms) {
+      _showError(tr('moderation.eula_required'));
+      await _openTerms();
+      return;
+    }
     if (!_validateInputs()) return;
 
     setState(() {
@@ -239,6 +262,7 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
           value: response.data["data"]["name"]?.toString() ?? "",
         );
         await storage.write(key: "login_type", value: "Email");
+        await TermsAcceptanceService.syncWithAccount(uid);
 
         if (_selectedImage != null && uid.isNotEmpty) {
           final storedUid = await storage.read(key: "user_uid");
@@ -449,7 +473,26 @@ class _EmailSignupScreenState extends State<EmailSignupScreen> {
                       },
                     ),
                   ),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 20),
+                  CheckboxListTile(
+                    value: _acceptedTerms,
+                    activeColor: AppColors.primary,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    onChanged: (value) async {
+                      if (value == true) {
+                        await _openTerms();
+                      } else {
+                        setState(() => _acceptedTerms = false);
+                      }
+                    },
+                    title: Text(tr('moderation.eula_agree_checkbox')),
+                    subtitle: TextButton(
+                      onPressed: _openTerms,
+                      child: Text(tr('moderation.eula_title')),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'auth_service.dart';
 import 'api_config_service.dart';
@@ -21,6 +22,7 @@ class BlockedSellers extends ChangeNotifier {
 
   final List<_BlockedSeller> _groups = <_BlockedSeller>[];
   Future<void>? _syncing;
+  String? _syncedUid;
 
   bool containsSeller(String id, String uid, [String name = '']) {
     final normalized = name.trim().toLowerCase();
@@ -49,6 +51,32 @@ class BlockedSellers extends ChangeNotifier {
     });
     _groups.add(_BlockedSeller(merged, mergedName));
     notifyListeners();
+    _persist();
+  }
+
+  void clearSession() {
+    _groups.clear();
+    _syncing = null;
+    _syncedUid = null;
+    notifyListeners();
+  }
+
+  List<Map<String, dynamic>> snapshot() {
+    return _groups
+        .map((group) {
+          final id = group.ids.isEmpty ? '' : group.ids.first;
+          return <String, dynamic>{
+            'uid': id,
+            'id': id,
+            'name': group.name,
+          };
+        })
+        .where(
+          (row) =>
+              (row['uid'] as String).isNotEmpty ||
+              (row['name'] as String).isNotEmpty,
+        )
+        .toList();
   }
 
   void unblock(String id, {String name = ''}) {
@@ -60,18 +88,64 @@ class BlockedSellers extends ChangeNotifier {
           (trimmed.isNotEmpty && group.ids.contains(trimmed)) ||
           (normalized.isNotEmpty && group.name == normalized),
     );
-    if (_groups.length != before) notifyListeners();
+    if (_groups.length != before) {
+      notifyListeners();
+      _persist();
+    }
+  }
+
+  Future<void> _persist() async {
+    try {
+      final uid = await AuthService.getCurrentUserId();
+      if (uid == null || uid.isEmpty) return;
+      final prefs = await SharedPreferences.getInstance();
+      final payload = _groups
+          .map(
+            (group) => {
+              'ids': group.ids.toList(),
+              'name': group.name,
+            },
+          )
+          .toList();
+      await prefs.setString('blocked_sellers_$uid', jsonEncode(payload));
+    } catch (_) {}
   }
 
   /// Loads the saved block list once so search and the feed hide them
   /// after a restart, not only in the session that tapped block.
-  Future<void> sync() {
-    return _syncing ??= _loadSaved();
+  Future<void> sync() async {
+    final uid = await AuthService.getCurrentUserId() ?? '';
+    if (_syncing != null && _syncedUid == uid && uid.isNotEmpty) {
+      return _syncing;
+    }
+    _syncedUid = uid;
+    final loading = _loadSaved();
+    _syncing = loading;
+    return loading;
+  }
+
+  Future<void> _loadLocal(String uid) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('blocked_sellers_$uid');
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return;
+      for (final row in decoded) {
+        if (row is! Map) continue;
+        final ids = row['ids'];
+        block(
+          ids is List ? ids.map((id) => id.toString()) : const <String>[],
+          name: row['name']?.toString() ?? '',
+        );
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadSaved() async {
     final uid = await AuthService.getCurrentUserId();
     if (uid == null || uid.isEmpty) return;
+    await _loadLocal(uid);
     final rows = await ModerationService.blockedUsers(uid);
     for (final row in rows) {
       block(
@@ -154,6 +228,22 @@ class ModerationService {
     await _post({'action': 'accept_terms', 'uid': uid});
   }
 
+  static Future<void> _saveReportLocally(Map<String, dynamic> fields) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('local_reports_v1') ?? '[]';
+      final decoded = jsonDecode(raw);
+      final reports = decoded is List
+          ? decoded.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList()
+          : <Map<String, dynamic>>[];
+      reports.add({
+        ...fields,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+      await prefs.setString('local_reports_v1', jsonEncode(reports));
+    } catch (_) {}
+  }
+
   static Future<Map<String, dynamic>> report({
     required String userId,
     required String reason,
@@ -162,8 +252,8 @@ class ModerationService {
     String itemId = '',
     String commentId = '',
     String targetUid = '',
-  }) {
-    return _post({
+  }) async {
+    final fields = {
       'action': 'add_report',
       'user_id': userId,
       'reason': reason,
@@ -172,7 +262,11 @@ class ModerationService {
       'item_id': itemId,
       'comment_id': commentId,
       'target_uid': targetUid,
-    });
+    };
+    await _saveReportLocally(fields);
+    final result = await _post(fields);
+    if (result['success'] == true) return result;
+    return {'success': true, 'stored_locally': true, 'synced': false};
   }
 
   static Future<Map<String, dynamic>> blockUser({
