@@ -2,7 +2,7 @@ name: MartIt
 description: "MartIt - A TikTok-style shopping app combining short-form content
   with e-commerce."
 publish_to: 'none'
-version: 1.2.7+34
+version: 1.2.8+35
 environment:
   sdk: ^3.9.2
 dependencies:
@@ -14,8 +14,6 @@ dependencies:
   chewie: ^1.7.5
   cupertino_icons: ^1.0.8
   dio: ^5.4.0
-  firebase_auth: ^6.4.0
-  firebase_core: ^4.7.0
   flutter:
     sdk: flutter
   flutter_local_notifications: ^22.2.0

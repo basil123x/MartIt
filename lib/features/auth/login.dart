@@ -8,7 +8,6 @@ import 'package:MartIt/core/services/google_auth_service.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:MartIt/features/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -24,6 +23,8 @@ import 'email_login_screen.dart';
 import 'otp_screen.dart';
 import '../../core/services/api_config_service.dart';
 import '../../core/services/terms_acceptance_service.dart';
+import '../../core/services/otp_local_notification_service.dart';
+import 'terms_of_use_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -55,6 +56,30 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
+  /// Always opens Terms of Use so reviewers can read them anytime.
+  Future<void> _openTermsScreen() async {
+    if (_termsRouteOpen || !mounted) return;
+    final alreadyAccepted =
+        _termsAccepted || await TermsAcceptanceService.hasAccepted();
+    if (!mounted) return;
+    _termsRouteOpen = true;
+    final accepted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => TermsOfUseScreen(
+          // Already accepted → read/close. Not yet → must check + Agree.
+          requireAcceptance: !alreadyAccepted,
+          allowDecline: true,
+        ),
+      ),
+    );
+    _termsRouteOpen = false;
+    if (!mounted) return;
+    if (accepted == true || alreadyAccepted) {
+      setState(() => _termsAccepted = true);
+    }
+  }
+
   Future<bool> _requireTerms({bool automatic = false}) async {
     if (_termsAccepted || await TermsAcceptanceService.hasAccepted()) {
       if (mounted) setState(() => _termsAccepted = true);
@@ -63,13 +88,9 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_termsRouteOpen) return false;
     if (automatic && _promptedTerms) return false;
     _promptedTerms = true;
-    _termsRouteOpen = true;
     if (!mounted) return false;
-    final accepted = await TermsAcceptanceService.ensureAccepted(context);
-    _termsRouteOpen = false;
-    if (!mounted) return false;
-    setState(() => _termsAccepted = accepted);
-    return accepted;
+    await _openTermsScreen();
+    return _termsAccepted || await TermsAcceptanceService.hasAccepted();
   }
 
   Future<void> _syncAcceptedTerms() {
@@ -85,15 +106,24 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!await _requireTerms()) return;
     if (!_isValidPhone || _isPhoneLoading) return;
     setState(() => _isPhoneLoading = true);
-    final otp = AuthService.generateOTP();
+    // Fixed visible OTP while SMS/WhatsApp provider is offline.
+    const otp = '123456';
+    await OtpLocalNotificationService.showOtpNotification(otp: otp);
     if (!mounted) return;
     setState(() => _isPhoneLoading = false);
+    final isAr = LocalizationService.instance.currentLanguage == 'ar';
+    showAppSnackbar(
+      context,
+      message: isAr ? 'رمز التحقق: $otp' : 'Verification code: $otp',
+      type: SnackType.success,
+    );
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => OTPScreen(
           countryCode: _selectedCountry.dialCode,
           phoneNumber: _phoneController.text,
           generatedOTP: otp,
+          otpAlreadySent: true,
         ),
       ),
     );
@@ -333,7 +363,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _googleSignIn() async {
     if (!await _requireTerms()) return;
     try {
-      User? user = await GoogleAuthService().signInWithGoogle();
+      final user = await GoogleAuthService().signInWithGoogle();
       if (user != null) {
         int uid = 1000 + Random().nextInt(9000);
         int oid = 1000 + Random().nextInt(9000);
@@ -651,7 +681,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 28),
                           TextButton(
-                            onPressed: () => _requireTerms(),
+                            onPressed: _openTermsScreen,
                             child: Text(
                               tr('moderation.eula_title'),
                               style: TextStyle(
@@ -697,7 +727,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           const SizedBox(height: 10),
           FilledButton(
-            onPressed: () => _requireTerms(),
+            onPressed: _openTermsScreen,
             style: FilledButton.styleFrom(
               backgroundColor: cs.primary,
               foregroundColor: cs.onPrimary,

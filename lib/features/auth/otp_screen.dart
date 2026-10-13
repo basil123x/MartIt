@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:MartIt/core/services/otp_local_notification_service.dart';
 import 'package:MartIt/features/auth/login.dart';
 import 'package:MartIt/features/splash/splash_screen.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +9,7 @@ import 'package:iconsax/iconsax.dart';
 import '../../core/constants/app_theme.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/localization_service.dart';
+import '../../core/services/otp_local_notification_service.dart';
 import '../../core/utils/snackbar_helper.dart';
 import '../../core/utils/theme_extensions.dart';
 import 'create_account_screen.dart';
@@ -21,11 +21,15 @@ class OTPScreen extends StatefulWidget {
   final String generatedOTP;
   final String countryCode;
 
+  /// True when login already delivered the OTP notification.
+  final bool otpAlreadySent;
+
   const OTPScreen({
     super.key,
     required this.phoneNumber,
     required this.generatedOTP,
     required this.countryCode,
+    this.otpAlreadySent = false,
   });
 
   @override
@@ -64,12 +68,21 @@ class _OTPScreenState extends State<OTPScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       _focusNodes[0].requestFocus();
-      await _deliverOtpNotification(_activeOtp);
+      if (!widget.otpAlreadySent) {
+        await _deliverOtp(_activeOtp, showSnack: false);
+      }
     });
   }
 
-  Future<void> _deliverOtpNotification(String otp) async {
+  Future<void> _deliverOtp(String otp, {bool showSnack = true}) async {
     await OtpLocalNotificationService.showOtpNotification(otp: otp);
+    if (!mounted || !showSnack) return;
+    final isAr = LocalizationService.instance.currentLanguage == 'ar';
+    showAppSnackbar(
+      context,
+      message: isAr ? 'رمز التحقق: $otp' : 'Verification code: $otp',
+      type: SnackType.success,
+    );
   }
 
   void _startResendTimer() {
@@ -219,20 +232,16 @@ class _OTPScreenState extends State<OTPScreen> {
   Future<void> _resendOTP() async {
     if (_resendRemaining > 0 || _isLoading) return;
 
-    final newOtp = AuthService.generateOTP();
-    setState(() => _activeOtp = newOtp);
+    const newOtp = '123456';
+    setState(() => _isLoading = true);
+    await _deliverOtp(newOtp);
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+      _activeOtp = newOtp;
+    });
     _clearOTP();
     _startResendTimer();
-    await _deliverOtpNotification(newOtp);
-
-    if (!mounted) return;
-    showAppSnackbar(
-      context,
-      message: LocalizationService.instance.currentLanguage == 'ar'
-          ? 'تم إرسال كود جديد'
-          : 'New code sent',
-      type: SnackType.success,
-    );
   }
 
   @override
@@ -324,7 +333,32 @@ class _OTPScreenState extends State<OTPScreen> {
                                 letterSpacing: 0.3,
                               ),
                             ),
-                            const SizedBox(height: 36),
+                            const SizedBox(height: 16),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                              decoration: BoxDecoration(
+                                color: cs.primaryContainer,
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Text(
+                                isAr
+                                    ? 'رمز التحقق: $_activeOtp'
+                                    : 'Code: $_activeOtp',
+                                textAlign: TextAlign.center,
+                                textDirection: TextDirection.ltr,
+                                style: TextStyle(
+                                  color: cs.onPrimaryContainer,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 2,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 28),
                             Directionality(
                               textDirection: TextDirection.ltr,
                               child: Row(

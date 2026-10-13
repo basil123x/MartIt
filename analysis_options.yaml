@@ -20,6 +20,10 @@ analyzer:
     unused_element: ignore
     avoid_unnecessary_containers: ignore
     package_names: ignore
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
 
 linter:
   # The lint rules applied to this project can be customized in the

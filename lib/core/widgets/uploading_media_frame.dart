@@ -112,7 +112,7 @@ class _UploadingMediaFrameState extends State<UploadingMediaFrame> {
 
     return Image.file(
       file,
-      fit: BoxFit.cover,
+      fit: BoxFit.contain,
       width: double.infinity,
       height: double.infinity,
       errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),

@@ -78,11 +78,6 @@ app.*.map.json
 /test/coverage/
 lcov.info
 
-# Firebase
-/ios/Runner/GoogleService-Info.plist
-/android/app/google-services.json
-/lib/firebase_options.dart
-
 # Temporary files
 *.tmp
 *.temp

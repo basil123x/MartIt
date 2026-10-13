@@ -2067,8 +2067,7 @@ class HomeFeedScreenState extends State<HomeFeedScreen>
                   autoPlayVideo: true,
                   showControls: false,
                   showIndicators: item.media.length > 1,
-                  // Feed photo fit. Change this back to BoxFit.contain to restore the old framing.
-                  fit: BoxFit.cover,
+                  fit: BoxFit.contain,
                 )
               : const Center(
                   child: Icon(Iconsax.image, color: Colors.white, size: 80),

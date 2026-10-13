@@ -2,8 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-/// Simulates an incoming SMS/OTP via a local notification while no SMS
-/// provider is wired up.
+/// Shows the OTP in a local notification (no SMS/WhatsApp provider).
 class OtpLocalNotificationService {
   OtpLocalNotificationService._();
 
@@ -14,7 +13,7 @@ class OtpLocalNotificationService {
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
     'martit_otp_channel',
     'OTP Messages',
-    description: 'Simulated OTP verification messages',
+    description: 'OTP verification messages',
     importance: Importance.high,
   );
 
@@ -74,7 +73,7 @@ class OtpLocalNotificationService {
         ),
       );
     } catch (_) {
-      // Simulation helper — never block the OTP flow.
+      // Never block the OTP flow.
     }
   }
 }

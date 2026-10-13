@@ -4,6 +4,7 @@ import 'package:iconsax/iconsax.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/localization_service.dart';
+import '../../core/services/otp_local_notification_service.dart';
 import 'otp_screen.dart';
 import '../../core/utils/theme_extensions.dart';
 
@@ -394,8 +395,10 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
       _isLoading = true;
     });
 
-    final otp = AuthService.generateOTP();
+    const otp = '123456';
+    await OtpLocalNotificationService.showOtpNotification(otp: otp);
 
+    if (!mounted) return;
     setState(() {
       _isLoading = false;
     });
@@ -406,6 +409,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
           countryCode: _selectedCountry.dialCode,
           phoneNumber: _phoneController.text,
           generatedOTP: otp,
+          otpAlreadySent: true,
         ),
       ),
     );
